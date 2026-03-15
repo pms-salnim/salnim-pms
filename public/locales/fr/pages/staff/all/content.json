@@ -1,0 +1,146 @@
+
+{
+  "title": "Gestion du Personnel",
+  "description": "Ajoutez, modifiez et gérez les membres du personnel qui ont accès au système.",
+  "add_staff_button": "Ajouter un utilisateur",
+  "filters": {
+    "search_placeholder": "Rechercher par nom ou e-mail...",
+    "role_placeholder": "Filtrer par rôle",
+    "all_roles": "Tous les rôles",
+    "status_placeholder": "Filtrer par statut",
+    "all_statuses": "Tous les statuts",
+    "apply_button": "Appliquer les filtres"
+  },
+  "roles": {
+    "admin": "Administrateur",
+    "manager": "Manager",
+    "frontDesk": "Réceptionniste",
+    "housekeeping": "Gouvernante",
+    "maintenance": "Maintenance",
+    "staff": "Personnel"
+  },
+  "statuses": {
+    "online": "En ligne",
+    "active": "Actif",
+    "on_break": "En pause",
+    "busy": "Occupé",
+    "offline": "Hors ligne",
+    "inactive": "Inactif"
+  },
+  "list": {
+    "headers": {
+      "full_name": "Nom et prénom",
+      "email": "E-mail",
+      "role": "Rôle",
+      "status": "Statut",
+      "last_login": "Dernière connexion",
+      "actions": "Actions"
+    },
+    "no_staff_message": "Aucun membre du personnel n'a encore été ajouté.",
+    "actions_menu": {
+      "view_profile": "Voir le profil",
+      "edit_staff": "Modifier l'utilisateur",
+      "toggle_status_deactivate": "Désactiver l'utilisateur",
+      "toggle_status_activate": "Activer l'utilisateur",
+      "reset_password": "Réinitialiser le mot de passe",
+      "delete_staff": "Supprimer l'utilisateur"
+    }
+  },
+  "form": {
+    "sections": {
+      "personal_info": "Informations Personnelles",
+      "account_access": "Accès au compte",
+      "permissions": "Permissions"
+    },
+    "first_name_label": "Prénom",
+    "first_name_placeholder": "Ex: Jean",
+    "last_name_label": "Nom de famille",
+    "last_name_placeholder": "Ex: Dupont",
+    "email_label": "Adresse e-mail",
+    "email_placeholder": "nom@exemple.com",
+    "phone_label": "Numéro de téléphone",
+    "phone_placeholder": "+33 6 12 34 56 78",
+    "role_label": "Rôle",
+    "role_placeholder": "Sélectionner un rôle",
+    "status_label": "Statut",
+    "status_placeholder": "Sélectionner un statut",
+    "password_label_new": "Mot de passe",
+    "password_label_edit": "Nouveau mot de passe (facultatif)",
+    "password_placeholder_new": "Entrez un mot de passe",
+    "password_placeholder_edit": "Laisser vide pour conserver le mot de passe actuel",
+    "password_info_new": "Un mot de passe temporaire sera créé. L'utilisateur pourra le changer après sa première connexion.",
+    "password_info_edit": "Laissez ce champ vide si vous ne souhaitez pas changer le mot de passe de l'utilisateur.",
+    "generate_button": "Générer",
+    "property_label": "Propriété",
+    "property_value": "Propriété principale (auto-assignée)",
+    "property_info": "Cet utilisateur sera assigné à votre propriété actuelle.",
+    "buttons": {
+      "cancel": "Annuler",
+      "save": "Enregistrer les modifications"
+    }
+  },
+  "permissions": {
+    "rooms": "Chambres",
+    "reservations": "Réservations",
+    "rate_plans": "Plans tarifaires",
+    "guests": "Clients",
+    "finance": "Finance",
+    "availability": "Disponibilité",
+    "reports": "Rapports",
+    "settings": "Paramètres",
+    "staff_management": "Gestion du personnel",
+    "housekeeping": "Gouvernante",
+    "extras": "Extras",
+    "team_workspace": "Espace d'équipe",
+    "staff_management_admin_note": "Seul un administrateur peut accorder ou révoquer les permissions 'Gestion du personnel' ou 'Paramètres'."
+  },
+  "add_modal": {
+    "title": "Ajouter un nouvel utilisateur",
+    "description": "Créez un nouveau compte utilisateur avec des identifiants de connexion et assignez des permissions."
+  },
+  "edit_modal": {
+    "title": "Modifier l'utilisateur",
+    "description": "Mettez à jour les détails et les permissions de ce membre du personnel."
+  },
+  "delete_dialog": {
+    "title": "Êtes-vous absolument sûr ?",
+    "description": "Cette action est irréversible. Cela supprimera définitivement le compte du membre du personnel et supprimera son accès au système. Êtes-vous sûr de vouloir supprimer {{name}} ?",
+    "cancel_button": "Annuler",
+    "continue_button": "Confirmer la suppression"
+  },
+  "profile_modal": {
+    "title": "Profil : {{name}}",
+    "description": "Affichage des détails pour l'utilisateur : {{email}}",
+    "name_label": "Nom",
+    "email_label": "E-mail",
+    "phone_label": "Téléphone",
+    "role_label": "Rôle",
+    "status_label": "Statut",
+    "last_login_label": "Dernière connexion",
+    "permissions_label": "Permissions assignées",
+    "not_provided": "Non fourni",
+    "no_permissions": "Aucune permission assignée.",
+    "buttons": {
+      "close": "Fermer"
+    }
+  },
+  "toasts": {
+    "success_title": "Succès",
+    "error_title": "Erreur",
+    "update_success": {
+      "description": "Les informations pour {{name}} ont été mises à jour."
+    },
+    "create_success": {
+      "description": "{{name}} a été invité(e) et ajouté(e) à la liste du personnel."
+    },
+    "create_error": "Une erreur inconnue s'est produite lors de la création de l'utilisateur.",
+    "save_error": "Impossible d'enregistrer le membre du personnel.",
+    "delete_success": "Utilisateur supprimé avec succès.",
+    "delete_error": "Impossible de supprimer le compte de l'utilisateur.",
+    "error_email_in_use": "Cet e-mail est déjà utilisé par un autre compte.",
+    "error_weak_password": "Le mot de passe est trop faible. Veuillez utiliser un mot de passe plus fort.",
+    "error_generic_signup": "Une erreur inattendue s'est produite lors de l'inscription.",
+    "error_unknown": "Une erreur inconnue s'est produite."
+  },
+  "cannot_edit_own_role": "Vous ne pouvez pas modifier votre propre rôle."
+}

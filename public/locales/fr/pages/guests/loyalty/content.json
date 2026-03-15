@@ -1,0 +1,98 @@
+
+{
+    "title": "Programme de Fidélité",
+    "description": "Gérez le statut de fidélité des clients, leurs points et leurs récompenses.",
+    "not_active": {
+        "title": "Le Programme de Fidélité n'est pas Actif",
+        "description": "Pour commencer à gérer votre programme de fidélité, vous devez d'abord l'activer dans les paramètres de votre propriété.",
+        "go_to_settings": "Aller aux Paramètres"
+    },
+    "list": {
+        "headers": {
+            "guest_name": "Nom du Client",
+            "tier": "Niveau",
+            "total_earned": "Total Gagné",
+            "redeemed": "Utilisé",
+            "remaining_points": "Points Restants",
+            "actions": "Actions"
+        },
+        "bulk_actions": {
+            "selected_text": "{{count}} sélectionné(s)",
+            "button": "Actions",
+            "adjust_points": "Ajuster les Points",
+            "delete_selected": "Supprimer la Sélection"
+        },
+        "actions_menu": {
+            "view_profile": "Voir le Profil",
+            "adjust_points": "Ajuster les Points",
+            "redeem_points": "Utiliser les Points"
+        },
+        "empty_state": "Aucun client n'est encore inscrit au programme de fidélité."
+    },
+    "adjust_form": {
+        "current_balance_label": "Solde Actuel",
+        "points_label": "Points",
+        "action_add": "Ajouter",
+        "action_deduct": "Déduire",
+        "points_to_action_label": "Points à {{action}}",
+        "points_placeholder": "ex: 500",
+        "reason_label": "Raison",
+        "reason_placeholder": "ex: Geste commercial, cadeau de bienvenue, etc.",
+        "validation": {
+            "points_required": "Veuillez entrer un nombre de points valide.",
+            "reason_required": "Une raison est requise pour cet ajustement."
+        },
+        "buttons": {
+            "cancel": "Annuler",
+            "confirm": "Confirmer l'Ajustement"
+        }
+    },
+    "redeem_form": {
+        "current_balance_label": "Solde Disponible",
+        "points_label": "Points",
+        "redeem_by_amount_label": "Utiliser par Montant",
+        "redeem_by_points_label": "Utiliser par Points",
+        "redeem_amount_label": "Montant à utiliser",
+        "redeem_points_label": "Points à utiliser",
+        "reason_label": "Raison de l'utilisation",
+        "reason_placeholder": "ex: Paiement pour la Réservation #123",
+        "default_reason": "Utilisation pour séjour",
+        "validation": {
+            "points_required": "Veuillez entrer un montant ou un nombre de points valide à utiliser.",
+            "insufficient_points": "Le client n'a pas assez de points pour utiliser ce montant.",
+            "reason_required": "Une raison est requise pour l'utilisation."
+        },
+        "buttons": {
+            "cancel": "Annuler",
+            "redeem": "Utiliser les Points"
+        }
+    },
+    "bulk_adjust_form": {
+        "points_to_action_label": "Points à {{action}} pour chaque client sélectionné",
+        "points_placeholder": "ex: 100",
+        "reason_label": "Raison (commune pour tous)",
+        "reason_placeholder": "ex: Bonus de fin d'année, événement promotionnel",
+        "buttons": {
+            "apply_to_all": "Appliquer à Tous"
+        }
+    },
+    "bulk_delete_dialog": {
+        "title": "Êtes-vous sûr ?",
+        "description": "Ceci supprimera définitivement {{count}} client(s) de votre propriété. Cette action est irréversible.",
+        "cancel_button": "Annuler",
+        "continue_button": "Supprimer"
+    },
+    "profile": {
+        "title": "Profil : {{name}}",
+        "description": "Voir l'historique et les détails du client."
+    },
+    "toasts": {
+        "success_title": "Succès",
+        "error_title": "Erreur",
+        "loyalty_disabled_title": "Programme de Fidélité Désactivé",
+        "loyalty_disabled_description": "Veuillez activer le programme de fidélité dans les paramètres avant d'inscrire des clients.",
+        "loyalty_enroll_success": "{{name}} a été inscrit(e) au programme de fidélité.",
+        "loyalty_unenroll_success": "{{name}} a été désinscrit(e) du programme de fidélité.",
+        "loyalty_update_error": "Échec de la mise à jour du statut de fidélité."
+    }
+}

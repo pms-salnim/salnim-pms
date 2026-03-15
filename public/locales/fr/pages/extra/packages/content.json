@@ -1,0 +1,121 @@
+{
+  "title": "Forfaits et Offres",
+  "description": "Créez des offres spéciales en combinant des types de chambres avec des services et des plans de repas.",
+  "access_denied": {
+    "title": "Accès Refusé",
+    "description": "Vous n'avez pas la permission de gérer les forfaits. Veuillez contacter un administrateur."
+  },
+  "add_button": "Créer un Forfait",
+  "list": {
+    "none": "Aucun",
+    "unknown": "Inconnu",
+    "price_display": {
+      "for_guests": "pour {{count}} personnes",
+      "per_nights": "pour {{count}} nuits",
+      "up_to_guests": "(jusqu'à {{count}} pers.)",
+      "per_night": "/nuit",
+      "per_guest_per_night": "/pers./nuit"
+    },
+    "status_active": "Actif",
+    "status_inactive": "Inactif",
+    "headers": {
+      "name": "Nom du Forfait",
+      "price": "Prix",
+      "inclusions": "Inclusions",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "inclusions_labels": {
+      "rooms": "Chambres:",
+      "services": "Services:",
+      "meals": "Repas:"
+    },
+    "actions_menu": {
+      "edit": "Modifier",
+      "deactivate": "Désactiver",
+      "activate": "Activer",
+      "delete": "Supprimer"
+    },
+    "empty_state": "Aucun forfait n'a encore été créé."
+  },
+  "add_modal": {
+    "title": "Créer un Nouveau Forfait",
+    "description": "Combinez des types de chambres avec des services et des repas pour créer une offre attractive.",
+    "no_rate_plans_warning": "Vous devez définir au moins un type de chambre avant de pouvoir créer un forfait."
+  },
+  "edit_modal": {
+    "title": "Modifier le Forfait"
+  },
+  "delete_dialog": {
+    "title": "Êtes-vous absolument sûr ?",
+    "description": "Cela supprimera définitivement le forfait '{{name}}'. Cette action est irréversible.",
+    "cancel_button": "Annuler",
+    "continue_button": "Confirmer la Suppression"
+  },
+  "form": {
+    "name_label": "Nom du Forfait",
+    "name_placeholder": "Ex: Escapade de week-end, Offre Lune de Miel",
+    "description_label": "Description",
+    "description_placeholder": "Décrivez ce qui rend ce forfait spécial.",
+    "type_label": "Type de Forfait",
+    "type_fixed": "Nombre de nuits fixe",
+    "type_per_night": "Par nuit (tarif forfaitaire)",
+    "type_per_guest": "Par personne et par nuit",
+    "price_label": "Prix",
+    "nights_label": "Nombre de Nuits",
+    "guests_label": "Nombre de Personnes",
+    "max_guests_label": "Nombre Max. de Personnes",
+    "guests_placeholder_fixed": "Ex: 2",
+    "guests_placeholder_max": "Ex: 4",
+    "capacity_note": "Basé sur les types de chambres sélectionnés (capacité max: {{maxCapacity}}).",
+    "room_types_label": "Types de Chambres Inclus",
+    "services_label": "Services Inclus",
+    "meal_plans_label": "Plans Repas Inclus",
+    "validation_error": {
+      "title": "Erreur de Validation",
+      "description": "Veuillez remplir tous les champs obligatoires : Nom, Prix, Nombre de Personnes et sélectionnez au moins un Type de Chambre.",
+      "nights_required": "Le nombre de nuits est requis pour un forfait à durée fixe.",
+      "guest_capacity": "Le nombre de personnes ({{guestCount}}) dépasse la capacité maximale ({{maxCapacity}}) des types de chambres sélectionnés."
+    }
+  },
+  "buttons": {
+    "cancel": "Annuler",
+    "save": "Enregistrer les modifications",
+    "create": "Créer le Forfait"
+  },
+  "toasts": {
+    "permission_denied": {
+      "title": "Permission Refusée",
+      "description": "Vous n'avez pas la permission d'effectuer cette action."
+    },
+    "save_success": {
+      "title": "Succès",
+      "update_description": "Le forfait a été mis à jour avec succès.",
+      "add_description": "Le nouveau forfait a été créé avec succès."
+    },
+    "save_error": {
+      "title": "Erreur",
+      "description": "Impossible d'enregistrer le forfait. Veuillez réessayer."
+    },
+    "status_update_success": {
+      "title": "Statut Mis à Jour",
+      "description": "Le forfait {{name}} a été défini comme {{status}}."
+    },
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif"
+    },
+    "status_update_error": {
+      "title": "Erreur",
+      "description": "Impossible de mettre à jour le statut du forfait."
+    },
+    "delete_success": {
+      "title": "Forfait Supprimé",
+      "description": "Le forfait a été supprimé avec succès."
+    },
+    "delete_error": {
+      "title": "Erreur",
+      "description": "Impossible de supprimer le forfait."
+    }
+  }
+}

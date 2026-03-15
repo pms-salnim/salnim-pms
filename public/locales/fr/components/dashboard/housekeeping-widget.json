@@ -1,0 +1,13 @@
+{
+  "title": "Entretien",
+  "subtitle": "Besoin d'attention",
+  "badge": "À traiter",
+  "dirty_rooms_label": "Chambres sales",
+  "open_tasks_label": "Tâches ouvertes",
+  "no_tasks": "Aucune tâche ouverte",
+  "no_title": "Sans titre",
+  "toasts": {
+    "completed_title": "Tâche terminée",
+    "completed_description": "La tâche d'entretien a été marquée comme terminée."
+  }
+}

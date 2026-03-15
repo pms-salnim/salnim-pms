@@ -1,0 +1,132 @@
+{
+    "title": "Toutes les chambres",
+    "description": "Affichez et gérez toutes les chambres physiques de votre établissement. Vous pouvez modifier les détails, les attribuer à des types de chambres et voir leur statut d'occupation actuel.",
+    "add_room_button": "Ajouter une chambre",
+    "loading_property": "Chargement des données de la propriété...",
+    "no_property_loaded": "Impossible de charger les données de la propriété. Veuillez vous assurer que vous êtes affecté à une propriété.",
+    "access_denied": {
+        "title": "Accès refusé",
+        "description": "Vous n'avez pas la permission de voir cette page. Veuillez contacter un administrateur."
+    },
+    "filters": {
+        "search_placeholder": "Rechercher par nom de chambre...",
+        "room_type_placeholder": "Filtrer par type de chambre",
+        "all_room_types": "Tous les types de chambres",
+        "occupancy_placeholder": "Filtrer par occupation",
+        "all_statuses": "Tous les statuts",
+        "available": "Disponible",
+        "occupied": "Occupée"
+    },
+    "edit_modal": {
+        "title": "Modifier la chambre",
+        "description": "Mettez à jour les détails de cette chambre."
+    },
+    "add_modal": {
+        "title": "Ajouter une ou plusieurs chambres",
+        "description": "Vous pouvez ajouter plusieurs chambres à la fois en les sélectionnant dans la liste des numéros de chambre non attribués pour le type choisi."
+    },
+    "form": {
+        "room_type_label": "Type de chambre",
+        "room_type_placeholder": "Sélectionnez un type de chambre",
+        "no_room_types": "Aucun type de chambre trouvé. Veuillez en créer un d'abord.",
+        "room_name_label_edit": "Nom/Numéro de la chambre",
+        "rooms_to_create_label": "Chambres à créer",
+        "select_all": "Tout sélectionner",
+        "no_unassigned_rooms": "Aucun numéro de chambre non attribué pour ce type.",
+        "select_type_first": "Sélectionnez un type de chambre pour voir les numéros disponibles.",
+        "floor_label": "Étage / Emplacement (Optionnel)",
+        "floor_placeholder": "Ex : 2ème étage, Aile Jardin",
+        "floor_description": "S'applique à toutes les nouvelles chambres créées.",
+        "amenities_label": "Équipements personnalisés (Optionnel)",
+        "amenities_placeholder": "Ex : Vue sur l'océan, Balcon",
+        "amenities_description": "Liste de caractéristiques spéciales pour cette chambre, séparées par des virgules.",
+        "notes_label": "Notes internes (Optionnel)",
+        "notes_placeholder": "Ex : Près de l'ascenseur, bruyant le matin"
+    },
+    "buttons": {
+        "close": "Fermer",
+        "save_changes": "Enregistrer les modifications",
+        "create_rooms": "Créer {{count}} chambres",
+        "create_rooms_fallback": "Créer une ou plusieurs chambres",
+        "cancel": "Annuler",
+        "delete": "Supprimer",
+        "delete_selected": "Supprimer la sélection",
+        "update_rooms": "Mettre à jour les chambres"
+    },
+    "card": {
+        "rooms_available_badge": "{{count}} chambres disponibles",
+        "view_details": "Voir les détails",
+        "edit": "Modifier",
+        "delete": "Supprimer",
+        "floor_label": "Étage",
+        "manage_button": "Gérer la chambre",
+        "delete_button": "Supprimer la chambre"
+    },
+    "select_room_aria_label": "Sélectionner la chambre {{roomName}}",
+    "manage_button_sr": "Gérer la chambre",
+    "delete_button_sr": "Supprimer la chambre",
+    "view_modal": {
+        "title": "Détails de la chambre",
+        "description": "Détails complets pour la chambre.",
+        "details_section_title": "Détails",
+        "base_rate_label": "Tarif de base",
+        "base_rate_suffix": "/ nuit",
+        "max_guests_label": "Invités max.",
+        "physical_rooms_label": "Nombre de chambres physiques",
+        "not_set": "Non défini",
+        "description_label": "Description",
+        "room_numbers_label": "Numéros de chambre attribués",
+        "amenities_section_title": "Équipements"
+    },
+    "toasts": {
+        "validation_error": {
+            "title": "Erreur de validation",
+            "description": "Veuillez sélectionner un type de chambre et fournir un nom de chambre.",
+            "bulk_create_description": "Veuillez sélectionner un type de chambre et au moins un nom/numéro de chambre à créer."
+        },
+        "success_update": {
+            "title": "Succès",
+            "description": "Chambre mise à jour avec succès."
+        },
+        "success_create": {
+            "title": "Succès",
+            "description": "{{count}} nouvelles chambres ont été créées avec succès."
+        },
+        "error_save": {
+            "title": "Erreur",
+            "description": "Impossible d'enregistrer la ou les chambres."
+        },
+        "success_delete": {
+            "title": "Succès",
+            "description": "La chambre et ses associations ont été supprimées."
+        },
+        "error_delete": {
+            "title": "Erreur",
+            "description": "Impossible de supprimer la chambre. Elle peut avoir des réservations actives."
+        },
+        "no_changes_title": "Aucun changement",
+        "no_changes_description": "Vous n'avez spécifié aucun changement à appliquer.",
+        "bulk_update_success_description": "{{count}} chambres ont été mises à jour avec succès.",
+        "bulk_update_error_description": "Impossible d'effectuer la mise à jour groupée."
+    },
+    "confirm_delete": "Êtes-vous sûr de vouloir supprimer cette chambre ? Cela la retirera également de tous les plans tarifaires non réservés. Cette action est irréversible.",
+    "confirm_bulk_delete": "Êtes-vous sûr de vouloir supprimer les {{count}} chambres sélectionnées ? Cette action est irréversible.",
+    "confirm_delete_title": "Êtes-vous sûr ?",
+    "confirm_delete_description": "Vous êtes sur le point de supprimer la chambre {{name}}. Cette action est irréversible.",
+    "select_all_label": "Tout sélectionner",
+    "room_badge_plural":"Chambres",
+    "occupancy_status": {
+        "available": "Disponible",
+        "occupied": "Occupée"
+    },
+    "bulk_actions": {
+        "selected_rooms": "{{count}} chambres sélectionnées",
+        "button": "Actions groupées"
+    },
+    "bulk_edit_modal": {
+        "title": "Modification groupée de chambres",
+        "description": "Les modifications que vous effectuez ici seront appliquées à toutes les {{count}} chambres sélectionnées.",
+        "new_floor_label": "Nouvel étage / Emplacement",
+        "new_floor_placeholder": "Ex: 3ème étage"
+    }
+}

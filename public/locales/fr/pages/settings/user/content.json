@@ -1,0 +1,40 @@
+
+{
+  "title": "Profil Utilisateur",
+  "description": "Gérez les détails de votre compte personnel et vos préférences linguistiques.",
+  "form": {
+    "full_name_label": "Nom Complet",
+    "full_name_placeholder": "Votre nom complet",
+    "email_label": "Email",
+    "email_placeholder": "votre@email.com",
+    "role_label": "Rôle",
+    "role_not_available": "N/A",
+    "phone_label": "Numéro de Téléphone",
+    "phone_placeholder": "+1 234 567 8900",
+    "language_label": "Langue Préférée",
+    "language_placeholder": "Sélectionner la langue",
+    "country_label": "Pays",
+    "country_placeholder": "Votre pays",
+    "city_label": "Ville",
+    "city_placeholder": "Votre ville",
+    "address_label": "Adresse Postale",
+    "address_placeholder": "Votre adresse postale",
+    "change_password_button": "Changer le Mot de Passe",
+    "change_password_description": "Un lien pour réinitialiser le mot de passe sera envoyé à votre adresse e-mail.",
+    "save_button": "Enregistrer les Paramètres"
+  },
+  "toasts": {
+    "loading": "Chargement des paramètres...",
+    "error_loading": "Impossible de charger vos paramètres.",
+    "error_not_authenticated": "Utilisateur non authentifié.",
+    "success_save": "Vos paramètres utilisateur ont été mis à jour.",
+    "error_save": "Impossible d'enregistrer vos paramètres.",
+    "success_password_reset": "Un lien de réinitialisation de mot de passe a été envoyé à votre adresse e-mail.",
+    "error_password_reset": "Impossible d'envoyer l'e-mail de réinitialisation du mot de passe.",
+    "error_email_not_found": "Adresse e-mail de l'utilisateur non trouvée."
+  },
+  "languages": {
+    "en": "Anglais",
+    "fr": "Français"
+  }
+}

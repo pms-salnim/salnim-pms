@@ -1,0 +1,29 @@
+{
+  "title": "Rooms Overview",
+  "description": "Get a comprehensive overview of your entire room inventory.",
+  "date_picker": {
+    "placeholder": "Pick a date range",
+    "today": "Today",
+    "this_week": "This Week",
+    "this_month": "This Month"
+  },
+  "cards": {
+    "total_rooms": "Total Rooms",
+    "occupied_avg": "Avg. Occupied",
+    "occupied_single": "Occupied",
+    "available_avg": "Avg. Available",
+    "available_single": "Available",
+    "room_types": "Room Types"
+  },
+  "chart": {
+    "title_single": "Rooms Overview for {{date}}",
+    "title_range": "Rooms Overview: {{from}} - {{to}}",
+    "description": "Average distribution of room statuses for the selected period.",
+    "empty_state": "No room data to display for the selected period."
+  },
+  "access_denied": {
+    "title": "Access Denied",
+    "description": "You do not have permission to view this page. Please contact an administrator."
+  },
+  "loading": "Loading..."
+}

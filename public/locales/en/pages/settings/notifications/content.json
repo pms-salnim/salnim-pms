@@ -1,0 +1,40 @@
+{
+  "loading": "Loading settings...",
+  "access_denied": {
+    "title": "Access Denied",
+    "description": "You do not have permission to view or modify notification settings. Please contact an administrator if you believe this is an error."
+  },
+  "form": {
+    "title": "Notification Rules & Alerts",
+    "description": "Choose which events trigger notifications and how they are delivered to your team."
+  },
+  "events": {
+    "new_reservation": {
+      "label": "New Reservation",
+      "description": "When a new booking is made."
+    },
+    "payment_received": {
+      "label": "Payment Received",
+      "description": "When a payment is successfully processed."
+    },
+    "cancellation": {
+      "label": "Reservation Cancellation",
+      "description": "When a booking is cancelled."
+    },
+    "new_message": {
+      "label": "New Guest Message",
+      "description": "When a new message arrives in the inbox."
+    }
+  },
+  "channels": {
+    "in_app": "In-App",
+    "email": "Email"
+  },
+  "buttons": {
+    "save": "Save Changes"
+  },
+  "toasts": {
+    "success_save": "Notification rules have been updated.",
+    "error_save": "Failed to save settings."
+  }
+}

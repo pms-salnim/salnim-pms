@@ -1,0 +1,107 @@
+
+{
+    "loading_property": "Loading property...",
+    "access_denied": {
+        "title": "Access Denied",
+        "description": "You do not have permission to manage room types. Please contact an administrator."
+    },
+    "title": "Room Types",
+    "description": "Create and manage the different categories of rooms available at your property.",
+    "no_property_loaded": "Property information could not be loaded. Please ensure you are assigned to a property.",
+    "add_room_type_button": "Add Room Type",
+    "edit_modal": {
+        "title": "Edit Room Type",
+        "description": "Make changes to your room type below. Click save when you're done."
+    },
+    "add_modal": {
+        "title": "Add New Room Type",
+        "description": "Define a new category of room for your property."
+    },
+    "tabs": {
+        "details": "Details",
+        "beds": "Beds",
+        "amenities": "Amenities",
+        "gallery": "Gallery"
+    },
+    "form": {
+        "type_name_label": "Type Name",
+        "type_name_placeholder": "e.g., Deluxe King Suite",
+        "max_guests_label": "Max Guests",
+        "max_guests_placeholder": "e.g., 2",
+        "rooms_count_label": "Number of Rooms of this Type (Optional)",
+        "rooms_count_placeholder": "e.g., 10",
+        "room_numbers_label": "Assigned Room Numbers (Optional)",
+        "room_numbers_placeholder": "e.g., 101, 102, 203A",
+        "room_numbers_description": "If you know the specific room numbers for this type, list them here separated by commas.",
+        "description_label": "Description",
+        "description_placeholder": "e.g., A spacious suite with a sea view and a private balcony.",
+        "beds_title": "Bed Configuration",
+        "beds_description": "Specify the number of each bed type available in this room category.",
+        "amenities_title": "Amenities",
+        "amenities_description": "Select all amenities that apply to this room type.",
+        "thumbnail_label": "Thumbnail Image",
+        "thumbnail_upload": "Click to upload a primary image",
+        "gallery_label": "Gallery Images",
+        "gallery_upload": "Add more images"
+    },
+    "view_modal": {
+        "title": "Room Type Details",
+        "description": "A summary of the room type's configuration.",
+        "details_section_title": "Details",
+        "max_guests_label": "Max Guests",
+        "physical_rooms_label": "Number of Physical Rooms",
+        "not_set": "Not Set",
+        "description_label": "Description",
+        "room_numbers_label": "Assigned Rooms",
+        "beds_section_title": "Bed Configuration",
+        "amenities_section_title": "Amenities"
+    },
+    "card": {
+        "rooms_available_badge": "{{count}} left",
+        "view_details": "View Details",
+        "edit": "Edit",
+        "delete": "Delete"
+    },
+    "bed_types": {
+        "king": "King",
+        "queen": "Queen",
+        "double": "Double",
+        "single": "Single",
+        "sofa_bed": "Sofa Bed",
+        "bunk_bed": "Bunk Bed"
+    },
+    "toasts": {
+        "validation_error": {
+            "title": "Validation Error",
+            "description": "Please fill in all required fields (Type Name, Max Guests)."
+        },
+        "success_update": {
+            "title": "Success",
+            "description": "Room type updated successfully."
+        },
+        "success_create": {
+            "title": "Success",
+            "description": "New room type created successfully."
+        },
+        "error_save": {
+            "title": "Error",
+            "description": "Could not save the room type. Please try again."
+        },
+        "success_delete": {
+            "title": "Success",
+            "description": "Room type and all associated rooms and rate plans have been deleted."
+        },
+        "error_delete": {
+            "title": "Error",
+            "description": "Could not delete the room type. Please try again."
+        }
+    },
+    "buttons": {
+        "save": "Save Changes",
+        "close": "Close",
+        "create_rooms": "Create Rooms",
+        "edit": "Edit"
+    },
+    "confirm_delete": "Are you sure you want to delete this room type? This will also delete all physical rooms and rate plans associated with it. This action cannot be undone.",
+    "no_room_types": "No room types have been created yet. Add one to get started."
+}

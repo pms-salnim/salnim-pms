@@ -1,0 +1,38 @@
+
+{
+    "title": "Modèles d'e-mails",
+    "description": "Personnalisez et gérez les modèles d'e-mails envoyés aux clients à chaque étape clé du cycle de vie de la réservation.",
+    "last_edited": "Dernière modification {{distance}} par {{name}}",
+    "buttons": {
+        "customize": "Personnaliser",
+        "close": "Fermer"
+    },
+    "status": {
+        "draft": "Brouillon",
+        "live": "En direct",
+        "disabled": "Désactivé"
+    },
+    "editor": {
+        "title": "Personnaliser : {{templateName}}",
+        "description": "Modifiez l'objet et le corps de l'e-mail. Utilisez des variables dynamiques pour personnaliser le contenu.",
+        "subject_label": "Sujet",
+        "body_label": "Corps",
+        "variables_title": "Variables Dynamiques",
+        "variables_description": "Cliquez pour insérer une variable dans le corps.",
+        "preview_button": "Aperçu",
+        "save_button": "Enregistrer",
+        "status_enabled": "Le modèle est en direct",
+        "status_disabled": "Le modèle est désactivé"
+    },
+    "preview_modal": {
+        "title": "Aperçu de l'e-mail",
+        "description": "Ceci est une représentation de l'apparence de l'e-mail. L'apparence réelle peut varier légèrement dans différents clients de messagerie."
+    },
+    "toasts": {
+        "success_save": "Le modèle \"{{name}}\" a été mis à jour à {{status}}.",
+        "success_autosave": "Modifications enregistrées automatiquement.",
+        "error_save": "Échec de l'enregistrement du modèle.",
+        "error_preview": "Échec de la génération de l'aperçu",
+        "preview_placeholder_note": "Utilisation de données fictives pour l'aperçu."
+    }
+}

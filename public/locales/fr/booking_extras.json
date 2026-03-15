@@ -1,0 +1,15 @@
+{
+    "title": "Extras",
+    "more_details_link": "Plus de détails",
+    "add_to_booking": "Ajouter à la réservation",
+    "units": {
+        "one-time": "unique",
+        "per-booking": "par réservation",
+        "per-night": "par nuit",
+        "per-guest": "par personne",
+        "per-night-per-guest": "par nuit/personne",
+        "per-night-per-room": "par nuit/chambre",
+        "one-time-per-guest": "unique/personne",
+        "one-time-per-room": "unique/chambre"
+    }
+}

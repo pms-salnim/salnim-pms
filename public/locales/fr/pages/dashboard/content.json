@@ -1,0 +1,135 @@
+{
+    "title": "Tableau de Bord",
+    "description": "Aperçu en temps réel des performances de votre propriété.",
+    "new_booking_button": "Nouvelle Réservation",
+    "loading": "Chargement...",
+    "date_range_picker": {
+        "placeholder": "Sélectionner une plage de dates",
+        "today": "Aujourd'hui",
+        "this_week": "Cette semaine",
+        "this_month": "Ce mois-ci",
+        "last_7_days": "7 derniers jours",
+        "last_30_days": "30 derniers jours"
+    },
+    "metric_cards": {
+        "bookings": {
+            "title": "Réservations"
+    },
+        "arrivals": {
+            "title": "Arrivées"
+  },
+        "departures": {
+            "title": "Départs"
+  },
+        "in_house_guests": {
+            "title": "Clients en séjour"
+  },
+        "occupied_rooms": {
+            "title": "Chambres occupées"
+  },
+        "cancellations": {
+            "title": "Annulations"
+  }
+    },
+    "todays_activity": {
+        "title": "Activité du Jour",
+        "description": "Aperçu des arrivées et départs prévus aujourd'hui.",
+        "check_ins": {
+            "title": "Arrivées",
+            "table": {
+                "guest": "Client",
+                "details": "Détails",
+                "total": "Total",
+                "status": "Statut",
+                "payment": "Paiement",
+                "actions": "Actions"
+            },
+            "checked_in_badge": "Enregistré",
+            "check_in_button": "Enregistrer",
+            "no_arrivals": "Aucune arrivée prévue pour aujourd'hui."
+        },
+        "check_outs": {
+            "title": "Départs",
+            "table": {
+                "guest": "Client",
+                "details": "Détails",
+                "total": "Total",
+                "status": "Statut",
+                "payment": "Paiement",
+                "actions": "Actions"
+            },
+            "completed_badge": "Départ effectué",
+            "check_out_button": "Départ",
+            "no_departures": "Aucun départ prévu pour aujourd'hui."
+        },
+        "show_all_button": "Voir Toute l'Activité",
+        "actions_menu": {
+            "label": "Ouvrir le menu",
+            "view": "Voir Détails",
+            "edit": "Modifier",
+            "delete": "Supprimer"
+        }
+    },
+    "recent_reservations": {
+        "title": "Réservations Récentes",
+        "description": "Les 10 dernières réservations créées.",
+        "table": {
+            "guest": "Client",
+            "room": "Chambre",
+            "dates": "Dates",
+            "total": "Total",
+            "status": "Statut",
+            "actions": "Actions"
+        },
+        "no_reservations": "Aucune réservation trouvée.",
+        "view_all_button": "Voir Toutes les Réservations"
+    },
+    "sidebar": {
+        "sentiment_snapshot": "Aperçu du sentiment",
+        "no_recent_reviews": "Aucun avis récent",
+        "vip_arrivals_today": "Arrivées VIP aujourd'hui",
+        "no_vips_today": "Aucun VIP aujourd'hui",
+        "live_requests": "Demandes en direct",
+        "no_live_requests": "Aucune demande en direct",
+        "view_all_bookings": "Voir toutes les réservations"
+    },
+    "activity_table": {
+        "today_checkins": "Arrivées d'aujourd'hui",
+        "today_checkouts": "Départs d'aujourd'hui",
+        "headers": {
+            "guest_name": "Nom du client",
+            "room_type": "Type de chambre",
+            "nights": "Nuits",
+            "status": "Statut",
+            "action": "Action",
+            "room": "Chambre",
+            "balance": "Solde"
+        },
+        "actions": {
+            "manage": "Gérer",
+            "checkout": "Enregistrer le départ"
+        }
+    },
+    "modals": {
+        "delete_confirmation": {
+            "title": "Êtes-vous sûr ?",
+            "description": "Cette action est irréversible et supprimera définitivement la réservation.",
+            "cancel_button": "Annuler",
+            "continue_button": "Continuer"
+        }
+    },
+    "toasts": {
+        "check_in_success_title": "Succès",
+        "check_in_success_description": "Le client a été enregistré avec succès.",
+        "check_in_error_title": "Erreur",
+        "check_in_error_description": "Échec de l'enregistrement du client.",
+        "check_out_success_title": "Succès",
+        "check_out_success_description": "Le client a quitté l'établissement. La chambre {{roomName}} a été marquée comme sale et une tâche de nettoyage a été créée.",
+        "check_out_error_title": "Erreur",
+        "check_out_error_description": "Échec du processus de départ.",
+        "delete_reservation_success_title": "Succès",
+        "delete_reservation_success_description": "Réservation supprimée avec succès.",
+        "delete_reservation_error_title": "Erreur",
+        "delete_reservation_error_description": "Impossible de supprimer la réservation."
+    }
+}

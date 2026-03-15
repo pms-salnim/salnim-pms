@@ -1,0 +1,177 @@
+{
+    "title": "Guest List",
+    "description": "Browse and manage all guest profiles in your system.",
+    "add_guest_button": "Add New Guest",
+    "filters": {
+        "search_placeholder": "Search by name or email...",
+        "nationality_placeholder": "Filter by Nationality",
+        "all_nationalities": "All Nationalities",
+        "tags_placeholder": "Filter by Tags",
+        "all_tags": "All Tags",
+        "date_range_placeholder": "Filter by last stay date"
+    },
+    "list": {
+        "headers": {
+            "full_name": "Full Name",
+            "email": "Email",
+            "phone": "Phone",
+            "nationality": "Nationality",
+            "reservations": "Reservations",
+            "last_stay": "Last Stay",
+            "tags": "Tags",
+            "actions": "Actions"
+        },
+        "no_guests_message": "No guests found. Try adding a new guest or adjusting your filters.",
+        "actions_menu": {
+            "view_profile": "View Profile",
+            "edit_guest": "Edit Guest",
+            "unenroll_loyalty": "Unenroll from Loyalty",
+            "enroll_loyalty": "Enroll in Loyalty",
+            "delete_guest": "Delete Guest"
+        },
+        "bulk_actions": {
+            "selected_text": "{{count}} selected",
+            "button_text": "Actions",
+            "add_tag": "Add Tag",
+            "delete_selected": "Delete Selected"
+        },
+        "select_all_aria_label": "Select all rows",
+        "pagination": {
+            "rows_per_page": "Rows per page",
+            "page_of": "Page {{currentPage}} of {{totalPages}}",
+            "previous_button": "Previous",
+            "next_button": "Next"
+        }
+    },
+    "form": {
+        "add_modal": {
+            "title": "Add New Guest Profile",
+            "description": "Create a new guest record. Fill in as much detail as possible."
+        },
+        "edit_modal": {
+            "title": "Edit Guest Profile",
+            "description": "Update the details for this guest."
+        },
+        "sections": {
+            "personal_details": "Personal Details",
+            "contact_details": "Contact Details",
+            "internal_notes": "Internal Notes & Preferences",
+            "loyalty_program": "Loyalty Program"
+        },
+        "first_name_label": "First Name",
+        "first_name_placeholder": "e.g., John",
+        "last_name_label": "Last Name",
+        "last_name_placeholder": "e.g., Doe",
+        "gender_label": "Gender",
+        "gender_placeholder": "Select gender",
+        "sexes": {
+            "male": "Male",
+            "female": "Female"
+        },
+        "birthdate_label": "Date of Birth",
+        "birthdate_placeholder": "Pick a date",
+        "nationality_label": "Nationality",
+        "nationality_placeholder": "Select nationality",
+        "email_label": "Email",
+        "email_placeholder": "guest@example.com",
+        "phone_label": "Phone Number",
+        "phone_placeholder": "e.g., +1 234 567 890",
+        "address_label": "Address",
+        "address_placeholder": "123 Main Street, Anytown, USA",
+        "notes_label": "Internal Notes (for staff only)",
+        "notes_placeholder": "e.g., Prefers high-floor rooms, allergic to peanuts...",
+        "enroll_loyalty_label": "Enroll this guest in the loyalty program.",
+        "buttons": {
+            "cancel": "Cancel",
+            "save": "Save Guest"
+        }
+    },
+    "profile": {
+        "title": "Profile: {{name}}",
+        "description": "A complete overview of the guest's history and details.",
+        "tabs": {
+            "history": "Reservation History",
+            "loyalty": "Loyalty Activity",
+            "notes": "Internal Notes",
+            "stats": "Statistics"
+        },
+        "history_tab": {
+            "title": "Reservation History",
+            "description": "A log of all past, present, and future bookings for {{name}}.",
+            "table_headers": {
+                "reservation_id": "Reservation ID",
+                "check_in": "Check-in",
+                "check_out": "Check-out",
+                "room_type":"Room Type",
+                "room": "Room",
+                "status": "Status"
+            },
+            "empty_state": "No reservations found for this guest."
+        },
+        "loyalty_tab": {
+            "title": "Loyalty Program Activity",
+            "description": "A detailed history of all loyalty points earned and redeemed by {{name}}.",
+            "not_enrolled": "This guest is not currently enrolled in the loyalty program.",
+            "no_activity": "No loyalty activity has been recorded yet."
+        },
+        "notes_tab": {
+            "title": "Internal Notes",
+            "description": "Private notes and preferences for staff reference. Not visible to the guest.",
+            "placeholder": "Add notes about guest preferences, special requests, or incidents...",
+            "save_button": "Save Notes",
+            "save_success_title": "Notes Saved",
+            "save_success_description": "The internal notes for this guest have been updated.",
+            "save_error_title": "Error",
+            "save_error_description": "Could not save notes. Please try again."
+        }
+    },
+    "modals": {
+        "delete_confirmation": {
+            "title": "Are you sure?",
+            "description": "This will permanently delete the profile for {{name}}. This action cannot be undone.",
+            "description_plural": "This will permanently delete {{count}} guest profiles. This action cannot be undone.",
+            "cancel_button": "Cancel",
+            "continue_button": "Delete"
+        }
+    },
+    "toasts": {
+        "permission_denied": "You do not have permission to perform this action.",
+        "delete_success": "Successfully deleted {{count}} guest(s).",
+        "delete_error": "An error occurred while deleting guests.",
+        "tag_add_success": "'{{tag}}' tag added to {{count}} guest(s).",
+        "tag_add_error": "Could not add tags to all selected guests.",
+        "update_success": "Guest profile for {{name}} has been updated.",
+        "add_success": "New guest profile for {{name}} has been created.",
+        "save_error": "Could not save guest data. Please check the form and try again.",
+        "save_error_generic": "An error occurred while saving the guest data.",
+        "error_loading_property": "Could not load property data for your user profile. Some features may be disabled.",
+        "loyalty_disabled_title": "Loyalty Program Disabled",
+        "loyalty_disabled_description": "The loyalty program is not enabled for this property. Please enable it in the settings.",
+        "success_title": "Success",
+        "error_title": "Error",
+        "loyalty_enroll_success": "{{name}} has been enrolled in the loyalty program.",
+        "loyalty_unenroll_success": "{{name}} has been unenrolled from the loyalty program.",
+        "loyalty_update_error": "Could not update loyalty enrollment status."
+    },
+    "bulk_tag_modal": {
+        "title": "Add Tag to {{count}} Guests",
+        "description": "Select a tag to apply to all selected guests. This will not remove existing tags.",
+        "label": "Tag to Apply",
+        "placeholder": "Select a tag...",
+        "buttons": {
+            "cancel": "Cancel",
+            "apply": "Apply Tag"
+        }
+    },
+    "stats": {
+        "tab_title": "Guest Statistics",
+        "title": "Guest Statistics",
+        "description": "An overview of this guest's lifetime value and stay habits.",
+        "total_nights": "Total Nights",
+        "total_spent": "Total Spent",
+        "favorite_room": "Favorite Room Type",
+        "avg_stay": "Avg. Length of Stay",
+        "avg_spend": "Avg. Spend per Night",
+        "last_stay": "Last Stay Date"
+    }
+}

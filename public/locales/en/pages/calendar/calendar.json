@@ -1,0 +1,53 @@
+
+{
+  "loading": "Loading...",
+  "no_room_types": "You have no room types set up. Please add at least one in the 'Rooms > Room Types' section to get started.",
+  "no_rooms": "No physical rooms assigned to this type.",
+  "today_button": "Today",
+  "previous_week": "Previous Week",
+  "next_week": "Next Week",
+  "date_picker": "Select Date",
+  "quick_jump": "Quick Jump",
+  "today": "Today",
+  "this_week": "This Week",
+  "this_month": "This Month",
+  "next_month": "Next Month",
+  "previous_days": "Previous 15 Days",
+  "next_days": "Next 15 Days",
+  "modals": {
+    "confirm_change": {
+      "title": "Confirm Reservation Change",
+      "description": "Please review the changes below and confirm to update the reservation.",
+      "original_title": "Original Details",
+      "new_title": "New Details",
+      "room": "Room",
+      "type": "Type",
+      "dates": "Dates",
+      "rate_plan": "Rate Plan",
+      "price": "Price",
+      "availability_check_title": "Availability Check",
+      "availability_check_description": "The system will double-check for conflicts before confirming the update. If the new slot is unavailable, the change will be rejected.",
+      "cancel_button": "Cancel",
+      "confirm_button": "Confirm Update"
+    }
+  },
+  "toasts": {
+    "invalid_duration_title": "Invalid Duration",
+    "invalid_duration_description": "A reservation must be for at least one night.",
+    "error_title": "Error",
+    "conflict_title": "Scheduling Conflict",
+    "conflict_resize_description": "The requested dates conflict with another booking for {{roomName}}.",
+    "conflict_move_description": "The new slot for this reservation is blocked or overlaps with another booking for {{roomName}}.",
+    "success_title": "Success",
+    "update_success_description": "Reservation updated successfully.",
+    "update_error_description": "Failed to update the reservation. Please try again.",
+    "reservation_not_found_error": "Could not find the reservation to move. Please refresh and try again.",
+    "missing_room_type_data": "Could not find the new room type's data.",
+    "guest_count_high_title": "Guest Capacity Exceeded",
+    "guest_count_high_description": "The selected room type '{{roomTypeName}}' only allows a maximum of {{maxGuests}} guests. This reservation has {{guestCount}}.",
+    "data_missing_title": "Data Missing",
+    "data_missing_description": "Cannot pre-fill reservation; room or room type data is missing."
+  },
+  "access_denied_title": "Access Denied",
+  "access_denied_description": "You do not have permission to view or manage the calendar. Please contact an administrator."
+}

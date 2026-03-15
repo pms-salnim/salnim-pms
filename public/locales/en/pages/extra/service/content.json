@@ -1,0 +1,81 @@
+
+{
+  "title": "Services & Extras",
+  "description": "Create and manage additional services that can be added to reservations, such as airport transfers, spa treatments, or special requests.",
+  "access_denied": {
+    "title": "Access Denied",
+    "description": "You do not have permission to manage services and extras. Please contact an administrator."
+  },
+  "add_service_button": "Add Service",
+  "table": {
+    "title": "Available Services",
+    "description": "List of all services configured for your property.",
+    "headers": {
+      "name": "Name",
+      "price": "Price",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "empty_state": "No services have been created yet.",
+    "actions": {
+      "edit": "Edit",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "delete": "Delete"
+    }
+  },
+  "add_modal": {
+    "title": "Add New Service",
+    "description": "Define the service details. Click save when you're done."
+  },
+  "edit_modal": {
+    "title": "Edit Service",
+    "description": "Update the details for this service."
+  },
+  "form": {
+    "name_label": "Service Name",
+    "description_label": "Description",
+    "price_label": "Price",
+    "billing_unit_label": "Billing Unit",
+    "taxable_label": "This service is taxable"
+  },
+  "billing_units": {
+    "one-time": "One-time",
+    "per-booking": "Per Booking",
+    "per-night": "Per Night",
+    "per-guest": "Per Guest",
+    "per-night-per-room": "Per Night / Room",
+    "one-time-per-guest": "One-time / Guest",
+    "per-night-per-guest": "Per Night / Guest",
+    "one-time-per-room": "One-time / Room"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "delete_alert": {
+    "title": "Are you sure?",
+    "description": "This will permanently delete the service '{{name}}'. This action cannot be undone.",
+    "continue_button": "Continue"
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "continue": "Continue"
+  },
+  "toasts": {
+    "error": "Error",
+    "success": "Success",
+    "permission_denied": "You don't have permission to perform this action.",
+    "validation_error": "Validation Error",
+    "name_price_required": "Service Name and Price are required.",
+    "update_success": "Service updated successfully.",
+    "add_success": "Service added successfully.",
+    "save_error": "Could not save service.",
+    "activate_success": "Service {{name}} has been activated.",
+    "deactivate_success": "Service {{name}} has been deactivated.",
+    "status_update_error": "Could not update service status.",
+    "delete_success": "Service deleted successfully.",
+    "delete_error": "Could not delete service."
+  }
+}

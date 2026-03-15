@@ -1,0 +1,129 @@
+{
+  "card_header": {
+    "title": "Définir la Disponibilité",
+    "edit_title": "Modifier la Règle de Disponibilité",
+    "description": "Bloquez des dates pour maintenance ou ouvrez des chambres pour de nouvelles réservations.",
+    "edit_description": "Modification de la règle ID : {{id}}"
+  },
+  "form": {
+    "room_type": {
+      "label": "Type de Chambre",
+      "loading": "Chargement des types...",
+      "placeholder": "Sélectionnez un type de chambre",
+      "not_found": "Aucun type de chambre trouvé"
+    },
+    "rooms": {
+      "label": "Chambres Spécifiques (Optionnel)",
+      "selected_rooms": "{{count}} sur {{total}} chambres sélectionnées",
+      "all_in_type": "Toutes les chambres de ce type",
+      "select_type_first": "Sélectionnez d'abord un type",
+      "clear_selection": "Désélectionner (appliquer à toutes)",
+      "description": "Laissez vide pour appliquer la règle à toutes les chambres du type sélectionné.",
+      "edit_description": "La modification s'applique à la sélection d'origine (chambre ou type). Pour changer la portée, créez une nouvelle règle."
+    },
+    "action": {
+      "label": "Action",
+      "available": "Rendre Disponible",
+      "block": "Bloquer les Dates"
+    },
+    "date_range": {
+      "label": "Plage de Dates",
+      "placeholder": "Choisissez une date de début et de fin",
+      "open_ended":"Durée Indéterminée",
+      "open_ended_checkbox": "C'est un blocage à durée indéterminée (sans date de fin)",
+      "open_ended_tooltip": "Utile pour la maintenance à long terme. Le blocage durera indéfiniment jusqu'à sa suppression.",
+      "end_date_required": "La date de fin est requise sauf si 'Durée indéterminée' est coché."
+    },
+    "notes": {
+      "label": "Notes (Optionnel)",
+      "placeholder": "ex: Maintenance annuelle, nettoyage en profondeur",
+      "block_default": "Bloqué le {{date, PPp}}",
+      "available_default": "Rendu disponible le {{date, PPp}}"
+    }
+  },
+  "alert": {
+    "title": "Note Importante",
+    "description": "Rendre un type de chambre 'Disponible' annulera tous les blocages de chambres individuelles de ce type pour la période sélectionnée. Le blocage prévaudra toujours sur la disponibilité."
+  },
+  "buttons": {
+    "cancel": "Annuler",
+    "cancel_edit": "Annuler la Modification",
+    "preview_update": "Aperçu de la Mise à Jour",
+    "preview_edit": "Aperçu des Changements",
+    "confirm_block": "Confirmer et Bloquer",
+    "confirm_update": "Confirmer et Rendre Disponible"
+  },
+  "confirmation": {
+    "title": "Confirmer le Changement de Disponibilité",
+    "description": "Veuillez vérifier les changements ci-dessous avant de confirmer. Cette action écrasera les paramètres existants pour les dates sélectionnées.",
+    "action_label": "Action",
+    "action_type": {
+      "block": "BLOQUER LES DATES",
+      "available": "RENDRE DISPONIBLE"
+    },
+    "room_type_label": "Type de Chambre",
+    "rooms_label": "Chambres Spécifiques",
+    "from_label": "Du",
+    "to_label": "Au",
+    "notes_label": "Notes",
+    "open_ended": "Durée indéterminée (sans date de fin)",
+    "selected_room_type": "Type de Chambre Sélectionné",
+    "alert_title_block": "Vous êtes sur le point de BLOQUER ces chambres.",
+    "alert_description_block": "Cela les rendra indisponibles à la réservation pour les dates spécifiées.",
+    "alert_title_available": "Vous êtes sur le point de RENDRE ces chambres disponibles.",
+    "alert_description_available": "Cela permettra leur réservation pour les dates spécifiées."
+  },
+  "log": {
+    "title": "Mises à Jour Récentes de Disponibilité",
+    "description": "Journal des 50 derniers paramètres manuels de disponibilité ou de blocage appliqués.",
+    "tabs": {
+        "all": "Toutes les Mises à Jour",
+        "blocked": "Bloquées",
+        "available": "Disponibles"
+    },
+    "no_records": "Aucun enregistrement trouvé.",
+    "header": {
+        "applies_to": "S'applique à",
+        "start_date": "Date de Début",
+        "end_date": "Date de Fin",
+        "notes": "Notes",
+        "actions": "Actions"
+    },
+    "open_ended": "Durée indéterminée"
+  },
+  "log_table": {
+      "delete_confirm": "Êtes-vous sûr de vouloir supprimer ce paramètre de disponibilité ?",
+      "unknown_room": "Chambre Inconnue",
+      "unknown_room_type": "Type de Chambre Inconnu",
+      "type": "Toutes les chambres de ce type",
+      "open_ended": "Durée indéterminée",
+      "no_records": "Aucun enregistrement trouvé.",
+      "header": {
+          "applies_to": "S'applique à",
+          "start_date": "Date de début",
+          "end_date": "Date de fin",
+          "notes": "Notes",
+          "actions": "Actions"
+      },
+      "actions": {
+          "edit": "Modifier",
+          "delete": "Supprimer"
+      }
+  },
+  "toasts": {
+      "log_load_error_title": "Erreur de Chargement du Journal",
+      "log_load_error_description": "Impossible de récupérer les mises à jour récentes de disponibilité.",
+      "success_title": "Succès",
+      "success_description": "La disponibilité pour {{roomTypeName}} a été mise à jour.",
+      "save_error_title": "Erreur de Sauvegarde",
+      "save_error_description": "Impossible de sauvegarder les paramètres de disponibilité. {{message}}",
+      "delete_success_title": "Paramètre Supprimé",
+      "delete_success_description": "Le paramètre de disponibilité a été supprimé.",
+      "delete_error_title": "Erreur de Suppression",
+      "delete_error_description": "Impossible de supprimer le paramètre. Veuillez réessayer."
+  },
+  "access_denied": {
+      "title": "Accès Refusé",
+      "description": "Vous n'avez pas la permission de gérer la disponibilité. Veuillez contacter un administrateur."
+  }
+}

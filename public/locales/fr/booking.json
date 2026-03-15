@@ -1,0 +1,53 @@
+
+{
+    "tabs": {
+    "reservation": "Réservation",
+    "packages": "Forfaits"
+},
+    "search_bar": {
+        "date_range_label": "Dates de séjour",
+        "date_range_placeholder": "Sélectionnez vos dates",
+        "rooms_guests_label": "Chambres et clients",
+        "rooms_guests_summary": "{{roomCount}} chambre, {{guestCount}} client",
+        "rooms_guests_summary_plural": "{{roomCount}} chambres, {{guestCount}} clients",
+        "update_button": "Mettre à jour",
+        "popover": {
+            "title": "Sélectionner les chambres et les clients",
+            "description": "Spécifiez le nombre de chambres et de clients pour votre séjour.",
+            "rooms": "Chambres",
+            "adults": "Adultes",
+            "children": "Enfants"
+        }
+    },
+    "room_selection": {
+        "no_rooms_title": "Aucune chambre disponible",
+        "no_rooms_description": "Nous n'avons trouvé aucune chambre disponible pour les dates ou le nombre de clients sélectionnés. Veuillez essayer d'autres dates ou ajuster le nombre de clients.",
+        "from_price": "À partir de",
+        "show_rates_button": "Voir les tarifs",
+        "hide_rates_button": "Cacher les tarifs",
+        "more_details_link": "Plus de détails",
+        "sleeps_text": "Jusqu'à {{count}} personnes",
+        "rate_plan_default_description": "Les conditions de réservation standard s'appliquent.",
+        "policies_title": "Conditions",
+        "no_policy_info": "Aucune information de politique spécifique disponible pour ce tarif.",
+        "total_price_tooltip": "Prix total du séjour pour {{nights}} nuits (avant taxes)",
+        "add_room_button": "Ajouter",
+        "total_including_taxes": "Total taxes comprises"
+    },
+    "details_modal": {
+        "no_images": "Aucune image disponible pour ce type de chambre.",
+        "description_title": "À propos de cette chambre",
+        "no_description": "Aucune description fournie pour ce type de chambre.",
+        "amenities_title": "Équipements",
+        "no_amenities": "Aucun équipement spécifique répertorié.",
+        "pricing_title": "Tarification",
+        "pricing_description_start": "Les prix pour cette chambre commencent à partir de",
+        "pricing_description_per_night": "par nuit",
+        "pricing_description_end": "Le prix réel dépend du plan tarifaire et des dates sélectionnés."
+    },
+    "property_info_card": {
+        "welcome": "Bienvenue à {{propertyName}}",
+        "visit_website": "Visitez notre site web",
+        "contact_info": "Coordonnées"
+    }
+}

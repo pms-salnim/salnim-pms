@@ -1,0 +1,72 @@
+
+{
+    "loading": "Chargement...",
+    "access_denied": {
+        "title": "Accès refusé",
+        "description": "Vous n'êtes pas autorisé à consulter les rapports sur les revenus. Veuillez contacter un administrateur."
+    },
+    "filters": {
+        "date_range_label": "Plage de dates (Création de réservation)",
+        "date_range_placeholder": "Sélectionnez une plage de dates",
+        "today_button": "Aujourd'hui",
+        "this_week_button": "Cette semaine",
+        "this_month_button": "Ce mois-ci",
+        "last_7_days_button": "7 derniers jours",
+        "last_30_days_button": "30 derniers jours",
+        "booking_source_label": "Source de réservation",
+        "booking_source_placeholder": "Filtrer par source",
+        "all_sources": "Toutes les sources",
+        "room_type_label": "Type de chambre",
+        "room_type_placeholder": "Filtrer par type de chambre",
+        "all_room_types": "Tous les types de chambres",
+        "apply_button": "Appliquer les filtres"
+    },
+    "cards": {
+        "total_revenue": {
+            "title": "Revenu total réservé",
+            "description": "Valeur totale de toutes les réservations confirmées créées au cours de cette période."
+        },
+        "stay_revenue": {
+            "title": "Revenu total des séjours",
+            "description": "Revenus générés par les séjours effectués au cours de la période."
+        },
+        "pending_revenue": {
+            "title": "Paiements en attente",
+            "description": "Montant total dû pour toutes les réservations non payées ou partiellement payées."
+        },
+        "total_bookings": {
+            "title": "Total des réservations",
+            "description": "Nombre de réservations confirmées créées au cours de cette période."
+        },
+        "adr": {
+            "title": "Tarif journalier moyen (ADR)",
+            "description": "Revenu moyen gagné par chambre occupée et par jour."
+        },
+        "occupancy_rate": {
+            "title": "Taux d'occupation",
+            "description": "Pourcentage de chambres disponibles occupées au cours de cette période."
+        },
+        "revpar": {
+            "title": "Revenu par chambre disponible (RevPAR)",
+            "description": "Revenu moyen généré par chambre disponible."
+        },
+        "canceled_bookings": {
+            "title": "Valeur des réservations annulées",
+            "description": "Revenus potentiels perdus suite aux annulations au cours de cette période."
+        }
+    },
+    "chart": {
+        "title": "Évolution des revenus",
+        "description": "Suivez le total de vos revenus de réservations pour la période sélectionnée.",
+        "empty_state": "Aucune donnée de revenus disponible pour les filtres sélectionnés.",
+        "tooltip_date_label": "Date"
+    },
+    "breakdown": {
+        "room_type_title": "Revenus par type de chambre",
+        "room_type_description": "Répartition des revenus totaux par type de chambre.",
+        "empty_state_room": "Aucune donnée de revenus pour aucun type de chambre dans cette période.",
+        "source_title": "Revenus par source de réservation",
+        "source_description": "Répartition des revenus totaux par la manière dont la réservation a été effectuée.",
+        "empty_state_source": "Aucune donnée de revenus pour aucune source dans cette période."
+    }
+}

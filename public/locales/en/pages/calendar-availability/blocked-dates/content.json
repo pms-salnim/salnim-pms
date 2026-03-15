@@ -1,0 +1,22 @@
+
+{
+    "title": "Blocked Dates",
+    "access_denied": {
+        "title": "Access Denied",
+        "description": "You do not have permission to view this page. Please contact an administrator."
+    },
+    "table": {
+        "headers": {
+            "room_type": "Room Type",
+            "start_date": "Start Date",
+            "applies_to":"Applies to",
+            "end_date": "End Date",
+            "notes": "Notes"
+        },
+        "empty_state": "No dates have been manually blocked."
+    },
+    "toasts": {
+        "error_title": "Error",
+        "error_description": "Could not fetch blocked dates."
+    }
+}

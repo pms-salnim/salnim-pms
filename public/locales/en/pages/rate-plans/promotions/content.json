@@ -1,0 +1,95 @@
+
+{
+  "title": "Promotions & Discounts",
+  "description": "Create special offers and coupon codes to attract more guests.",
+  "add_button": "New Promotion",
+  "edit_modal": {
+    "title": "Edit Promotion",
+    "description": "Set up your discount. It will apply to the selected rate plans within the validity period.",
+    "no_rate_plans_warning": "You must define at least one Rate Plan before creating a promotion."
+  },
+  "add_modal": {
+    "title": "Create New Promotion",
+    "description": "Set up your discount. It will apply to the selected rate plans within the validity period.",
+    "no_rate_plans_warning": "You must define at least one Rate Plan before creating a promotion."
+  },
+  "list": {
+    "headers": {
+      "name": "Promotion Name",
+      "discount": "Discount",
+      "type": "Type",
+      "usage": "Usage",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "types": {
+      "coupon": "Coupon",
+      "automatic": "Automatic"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "no_promotions": "No promotions found. Click \"New Promotion\" to get started.",
+    "actions_menu": {
+      "edit": "Edit",
+      "delete": "Delete"
+    }
+  },
+  "form": {
+    "name_label": "Promotion Name",
+    "name_placeholder": "e.g., Summer Sale",
+    "description_label": "Description (Optional)",
+    "description_placeholder": "Briefly describe the promotion.",
+    "type_label": "Promotion Type",
+    "type_auto": "Automatic Discount",
+    "type_coupon": "Coupon Code",
+    "coupon_code_label": "Coupon Code",
+    "coupon_code_placeholder": "e.g., SUMMER24",
+    "usage_limit_label": "Usage Limit (Optional)",
+    "usage_limit_placeholder": "Leave blank for unlimited",
+    "rate_plans_label": "Applicable Rate Plans",
+    "discount_type_label": "Discount Type",
+    "discount_type_percentage": "Percentage",
+    "discount_type_flat": "Flat Rate",
+    "discount_value_label": "Discount Value",
+    "discount_value_percentage_placeholder": "e.g., 15",
+    "discount_value_flat_placeholder": "e.g., 25",
+    "validity_period_label": "Validity Period",
+    "validity_period_placeholder": "Pick dates",
+    "active_label": "Promotion is Active",
+    "validation": {
+      "required_fields": "Please fill all required fields.",
+      "coupon_required": "A coupon code is required for this promotion type."
+    }
+  },
+  "delete_dialog": {
+    "title": "Are you absolutely sure?",
+    "description": "This action cannot be undone. This will permanently delete the promotion \"{{name}}\".",
+    "cancel_button": "Cancel",
+    "continue_button": "Continue"
+  },
+  "toasts": {
+    "permission_denied": "Permission denied or property not identified.",
+    "success_update_title": "Success",
+    "success_update_description": "Promotion updated.",
+    "success_create_title": "Success",
+    "success_create_description": "Promotion added.",
+    "error_save_title": "Error",
+    "error_save_description": "Could not save promotion.",
+    "success_delete_title": "Success",
+    "success_delete_description": "Promotion deleted.",
+    "error_delete_title": "Error",
+    "error_delete_description": "Could not delete the promotion.",
+    "promo_applied_success": "\"{{name}}\" has been successfully applied.",
+    "promo_applied_error": "This promo code is not valid for the items in your booking.",
+    "promo_code_empty": "Please enter a promotion code to apply.",
+    "promo_code_invalid": "The promotion code you entered is not valid.",
+    "validation_error_title": "Validation Error"
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "save": "Save Promotion",
+    "continue": "Continue"
+  }
+}

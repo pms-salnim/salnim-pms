@@ -1,0 +1,27 @@
+{
+  "fixed_stay_badge": "Fixed Stay",
+  "flexible_stay_badge": "Flexible Stay",
+  "whats_included_title": "What's Included:",
+  "accommodation_inclusion": "Accommodation in {{roomTypeName}}",
+  "choose_room_type_label": "Choose Your Room Type",
+  "checkin_date_label": "Check-in Date",
+  "date_range_label": "Date Range",
+  "checkin_date_placeholder": "Select check-in date",
+  "date_range_placeholder": "Select date range",
+  "book_package_button": "Book This Package",
+  "not_available_button": "Not Available",
+  "empty_state": "There are currently no special packages available.",
+  "price_display": {
+    "for_guests": "for {{count}} guests",
+    "per_nights": "for {{count}} nights",
+    "up_to_guests": "up to {{count}} guests",
+    "per_night": "/night",
+    "per_guest_per_night": "/guest/night"
+  },
+  "toasts": {
+    "select_room_type": "Please select a room type for this package.",
+    "select_checkin_date": "Please select a check-in date for this package.",
+    "select_date_range": "Please select a valid date range.",
+    "select_valid_range": "Please select a valid date range of at least one night."
+  }
+}

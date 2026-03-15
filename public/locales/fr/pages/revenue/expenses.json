@@ -1,0 +1,89 @@
+
+{
+  "title": "Dépenses",
+  "description": "Suivez et gérez toutes les dépenses de votre établissement.",
+  "add_expense_button": "Ajouter une dépense",
+  "stats": {
+    "total": "Total des Dépenses",
+    "fixed": "Total des Dépenses Fixes",
+    "variable": "Total des Dépenses Variables"
+  },
+  "list": {
+    "filters": {
+      "search_placeholder": "Rechercher par nom...",
+      "type_placeholder": "Filtrer par type...",
+      "category_placeholder": "Filtrer par catégorie...",
+      "all_types": "Tous les Types",
+      "all_categories": "Toutes les Catégories"
+    },
+    "headers": {
+      "date": "Date",
+      "name": "Nom",
+      "type": "Type",
+      "category": "Catégorie",
+      "amount": "Montant",
+      "notes": "Notes",
+      "actions": "Actions"
+    },
+    "empty_state": "Aucune dépense ne correspond aux filtres actuels.",
+    "total": "Total",
+    "pagination": {
+      "rows_per_page": "Lignes par page :",
+      "page_of": "Page {{currentPage}} sur {{totalPages}}",
+      "previous_button": "Précédent",
+      "next_button": "Suivant"
+    },
+    "actions": {
+      "edit": "Modifier",
+      "delete": "Supprimer"
+    }
+  },
+  "form": {
+    "add_title": "Ajouter une nouvelle dépense",
+    "add_description": "Remplissez les détails ci-dessous pour enregistrer une nouvelle dépense.",
+    "edit_title": "Modifier la dépense",
+    "edit_description": "Mettez à jour les détails de la dépense.",
+    "name_label": "Nom de la dépense",
+    "type_label": "Type de dépense",
+    "category_label": "Catégorie",
+    "amount_label": "Montant",
+    "date_label": "Date",
+    "date_placeholder": "Choisir une date",
+    "notes_label": "Notes (Optionnel)",
+    "notes_placeholder": "ex: détails spécifiques sur la dépense"
+  },
+  "buttons": {
+    "cancel": "Annuler",
+    "save": "Enregistrer la dépense"
+  },
+  "toasts": {
+    "validation_error_title": "Erreur de validation",
+    "validation_error_description": "Veuillez remplir tous les champs obligatoires (Nom, Montant, Date).",
+    "error_fetching": "Impossible de charger les dépenses.",
+    "error_title": "Erreur",
+    "save_error_description": "Impossible d'enregistrer la dépense.",
+    "update_success_title": "Dépense mise à jour",
+    "create_success_title": "Dépense créée",
+    "delete_success_title": "Dépense supprimée",
+    "delete_error_title": "Échec de la suppression"
+  },
+  "types": {
+    "fixe": "Fixe",
+    "variable": "Variable"
+  },
+  "categories": {
+    "loyer": "Loyer",
+    "salaires": "Salaires",
+    "fournitures": "Fournitures",
+    "maintenance": "Maintenance",
+    "électricité": "Électricité",
+    "eau": "Eau",
+    "divers": "Divers"
+  },
+  "confirm_delete_title": "Êtes-vous sûr ?",
+  "confirm_delete_description": "Cette action supprimera définitivement l'enregistrement de la dépense '{{name}}'. Cette action est irréversible.",
+  "delete_dialog": {
+    "cancel_button": "Annuler",
+    "continue_button": "Supprimer"
+  }
+}

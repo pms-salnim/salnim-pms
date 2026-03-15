@@ -1,0 +1,64 @@
+
+{
+  "title": "Paiements en attente",
+  "description": "Cette section affiche toutes les réservations avec des soldes impayés ou partiellement payés.",
+  "outstanding_balances": {
+    "title": "Soldes impayés",
+    "found_reservations": "{{count}} réservation(s) trouvée(s) avec un solde impayé."
+  },
+  "search_placeholder": "Rechercher par client ou ID...",
+  "filters": {
+    "status": {
+      "placeholder": "Filtrer par statut",
+      "all": "Tous les statuts",
+      "pending": "En attente",
+      "partial": "Partiel"
+    },
+    "sort": {
+      "placeholder": "Trier par",
+      "check_in_soonest": "Arrivée (la plus proche)",
+      "amount_high_low": "Montant dû (décroissant)",
+      "amount_low_high": "Montant dû (croissant)"
+    }
+  },
+  "table": {
+    "guest": "Client",
+    "dates": "Date d'arrivée",
+    "reservation_no": "N° de le Réservation",
+    "due": "Montant Dû",
+    "status": "Statut du Paiement",
+    "actions": "Actions"
+  },
+  "buttons": {
+    "add_payment": "Ajouter un paiement"
+  },
+  "loading": "Chargement...",
+  "access_denied": {
+    "title": "Accès refusé",
+    "description": "Vous n'avez pas la permission de voir cette page. Veuillez contacter un administrateur."
+  },
+  "no_pending": "Aucun paiement en attente",
+  "all_paid": "Toutes les réservations sont payées. Bon travail !",
+  "pagination": {
+    "rows_per_page": "Lignes par page",
+    "page_of": "Page {{currentPage}} sur {{totalPages}}",
+    "previous_button": "Précédent",
+    "next_button": "Suivant"
+  },
+  "toasts": {
+    "error_fetching_reservations": {
+      "title": "Erreur",
+      "description": "Impossible de récupérer les réservations en attente."
+    },
+    "error_fetching_payments": {
+      "title": "Erreur",
+      "description": "Impossible de récupérer les données de paiement."
+    },
+    "success_title": "Succès",
+    "payment_recorded_success_description": "Paiement enregistré avec succès."
+  },
+  "payment_modal": {
+    "title": "Enregistrer un paiement",
+    "description": "Ajoutez manuellement un paiement reçu pour une réservation."
+  }
+}

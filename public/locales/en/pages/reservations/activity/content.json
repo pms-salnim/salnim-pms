@@ -1,0 +1,70 @@
+
+{
+    "header": {
+        "title": "Today's Activity",
+        "calendar_view": "Calendar View",
+        "new_reservation": "New Reservation"
+    },
+    "kpis": {
+        "arrivals": "Arrivals",
+        "departures": "Departures",
+        "stay_overs": "Stay-overs",
+        "no_shows": "No-Shows"
+    },
+    "filters": {
+        "search_placeholder": "Search by Guest, Room, Res No...",
+        "all": "All Activities",
+        "arrivals": "Arrivals",
+        "departures": "Departures",
+        "in_house": "In-house",
+        "no_shows": "No-Shows"
+    },
+    "table": {
+        "guest": "Guest",
+        "res_no": "Res No.",
+        "dates": "Dates",
+        "room_type": "Room Type",
+        "room": "Room",
+        "total": "Total",
+        "payment_total": "Payment Total",
+        "booking_date": "Booking Date",
+        "status": "Status",
+        "actions": "Actions",
+        "no_results": "No matching activities found."
+    },
+    "actions": {
+        "check_in": "Check-in",
+        "check_out": "Check-out",
+        "view": "View",
+        "edit": "Edit"
+    },
+    "housekeeping": {
+        "title": "Housekeeping Status",
+        "subtitle": "{{count}} rooms are currently dirty and need cleaning.",
+        "go_to_housekeeping": "Go to Housekeeping"
+    },
+    "modals": {
+        "edit_reservation": {
+            "title": "Edit Reservation"
+        },
+        "new_reservation": {
+            "title": "New Reservation"
+        }
+    },
+    "toasts": {
+        "error_fetching_reservations_title": "Error Fetching Reservations",
+        "error_fetching_reservations_description": "Could not load today's activities.",
+        "check_in_success_title": "Check-in Successful",
+        "check_in_success_description": "The guest has been checked in.",
+        "check_in_error_title": "Check-in Failed",
+        "check_in_error_description": "Could not process the check-in.",
+        "check_out_success_title": "Check-out Successful",
+        "check_out_success_description": "The guest has been checked out. Cleaning task created for room {{roomName}}.",
+        "check_out_error_title": "Check-out Failed",
+        "check_out_error_description": "Could not process the check-out."
+    },
+    "access_denied_title": "Access Denied",
+    "access_denied_description": "You do not have permission to view this page."
+}
+
+    

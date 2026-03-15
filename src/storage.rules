@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Deny all reads and writes by default.
+// You can open up access to specific paths as needed.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

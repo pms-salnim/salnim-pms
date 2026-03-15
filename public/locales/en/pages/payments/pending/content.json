@@ -1,0 +1,64 @@
+
+{
+  "title": "Pending Payments",
+  "description": "This section displays all reservations that have unpaid or partially paid balances.",
+  "outstanding_balances": {
+    "title": "Outstanding Balances",
+    "found_reservations": "Found {{count}} reservation(s) with an outstanding balance."
+  },
+  "search_placeholder": "Search by guest or ID...",
+  "filters": {
+    "status": {
+      "placeholder": "Filter by status",
+      "all": "All Statuses",
+      "pending": "Pending",
+      "partial": "Partial"
+    },
+    "sort": {
+      "placeholder": "Sort by",
+      "check_in_soonest": "Check-in (Soonest)",
+      "amount_high_low": "Amount Due (High-Low)",
+      "amount_low_high": "Amount Due (Low-High)"
+    }
+  },
+  "table": {
+    "guest": "Guest",
+    "dates": "Check-in Date",
+    "reservation_no": "Reservation N°.",
+    "due": "Amount Due",
+    "status": "Payment Status",
+    "actions": "Actions"
+  },
+  "buttons": {
+    "add_payment": "Add Payment"
+  },
+  "loading": "Loading...",
+  "access_denied": {
+    "title": "Access Denied",
+    "description": "You do not have permission to view this page. Please contact an administrator."
+  },
+  "no_pending": "No Pending Payments",
+  "all_paid": "All reservations are paid up. Great job!",
+  "pagination": {
+    "rows_per_page": "Rows per page",
+    "page_of": "Page {{currentPage}} of {{totalPages}}",
+    "previous_button": "Previous",
+    "next_button": "Next"
+  },
+  "toasts": {
+    "error_fetching_reservations": {
+      "title": "Error",
+      "description": "Could not fetch pending reservations."
+    },
+    "error_fetching_payments": {
+      "title": "Error",
+      "description": "Could not fetch payment data."
+    },
+    "success_title": "Success",
+    "payment_recorded_success_description": "Payment recorded successfully."
+  },
+  "payment_modal": {
+    "title": "Record a Payment",
+    "description": "Manually add a payment received for a reservation."
+  }
+}

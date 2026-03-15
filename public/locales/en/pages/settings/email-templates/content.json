@@ -1,0 +1,38 @@
+
+{
+    "title": "Email Templates",
+    "description": "Customize and manage email templates sent to guests at each key stage of the reservation lifecycle.",
+    "last_edited": "Last edited {{distance}} by {{name}}",
+    "buttons": {
+        "customize": "Customize",
+        "close": "Close"
+    },
+    "status": {
+        "draft": "Draft",
+        "live": "Live",
+        "disabled": "Disabled"
+    },
+    "editor": {
+        "title": "Customize: {{templateName}}",
+        "description": "Modify the subject and body of the email. Use dynamic variables to personalize the content.",
+        "subject_label": "Subject",
+        "body_label": "Body",
+        "variables_title": "Dynamic Variables",
+        "variables_description": "Click to insert a variable into the body.",
+        "preview_button": "Preview",
+        "save_button": "Save",
+        "status_enabled": "Template is Live",
+        "status_disabled": "Template is Disabled"
+    },
+    "preview_modal": {
+        "title": "Email Preview",
+        "description": "This is a representation of how the email will look. Actual appearance may vary slightly in different email clients."
+    },
+    "toasts": {
+        "success_save": "Template \"{{name}}\" updated to {{status}}.",
+        "success_autosave": "Changes auto-saved.",
+        "error_save": "Failed to save template.",
+        "error_preview": "Failed to generate preview",
+        "preview_placeholder_note": "Using placeholder data for preview."
+    }
+}

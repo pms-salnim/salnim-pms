@@ -1,0 +1,112 @@
+{
+    "title": "All Reservations",
+    "description": "View and manage all bookings, past, present, and future.",
+    "search_placeholder": "Search by guest name, reservation ID...",
+    "add_reservation_button": "New Reservation",
+    "export_button":"Export",
+    "export_pdf":"PDF",
+    "export_excel":"XLSX",
+    "export_csv":"CSV",
+    "filters": {
+        "button_text": "Filters",
+        "label": "Filter Reservations",
+        "status_label": "Status",
+        "status_placeholder": "Filter by status...",
+        "status_all": "All Statuses",
+        "room_type_label": "Room Type",
+        "room_type_placeholder": "Filter by room type...",
+        "room_type_all": "All Room Types",
+        "date_range_label": "Date Range (Overlaps)",
+        "date_range_placeholder": "Filter by date",
+        "date_booked_label": "Booked Date",
+        "check_in_date_label": "Check-in Date",
+        "check_out_date_label": "Check-out Date",
+        "quick_today": "Today",
+        "quick_this_week": "This week",
+        "quick_this_month": "This month",
+        "quick_next_week": "Next week",
+        "quick_next_month": "Next month",
+        "clear_button": "Clear",
+        "cancellation_date_label": "Cancellation Date",
+        "cancellation_reason_label": "Cancellation Reason",
+        "cancellation_reason_placeholder": "e.g. Guest request",
+        "booking_source_label": "Booking Source",
+        "source_all": "All",
+        "payment_status_label": "Payment / Refund Status",
+        "payment_status_all": "All"
+    },
+    "list": {
+        "bulk_actions":{
+            "selected_text": "{{count}} reservation selected",
+            "selected_text_plural": "{{count}} reservations selected",
+            "button_text": "Actions",
+            "change_status_option": "Change status",
+            "mark_as_status": "Mark as {{status}}",
+            "delete_option": "Delete selected",
+            "no_reservations_message": "No reservations found matching your criteria.",
+            "select_all_aria_label": "Select all reservations on this page",
+            "select_row_aria_label": "Select reservation for {{name}}"
+        },
+        "payment_status": {
+            "paid":"Paid",
+            "unpaid":"Unpaid",
+            "partial":"Partial"
+        },
+        "headers": {
+            "guest": "Guest",
+            "reservation_no": "Res No.",
+            "dates": "Dates",
+            "check_in":"Check-in",
+            "check_out":"Check-out",
+            "room_type":"Room Type",
+            "room": "Room",
+            "payment_total":"Payment Total",
+            "booking_date":"Booking Date",
+            "status": "Status",
+            "total": "Total",
+            "actions": "Actions"
+        },
+        "actions_menu": {
+            "view": "View Details",
+            "edit": "Edit",
+            "create_guest": "Create Guest Profile",
+            "send_email": "Send Email",
+            "check_in": "Check-in",
+            "check_out": "Check-out",
+            "delete": "Delete"
+        }
+    },
+    "modals": {
+        "delete_confirmation": {
+            "title": "Are you absolutely sure?",
+            "description": "This will permanently delete {{count}} reservation(s) and associated data. This action cannot be undone.",
+            "delete_related_docs": "Also delete associated invoice and payment records.",
+            "cancel_button": "Cancel",
+            "continue_button": "Continue"
+        },
+        "status_change_confirmation": {
+            "title": "Confirm Status Change",
+            "description": "Are you sure you want to change the status of {{count}} reservation(s) to '{{status}}'?",
+            "cancel_button": "Cancel",
+            "continue_button": "Confirm"
+        }
+    },
+    "toasts": {
+        "permission_denied": "You do not have permission to perform this action.",
+        "delete_success": "{{count}} reservation(s) have been deleted.",
+        "delete_error": "Failed to delete reservations. Please try again.",
+        "status_change_success": "Status for {{count}} reservation(s) updated to '{{status}}'.",
+        "status_change_error": "Failed to update reservation statuses.",
+        "success_title": "Success",
+        "error_title": "Error"
+    },
+    "table": {
+        "pagination": {
+            "rows_per_page": "Rows per page:",
+            "page_of": "Page {{currentPage}} of {{totalPages}}",
+            "previous_button": "Previous",
+            "next_button": "Next"
+        }    
+    }
+    
+}

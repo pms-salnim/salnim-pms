@@ -1,0 +1,108 @@
+
+{
+  "title": "Plans Repas",
+  "description": "Définissez et gérez les options de plans repas pour vos clients, comme le petit-déjeuner ou les forfaits demi-pension.",
+  "add_button": "Ajouter un Plan Repas",
+  "access_denied": {
+    "title": "Accès Refusé",
+    "description": "Vous n'avez pas la permission de gérer les plans repas. Veuillez contacter un administrateur."
+  },
+  "table": {
+    "title": "Plans Repas Disponibles",
+    "description": "Liste de tous les plans repas configurés pour votre établissement.",
+    "headers": {
+      "image": "Image",
+      "name": "Nom",
+      "price": "Prix",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "empty_state": "Aucun plan repas n'a encore été créé."
+  },
+  "edit_modal": {
+    "title": "Modifier le Plan Repas"
+  },
+  "add_modal": {
+    "title": "Ajouter un Nouveau Plan Repas",
+    "description": "Définissez les détails du plan repas. Cliquez sur enregistrer lorsque vous avez terminé."
+  },
+  "form": {
+    "name_label": "Nom du Plan",
+    "name_placeholder": "Ex: Pension Complète",
+    "description_label": "Description",
+    "description_placeholder": "Ex: Inclut le petit-déjeuner, le déjeuner et le dîner.",
+    "price_label": "Prix",
+    "billing_unit_label": "Unité de Facturation",
+    "menu_url_label": "URL du Menu (Optionnel)",
+    "menu_url_placeholder": "Ex: https://exemple.com/menu.pdf",
+    "image_label": "Image (Optionnel)",
+    "image_upload_text": "Cliquez pour télécharger une image",
+    "image_upload_subtext": "PNG ou JPG jusqu'à 2Mo",
+    "taxable_label": "Ce plan repas est taxable",
+    "required_field_indicator": "*"
+  },
+  "billing_units": {
+    "per-night-per-guest": "Par Nuit / Personne",
+    "per-night-per-room": "Par Nuit / Chambre",
+    "one-time-per-guest": "Unique / Personne",
+    "one-time-per-room": "Unique / Chambre"
+  },
+  "status": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "delete_dialog": {
+    "title": "Êtes-vous sûr ?",
+    "description": "Cela supprimera définitivement le plan repas '{{name}}'. Cette action est irréversible.",
+    "continue_button": "Supprimer"
+  },
+  "buttons": {
+    "cancel": "Annuler",
+    "save": "Enregistrer le Plan Repas",
+    "close": "Fermer"
+  },
+  "actions_menu": {
+    "edit": "Modifier",
+    "deactivate": "Désactiver",
+    "activate": "Activer",
+    "delete": "Supprimer"
+  },
+  "toasts": {
+    "permission_denied": {
+      "title": "Accès Refusé",
+      "description": "Vous n'êtes pas autorisé à effectuer cette action."
+    },
+    "validation_error": {
+      "title": "Erreur de Validation",
+      "description": "Le nom et le prix du plan repas sont obligatoires."
+    },
+    "update_success": {
+      "title": "Succès",
+      "description": "Plan repas mis à jour avec succès."
+    },
+    "add_success": {
+      "title": "Succès",
+      "description": "Plan repas ajouté avec succès."
+    },
+    "save_error": {
+      "title": "Erreur",
+      "description": "Impossible d'enregistrer le plan repas."
+    },
+    "status_update_success": {
+      "title": "Statut Mis à Jour",
+      "description": "Le plan repas '{{name}}' a été défini sur '{{status}}'."
+    },
+    "status_update_error": {
+      "title": "Erreur",
+      "description": "Impossible de mettre à jour le statut du plan repas."
+    },
+    "delete_success": {
+      "title": "Supprimé",
+      "description": "Plan repas supprimé avec succès."
+    },
+    "delete_error": {
+      "title": "Erreur",
+      "description": "Impossible de supprimer le plan repas."
+    }
+  }
+}

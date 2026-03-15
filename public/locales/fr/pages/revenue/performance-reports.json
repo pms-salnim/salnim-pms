@@ -1,0 +1,27 @@
+
+{
+    "title": "Rapports de Performance",
+    "description": "Générez des rapports détaillés sur les revenus, l'occupation et d'autres indicateurs de performance clés.",
+    "card_generate": {
+        "title": "Générer un Rapport",
+        "description": "Sélectionnez une plage de dates et des filtres pour générer un nouveau rapport de performance."
+    },
+    "buttons": {
+        "generate": "Générer le Rapport",
+        "generating": "Génération en cours...",
+        "export": "Exporter"
+    },
+    "card_results": {
+        "title": "Résultats du Rapport",
+        "description": "Rapport pour la période du {{from}} au {{to}}.",
+        "filters_info": "Filtres : Type de chambre - {{roomType}} | Source de réservation - {{bookingSource}}",
+        "export": "Exporter",
+        "download_pdf": "Exporter en PDF",
+        "export_xlsx": "Exporter en XLSX",
+        "export_csv": "Exporter en CSV"
+    },
+    "no_data": "Aucune donnée disponible pour la période et les filtres sélectionnés.",
+    "toasts": {
+        "date_range_required": "Veuillez sélectionner une plage de dates valide pour générer le rapport."
+    }
+}

@@ -1,0 +1,188 @@
+
+{
+  "title": "Invoices",
+  "description": "Manage all invoices for your property, from creation to payment tracking.",
+  "create_invoice_button": "Create Invoice",
+  "filters": {
+    "search_placeholder": "Search by guest or invoice #...",
+    "status_label": "Status",
+    "status_placeholder": "Filter by status",
+    "all_statuses": "All Statuses",
+    "draft": "Draft",
+    "pending": "Pending",
+    "paid": "Paid",
+    "overdue": "Overdue",
+    "sort_by_label": "Sort by",
+    "sort_placeholder": "Select sorting",
+    "sort_options": {
+      "most_recent": "Most Recent",
+      "oldest": "Oldest",
+      "amount_high_low": "Amount: High to Low",
+      "amount_low_high": "Amount: Low to High",
+      "due_date_soonest": "Due Date: Soonest"
+    }
+  },
+  "table": {
+    "select_all_aria_label": "Select all invoices on this page",
+    "select_row_aria_label": "Select invoice for {{guest}}",
+    "headers": {
+      "invoice_no": "Invoice #",
+      "date_issued": "Date Issued",
+      "guest_company": "Guest / Company",
+      "amount": "Amount",
+      "status": "Status",
+      "due_date": "Due Date",
+      "actions": "Actions"
+    },
+    "empty_state": "No invoices found for the current filters.",
+    "actions_menu": {
+      "view": "View Details",
+      "edit": "Edit",
+      "download_pdf": "Download PDF",
+      "send_email": "Send via Email",
+      "delete": "Delete"
+    },
+    "bulk_actions": {
+      "selected_text": "{{count}} selected",
+      "button_text": "Actions",
+      "change_status_option": "Change Status",
+      "mark_as_draft": "Mark as Draft",
+      "mark_as_pending": "Mark as Pending",
+      "mark_as_paid": "Mark as Paid",
+      "mark_as_overdue": "Mark as Overdue",
+      "delete_option": "Delete Selected"
+    },
+    "pagination": {
+      "rows_per_page": "Rows per page",
+      "page_of": "Page {{currentPage}} of {{totalPages}}",
+      "previous_button": "Previous",
+      "next_button": "Next"
+    }
+  },
+  "create_invoice_modal": {
+    "title": "Create New Invoice",
+    "description": "Manually create an invoice for a guest or external company."
+  },
+  "edit_invoice_modal": {
+    "title": "Edit Invoice",
+    "description": "Update the details for this invoice. Changes will be saved immediately."
+  },
+  "view_modal": {
+    "title": "Invoice #{{number}}",
+    "description": "Details for the invoice issued to {{guest}} on {{date}}.",
+    "bill_to_heading": "Bill To",
+    "reservation_label": "Reservation",
+    "date_issued_label": "Date Issued",
+    "due_date_label": "Due Date",
+    "items_heading": "Items",
+    "table_headers": {
+      "description": "Description",
+      "qty": "Qty",
+      "unit_price": "Unit Price",
+      "total": "Total"
+    },
+    "no_line_items": "There are no line items on this invoice.",
+    "notes_heading": "Notes",
+    "subtotal_before_discount_label": "Subtotal (before discount)",
+    "discount_label": "Discount ({{name}})",
+    "subtotal_label": "Subtotal",
+    "tax_label": "{{name}} ({{rate}}%)",
+    "grand_total_label": "Grand Total",
+    "total_paid_label":"Total Paid",
+    "net_amount_label":"Net Amount",
+    "buttons": {
+      "download_pdf": "Download PDF",
+      "send_email": "Send Email",
+      "email_invoice": "Email Invoice",
+      "other_templates": "Other Templates",
+      "edit": "Edit",
+      "close": "Close"
+    }
+  },
+  "form": {
+    "invoice_number_label": "Invoice #",
+    "invoice_number_placeholder": "e.g., INV-00124",
+    "invoice_date_label": "Invoice Date",
+    "due_date_label": "Due Date",
+    "pick_a_date_placeholder": "Pick a date",
+    "bill_to_heading": "Bill To",
+    "guest_company_label": "Guest / Company Name",
+    "guest_company_placeholder": "Start typing to search existing guests...",
+    "guest_email_label": "Guest Email",
+    "email_placeholder": "guest@example.com",
+    "guest_phone_label": "Guest Phone",
+    "phone_placeholder": "+1 234 567 890",
+    "reservation_number_label": "Reservation Number (Optional)",
+    "reservation_number_placeholder": "Link to an existing reservation...",
+    "line_items_heading": "Line Items",
+    "line_items": {
+      "description": "Description",
+      "quantity": "Qty",
+      "unit_price": "Unit Price",
+      "total": "Total"
+    },
+    "description_placeholder": "Item description",
+    "qty_placeholder": "1",
+    "unit_price_placeholder": "0.00",
+    "total_placeholder": "0.00",
+    "add_line_item_button": "Add Line Item",
+    "payment_status_label": "Payment Status",
+    "payment_status_placeholder": "Select status",
+    "status_options": {
+      "draft": "Draft",
+      "pending": "Pending",
+      "paid": "Paid",
+      "overdue": "Overdue"
+    },
+    "payment_terms_label": "Payment Terms",
+    "payment_terms_placeholder": "Select terms",
+    "terms_options": {
+      "due_on_receipt": "Due on receipt",
+      "net_15": "Net 15",
+      "net_30": "Net 30",
+      "net_60": "Net 60"
+    },
+    "notes_label": "Notes / Memo",
+    "notes_placeholder": "Optional notes to the guest...",
+    "subtotal_label": "Subtotal",
+    "discount_label": "Discount",
+    "discount_type_fixed": "Fixed",
+    "discount_type_percentage": "Percentage",
+    "discount_amount_label": "Discount Amount",
+    "tax_rate_label": "Tax Rate (%)",
+    "tax_amount_label": "Tax",
+    "grand_total_label": "Grand Total",
+    "buttons": {
+      "cancel": "Cancel",
+      "create_invoice": "Create Invoice",
+      "save_changes": "Save Changes"
+    }
+  },
+  "delete_dialog": {
+    "title": "Are you sure?",
+    "description": "This will permanently delete {{count}} invoice(s). This action cannot be undone.",
+    "cancel_button": "Cancel",
+    "continue_button": "Confirm Delete"
+  },
+  "status_change_dialog": {
+    "title": "Confirm Status Change",
+    "description": "Are you sure you want to change the status of {{count}} invoice(s) to '{{status}}'?",
+    "cancel_button": "Cancel",
+    "confirm_button": "Confirm"
+  },
+  "toasts": {
+    "error_title": "Error",
+    "success": "Success",
+    "update_success": "Invoice updated successfully.",
+    "create_success": "New invoice created successfully.",
+    "delete_success": "{{count}} invoice(s) deleted.",
+    "delete_error": "Could not delete all selected invoices.",
+    "status_change_success": "Status for {{count}} invoice(s) updated to '{{status}}'.",
+    "status_change_error": "Could not update all selected invoices.",
+    "not_found_title": "Invoice Not Found",
+    "not_found_description": "The invoice associated with this reservation could not be found.",
+    "pdf_download_error": "Could not generate invoice PDF.",
+    "send_email_missing_data": "Invoice or property data is missing.",
+    "guest_email_not_found": "Could not find an email address for this guest."
+  }
+}

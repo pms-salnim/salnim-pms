@@ -1,0 +1,187 @@
+
+{
+  "title": "Factures",
+  "description": "Gérez toutes les factures de votre établissement, de la création au suivi des paiements.",
+  "create_invoice_button": "Créer une facture",
+  "filters": {
+    "search_placeholder": "Rechercher par client ou n° de facture...",
+    "status_label": "Statut",
+    "status_placeholder": "Filtrer par statut",
+    "all_statuses": "Tous les statuts",
+    "draft": "Brouillon",
+    "pending": "En attente",
+    "paid": "Payée",
+    "overdue": "En retard",
+    "sort_by_label": "Trier par",
+    "sort_placeholder": "Sélectionner un tri",
+    "sort_options": {
+      "most_recent": "Plus récentes",
+      "oldest": "Plus anciennes",
+      "amount_high_low": "Montant : décroissant",
+      "amount_low_high": "Montant : croissant",
+      "due_date_soonest": "Échéance : la plus proche"
+    }
+  },
+  "table": {
+    "select_all_aria_label": "Sélectionner toutes les factures sur cette page",
+    "select_row_aria_label": "Sélectionner la facture pour {{guest}}",
+    "headers": {
+      "invoice_no": "Facture n°",
+      "date_issued": "Date d'émission",
+      "guest_company": "Client / Société",
+      "amount": "Montant",
+      "status": "Statut",
+      "due_date": "Échéance",
+      "actions": "Actions"
+    },
+    "empty_state": "Aucune facture ne correspond aux filtres actuels.",
+    "actions_menu": {
+      "view": "Voir les détails",
+      "edit": "Modifier",
+      "download_pdf": "Télécharger PDF",
+      "send_email": "Envoyer par e-mail",
+      "delete": "Supprimer"
+    },
+    "bulk_actions": {
+      "selected_text": "{{count}} sélectionné(s)",
+      "button_text": "Actions",
+      "change_status_option": "Changer le statut",
+      "mark_as_draft": "Marquer comme Brouillon",
+      "mark_as_pending": "Marquer comme En attente",
+      "mark_as_paid": "Marquer comme Payée",
+      "mark_as_overdue": "Marquer comme En retard",
+      "delete_option": "Supprimer la sélection"
+    },
+    "pagination": {
+      "rows_per_page": "Lignes par page",
+      "page_of": "Page {{currentPage}} sur {{totalPages}}",
+      "previous_button": "Précédent",
+      "next_button": "Suivant"
+    }
+  },
+  "create_invoice_modal": {
+    "title": "Créer une nouvelle facture",
+    "description": "Créez manuellement une facture pour un client ou une entreprise externe."
+  },
+  "edit_invoice_modal": {
+    "title": "Modifier la facture",
+    "description": "Mettez à jour les détails de cette facture. Les modifications seront enregistrées immédiatement."
+  },
+  "view_modal": {
+    "title": "Facture n°{{number}}",
+    "description": "Détails de la facture émise à {{guest}} le {{date}}.",
+    "bill_to_heading": "Facturé à",
+    "reservation_label": "Réservation",
+    "date_issued_label": "Date d'émission",
+    "due_date_label": "Date d'échéance",
+    "items_heading": "Éléments",
+    "table_headers": {
+      "description": "Description",
+      "qty": "Qté",
+      "unit_price": "Prix Unitaire",
+      "total": "Total"
+    },
+    "no_line_items": "Aucun article sur cette facture.",
+    "notes_heading": "Notes",
+    "subtotal_before_discount_label": "Sous-total (avant remise)",
+    "discount_label": "Remise ({{name}})",
+    "subtotal_label": "Sous-total",
+    "tax_label": "{{name}} ({{rate}}%)",
+    "grand_total_label": "Total Général",
+    "total_paid_label":"Total Payé",
+    "buttons": {
+      "download_pdf": "Télécharger PDF",
+      "send_email": "Envoyer par e-mail",
+      "email_invoice": "Facture par e-mail",
+      "other_templates": "Autres modèles",
+      "edit": "Modifier",
+      "close": "Fermer"
+    }
+  },
+  "form": {
+    "invoice_number_label": "Facture n°",
+    "invoice_number_placeholder": "Ex : FAC-00124",
+    "invoice_date_label": "Date de facturation",
+    "due_date_label": "Date d'échéance",
+    "pick_a_date_placeholder": "Choisir une date",
+    "bill_to_heading": "Facturé à",
+    "guest_company_label": "Nom du client / de l'entreprise",
+    "guest_company_placeholder": "Commencez à taper pour rechercher...",
+    "guest_email_label": "E-mail du client",
+    "email_placeholder": "client@exemple.com",
+    "guest_phone_label": "Téléphone du client",
+    "phone_placeholder": "+33 6 12 34 56 78",
+    "reservation_number_label": "Numéro de réservation (facultatif)",
+    "reservation_number_placeholder": "Lier à une réservation existante...",
+    "line_items_heading": "Lignes de facturation",
+    "line_items": {
+      "description": "Description",
+      "quantity": "Qté",
+      "unit_price": "P.U.",
+      "total": "Total"
+    },
+    "description_placeholder": "Description de l'article",
+    "qty_placeholder": "1",
+    "unit_price_placeholder": "0.00",
+    "total_placeholder": "0.00",
+    "add_line_item_button": "Ajouter une ligne",
+    "payment_status_label": "Statut de paiement",
+    "payment_status_placeholder": "Sélectionner un statut",
+    "status_options": {
+      "draft": "Brouillon",
+      "pending": "En attente",
+      "paid": "Payée",
+      "overdue": "En retard"
+    },
+    "payment_terms_label": "Conditions de paiement",
+    "payment_terms_placeholder": "Sélectionner les conditions",
+    "terms_options": {
+      "due_on_receipt": "Dû à réception",
+      "net_15": "Net 15 jours",
+      "net_30": "Net 30 jours",
+      "net_60": "Net 60 jours"
+    },
+    "notes_label": "Notes / Mémo",
+    "notes_placeholder": "Notes facultatives pour le client...",
+    "subtotal_label": "Sous-total",
+    "discount_label": "Remise",
+    "discount_type_fixed": "Fixe",
+    "discount_type_percentage": "Pourcentage",
+    "discount_amount_label": "Montant de la remise",
+    "tax_rate_label": "Taux de taxe (%)",
+    "tax_amount_label": "Taxe",
+    "grand_total_label": "Total général",
+    "buttons": {
+      "cancel": "Annuler",
+      "create_invoice": "Créer la facture",
+      "save_changes": "Enregistrer les modifications"
+    }
+  },
+  "delete_dialog": {
+    "title": "Êtes-vous sûr ?",
+    "description": "Cette action supprimera définitivement {{count}} facture(s). Cette action est irréversible.",
+    "cancel_button": "Annuler",
+    "continue_button": "Confirmer la suppression"
+  },
+  "status_change_dialog": {
+    "title": "Confirmer le changement de statut",
+    "description": "Êtes-vous sûr de vouloir changer le statut de {{count}} facture(s) en '{{status}}' ?",
+    "cancel_button": "Annuler",
+    "confirm_button": "Confirmer"
+  },
+  "toasts": {
+    "error_title": "Erreur",
+    "success": "Succès",
+    "update_success": "Facture mise à jour avec succès.",
+    "create_success": "Nouvelle facture créée avec succès.",
+    "delete_success": "{{count}} facture(s) supprimée(s).",
+    "delete_error": "Impossible de supprimer toutes les factures sélectionnées.",
+    "status_change_success": "Statut de {{count}} facture(s) mis à jour en '{{status}}'.",
+    "status_change_error": "Impossible de mettre à jour toutes les factures sélectionnées.",
+    "not_found_title": "Facture non trouvée",
+    "not_found_description": "La facture associée à cette réservation n'a pas pu être trouvée.",
+    "pdf_download_error": "Impossible de générer le PDF de la facture.",
+    "send_email_missing_data": "Données de facture ou de propriété manquantes.",
+    "guest_email_not_found": "Impossible de trouver une adresse e-mail pour ce client."
+  }
+}

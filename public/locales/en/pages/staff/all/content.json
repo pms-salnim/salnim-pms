@@ -1,0 +1,146 @@
+
+{
+  "title": "User Management",
+  "description": "Add, edit, and manage staff members who have login access to the system.",
+  "add_staff_button": "Add Staff Member",
+  "filters": {
+    "search_placeholder": "Search by name or email...",
+    "role_placeholder": "Filter by role",
+    "all_roles": "All Roles",
+    "status_placeholder": "Filter by status",
+    "all_statuses": "All Statuses",
+    "apply_button": "Apply Filters"
+  },
+  "roles": {
+    "admin": "Admin",
+    "manager": "Manager",
+    "frontDesk": "Front Desk",
+    "housekeeping": "Housekeeping",
+    "maintenance": "Maintenance",
+    "staff": "Staff"
+  },
+  "statuses": {
+    "online": "Online",
+    "active": "Active",
+    "on_break": "On Break",
+    "busy": "Busy",
+    "offline": "Offline",
+    "inactive": "Inactive"
+  },
+  "list": {
+    "headers": {
+      "full_name": "Full Name",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "last_login": "Last Login",
+      "actions": "Actions"
+    },
+    "no_staff_message": "No staff members have been added yet.",
+    "actions_menu": {
+      "view_profile": "View Profile",
+      "edit_staff": "Edit Staff Member",
+      "toggle_status_deactivate": "Deactivate User",
+      "toggle_status_activate": "Activate User",
+      "reset_password": "Reset Password",
+      "delete_staff": "Delete User"
+    }
+  },
+  "form": {
+    "sections": {
+      "personal_info": "Personal Information",
+      "account_access": "Account Access",
+      "permissions": "Permissions"
+    },
+    "first_name_label": "First Name",
+    "first_name_placeholder": "e.g. John",
+    "last_name_label": "Last Name",
+    "last_name_placeholder": "e.g. Doe",
+    "email_label": "Email Address",
+    "email_placeholder": "name@example.com",
+    "phone_label": "Phone Number",
+    "phone_placeholder": "+1 (555) 123-4567",
+    "role_label": "Role",
+    "role_placeholder": "Select a role",
+    "status_label": "Status",
+    "status_placeholder": "Select a status",
+    "password_label_new": "Password",
+    "password_label_edit": "New Password (Optional)",
+    "password_placeholder_new": "Enter a password",
+    "password_placeholder_edit": "Leave blank to keep current password",
+    "password_info_new": "A temporary password will be created. The user can change it after their first login.",
+    "password_info_edit": "Leave this field empty if you do not wish to change the user's password.",
+    "generate_button": "Generate",
+    "property_label": "Property",
+    "property_value": "Main Property (auto-assigned)",
+    "property_info": "This user will be assigned to your current property.",
+    "buttons": {
+      "cancel": "Cancel",
+      "save": "Save Changes"
+    }
+  },
+  "permissions": {
+    "rooms": "Rooms",
+    "reservations": "Reservations",
+    "rate_plans": "Rate Plans",
+    "guests": "Guests",
+    "finance": "Finance",
+    "availability": "Availability",
+    "reports": "Reports",
+    "settings": "Settings",
+    "staff_management": "Staff Management",
+    "housekeeping": "Housekeeping",
+    "extras": "Extras",
+    "team_workspace": "Team Workspace",
+    "staff_management_admin_note": "Only an Admin can grant or revoke 'Staff Management' or 'Settings' permissions."
+  },
+  "add_modal": {
+    "title": "Add New Staff User",
+    "description": "Create a new user account with login credentials and assign permissions."
+  },
+  "edit_modal": {
+    "title": "Edit Staff User",
+    "description": "Update the details and permissions for this staff member."
+  },
+  "delete_dialog": {
+    "title": "Are you absolutely sure?",
+    "description": "This action cannot be undone. This will permanently delete the staff member's account and remove their access to the system. Are you sure you want to delete {{name}}?",
+    "cancel_button": "Cancel",
+    "continue_button": "Confirm Delete"
+  },
+  "profile_modal": {
+    "title": "Profile: {{name}}",
+    "description": "Viewing details for user: {{email}}",
+    "name_label": "Name",
+    "email_label": "Email",
+    "phone_label": "Phone",
+    "role_label": "Role",
+    "status_label": "Status",
+    "last_login_label": "Last Login",
+    "permissions_label": "Assigned Permissions",
+    "not_provided": "Not provided",
+    "no_permissions": "No permissions assigned.",
+    "buttons": {
+      "close": "Close"
+    }
+  },
+  "toasts": {
+    "success_title": "Success",
+    "error_title": "Error",
+    "update_success": {
+      "description": "Information for {{name}} has been updated."
+    },
+    "create_success": {
+      "description": "{{name}} has been invited and added to the staff list."
+    },
+    "create_error": "An unknown error occurred while creating the user.",
+    "save_error": "Could not save staff member.",
+    "delete_success": "User deleted successfully.",
+    "delete_error": "Could not delete the user account.",
+    "error_email_in_use": "This email is already in use by another account.",
+    "error_weak_password": "The password is too weak. Please use a stronger password.",
+    "error_generic_signup": "An unexpected error occurred during signup.",
+    "error_unknown": "An unknown error occurred."
+  },
+  "cannot_edit_own_role": "You cannot change your own role."
+}

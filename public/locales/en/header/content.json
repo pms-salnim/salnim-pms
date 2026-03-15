@@ -1,0 +1,39 @@
+
+{
+  "location": "{{city}}, {{timeZone}}",
+  "timezone_fallback": "Time Zone",
+  "user_menu": {
+    "toggle_label": "Toggle user menu",
+    "settings": "Settings",
+    "logout": "Log out",
+    "language": "Language"
+  },
+  "help_menu": {
+    "toggle_label": "Help & Documentation",
+    "title": "Salnim Pms Help Center",
+    "description": "Browse our guides to get the most out of your dashboard.",
+    "contact_support": "Contact Support",
+    "getting_started_link": "Getting Started",
+    "rooms_rates_link": "Setting Up Rooms & Rates",
+    "calendar_guide_link": "Calendar & Availability Guide",
+    "reservations_guide_link": "How to Manage Reservations",
+    "payments_invoices_link": "Managing Payments & Invoices",
+    "extras_guide_link": "Managing Extras",
+    "revenue_reports_link": "Revenue & Reports Guide",
+    "guest_relationships_link": "Guest Relationships Guide",
+    "housekeeping_guide_link": "Housekeeping Guide",
+    "team_workspace_link": "Team Workspace Guide",
+    "users_roles_link": "User & Staff Roles"
+  },
+  "notifications": {
+    "toggle_label": "Notifications",
+    "title": "Notifications",
+    "mark_all_read": "Mark all as read",
+    "empty_state": "No new notifications.",
+    "view_all": "View all notifications"
+  },
+  "sidebar": {
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "loading": "Chargement des paramètres...",
+  "access_denied": {
+    "title": "Accès Refusé",
+    "description": "Vous n'avez pas la permission de voir ou de modifier les paramètres de notification. Veuillez contacter un administrateur si vous pensez qu'il s'agit d'une erreur."
+  },
+  "form": {
+    "title": "Règles de Notification & Alertes",
+    "description": "Choisissez quels événements déclenchent des notifications et comment elles sont livrées à votre équipe."
+  },
+  "events": {
+    "new_reservation": {
+      "label": "Nouvelle Réservation",
+      "description": "Lorsqu'une nouvelle réservation est effectuée."
+    },
+    "payment_received": {
+      "label": "Paiement Reçu",
+      "description": "Lorsqu'un paiement est traité avec succès."
+    },
+    "cancellation": {
+      "label": "Annulation de Réservation",
+      "description": "Lorsqu'une réservation est annulée."
+    },
+    "new_message": {
+      "label": "Nouveau Message d'Invité",
+      "description": "Lorsqu'un nouveau message arrive dans la boîte de réception."
+    }
+  },
+  "channels": {
+    "in_app": "In-App",
+    "email": "Email"
+  },
+  "buttons": {
+    "save": "Enregistrer les Modifications"
+  },
+  "toasts": {
+    "success_save": "Les règles de notification ont été mises à jour.",
+    "error_save": "Échec de l'enregistrement des paramètres."
+  }
+}

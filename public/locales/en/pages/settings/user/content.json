@@ -1,0 +1,40 @@
+
+{
+  "title": "User Profile",
+  "description": "Manage your personal account details and language preferences.",
+  "form": {
+    "full_name_label": "Full Name",
+    "full_name_placeholder": "Your full name",
+    "email_label": "Email",
+    "email_placeholder": "your@email.com",
+    "role_label": "Role",
+    "role_not_available": "N/A",
+    "phone_label": "Phone Number",
+    "phone_placeholder": "+1 234 567 8900",
+    "language_label": "Preferred Language",
+    "language_placeholder": "Select language",
+    "country_label": "Country",
+    "country_placeholder": "Your country",
+    "city_label": "City",
+    "city_placeholder": "Your city",
+    "address_label": "Street Address",
+    "address_placeholder": "Your street address",
+    "change_password_button": "Change Password",
+    "change_password_description": "This will send a password reset link to your email.",
+    "save_button": "Save Settings"
+  },
+  "toasts": {
+    "loading": "Loading settings...",
+    "error_loading": "Could not load your settings.",
+    "error_not_authenticated": "User not authenticated.",
+    "success_save": "Your user settings have been updated.",
+    "error_save": "Could not save your settings.",
+    "success_password_reset": "A password reset link has been sent to your email address.",
+    "error_password_reset": "Could not send password reset email.",
+    "error_email_not_found": "User email not found."
+  },
+  "languages": {
+    "en": "English",
+    "fr": "Français"
+  }
+}

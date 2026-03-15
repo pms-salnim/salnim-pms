@@ -1,0 +1,89 @@
+
+{
+  "title": "Règles de Tarification Saisonnière",
+  "description": "Créez des règles pour remplacer automatiquement vos plans tarifaires standards pour des périodes spécifiques, comme les vacances ou la haute saison.",
+  "add_button": "Ajouter un Tarif Saisonnier",
+  "add_modal": {
+    "title": "Ajouter un Nouveau Tarif Saisonnier",
+    "description": "Définissez une nouvelle règle de tarification pour une période spécifique. Cela remplacera le plan tarifaire de base.",
+    "no_rate_plans_warning": "Vous devez créer un Plan Tarifaire avant de pouvoir créer un tarif saisonnier pour celui-ci."
+  },
+  "edit_modal": {
+    "title": "Modifier le Tarif Saisonnier"
+  },
+  "form": {
+    "season_name_label": "Nom de la Saison",
+    "season_name_placeholder": "Ex: Spécial Noël",
+    "date_range_label": "Période",
+    "date_range_placeholder": "Sélectionnez une période",
+    "rate_plan_label": "Plan Tarifaire à Remplacer",
+    "rate_plan_placeholder": "Sélectionnez un plan tarifaire",
+    "pricing_override_title": "Remplacement de Prix",
+    "pricing_override_description": "Laissez les champs vides pour utiliser le prix du plan tarifaire parent. Sinon, entrez un nouveau prix pour la méthode {{pricingMethod}}.",
+    "override_per_night_label": "Remplacer le Prix de Base par Nuit",
+    "override_per_night_placeholder": "Ex: 150.00",
+    "override_per_guest_label": "Remplacer le Prix par Client",
+    "override_per_guest_placeholder": "Ex: 95.00",
+    "guests_label": "{{count}} Clients",
+    "select_rate_plan_prompt": "Veuillez d'abord sélectionner un plan tarifaire pour voir les options de tarification.",
+    "per_night": "par nuit",
+    "per_guest": "par client",
+    "active_label": "Ce tarif saisonnier est actif"
+  },
+  "list": {
+    "headers": {
+      "season_name": "Nom de la Saison",
+      "date_range": "Période",
+      "rate_plan": "Plan Tarifaire",
+      "pricing": "Tarification",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "unknown_plan": "Plan Inconnu",
+    "not_set": "Non défini",
+    "no_rules": "Aucune règle de tarification saisonnière n'a encore été créée.",
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif"
+    },
+    "actions": {
+      "edit": "Modifier",
+      "deactivate": "Désactiver",
+      "activate": "Activer",
+      "delete": "Supprimer"
+    }
+  },
+  "toasts": {
+    "validation_error_title": "Erreur de Validation",
+    "validation_error_required_fields": "Veuillez remplir le nom, la période et sélectionner un plan tarifaire.",
+    "conflict_error_title": "Conflit de Dates",
+    "conflict_error_description": "La période sélectionnée chevauche un tarif saisonnier actif existant pour le même plan tarifaire.",
+    "validation_error_price_required": "Vous devez fournir au moins un prix de remplacement.",
+    "success_create_title": "Succès",
+    "success_create_description": "Le nouveau tarif saisonnier a été créé.",
+    "success_update_title": "Succès",
+    "success_update_description": "Tarif saisonnier mis à jour avec succès.",
+    "error_save_title": "Erreur d'Enregistrement",
+    "error_save_description": "Impossible d'enregistrer le tarif saisonnier.",
+    "success_delete_title": "Succès",
+    "success_delete_description": "Le tarif saisonnier a été supprimé.",
+    "error_delete_title": "Erreur de Suppression",
+    "error_delete_description": "Impossible de supprimer le tarif saisonnier.",
+    "success_status_update_title": "Statut Mis à Jour",
+    "success_status_update_description": "Le statut pour '{{name}}' a été défini sur {{status}}.",
+    "error_status_update_title": "Échec de la Mise à Jour",
+    "error_status_update_description": "Impossible de mettre à jour le statut du tarif saisonnier."
+  },
+  "buttons": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "continue": "Continuer",
+    "delete": "Supprimer"
+  },
+  "delete_dialog": {
+    "title": "Êtes-vous sûr ?",
+    "description": "Cela supprimera définitivement le tarif saisonnier '{{name}}'. Cette action est irréversible.",
+    "cancel_button": "Annuler",
+    "continue_button": "Supprimer"
+  }
+}

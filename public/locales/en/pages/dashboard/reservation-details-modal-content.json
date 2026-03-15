@@ -1,0 +1,126 @@
+{
+  "title": "Reservation Details for #{{id}}",
+  "description": "Viewing booking information for {{name}}.",
+  "buttons": {
+      "download_invoice": "Download Invoice",
+      "send_email": "Send Email",
+      "email_invoice": "Email Invoice",
+      "other_templates": "Other Templates",
+      "check_in": "Check In",
+      "check_out": "Check Out",
+      "edit": "Edit",
+      "close": "Close"
+  },
+  "sections": {
+      "guest": {
+          "title": "Guest Information",
+          "full_name": "Full Name",
+          "email": "Email Address",
+          "phone": "Phone Number",
+          "passport":"Passport",
+          "country": "Country",
+          "id_passport": "ID/Passport"
+      },
+      "booking": {
+          "title": "Booking Details",
+          "room_type": "Room Type",
+          "room": "Room",
+          "rate_plan": "Rate Plan",
+          "source": "Source",
+          "check_in": "Check-in",
+          "check_out": "Check-out",
+          "adults": "Adults",
+          "children": "Children",
+          "package_booked": "Package Booked"
+      },
+      "booking_summary": {
+          "title": "Booking Summary",
+          "checkin": "Check-in",
+          "checkout": "Check-out",
+          "guests": "Guests",
+          "stay": "Stay",
+          "num_rooms": "Number of room(s)",
+          "rooms_plural": "{{count}} room(s)",
+          "source": "Source",
+          "room_numbers": "Room Number(s)"
+      },
+      "stay_details": {
+          "title": "Stay Details",
+          "guest_count": "{{adults}} adult(s), {{children}} child(ren)",
+          "stay": "{{count}} nights",
+          "rooms_count": "{{count}} rooms"
+      },
+      "rooms": {
+          "title": "Rooms",
+          "guests": "{{adults}} Adult(s), {{children}} Child(ren)"
+      },
+      "pricing": {
+          "title": "Status & Payment",
+          "reservation_status": "Reservation Status",
+          "payment_status": "Payment Status",
+          "stay_total": "Stay Total",
+          "extras_total": "Extras Total",
+          "subtotal": "Subtotal",
+          "discount": "Discount",
+          "net_amount": "Net Amount",
+          "tax": "Tax ({{rate}}%)",
+          "grand_total": "Grand Total",
+          "rooms_total": "Rooms Total",
+          "total_to_pay": "Total To Pay"
+      },
+      "pricing_summary": {
+          "title": "Pricing Summary",
+          "room_rate": "Room Rate",
+          "room_number": "Room",
+          "rooms_total": "Rooms Total",
+          "extras_total": "Extras Total",
+          "subtotal": "Subtotal",
+          "discount": "Discount",
+          "net_amount": "Net Amount",
+          "tax": "Tax ({{rate}}%)",
+          "grand_total": "Total To Pay",
+          "total_paid":"Total Paid",
+          "rest_of_payment":"Rest of Payment",
+          "amount_due": "Amount Due"
+      },
+      "package": {
+          "title": "Package Inclusions",
+          "included": "Included",
+          "no_extras": "No additional services or meal plans are included in this package."
+      },
+      "extras": {
+          "title": "Selected Extras"
+      },
+      "timestamps": {
+          "title": "Timestamps",
+          "created_at": "Created At",
+          "last_updated": "Last Updated",
+          "actual_checkin": "Actual Check-in",
+          "actual_checkout": "Actual Check-out"
+      },
+      "notes": {
+          "special_requests_title": "Special Requests",
+          "internal_notes_title":"Internal Notes"
+      }
+  },
+  "toasts": {
+      "error_title": "Error",
+      "missing_data_error": "Invoice or property data is missing.",
+      "invoice_not_found_title": "Invoice Not Found",
+      "invoice_not_found_description": "Could not find the invoice associated with this booking.",
+      "success_title": "Success",
+      "pdf_download_success": "Invoice PDF download started.",
+      "pdf_download_error": "Could not generate invoice PDF.",
+      "guest_email_not_found": "Guest email not found for this reservation.",
+      "no_reservation_title": "No Reservation Data",
+      "no_reservation_description": "Cannot send email without reservation information.",
+      "package_details_error": "Failed to load package details."
+  },
+  "breakdowns": {
+      "per_night": "{{price}} x {{nights}} nights x {{quantity}}",
+      "per_guest": "{{price}} x {{guests}} guests x {{quantity}}",
+      "per_night_per_guest": "{{price}} x {{nights}} nights x {{guests}} guests x {{quantity}}"
+  },
+  "nights": "{{count}} night",
+  "nights_plural": "{{count}} nights"
+}

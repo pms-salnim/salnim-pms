@@ -1,0 +1,29 @@
+{
+  "title": "Aperçu des Chambres",
+  "description": "Obtenez un aperçu complet de l'inventaire de vos chambres.",
+  "date_picker": {
+    "placeholder": "Choisir une plage de dates",
+    "today": "Aujourd'hui",
+    "this_week": "Cette semaine",
+    "this_month": "Ce mois-ci"
+  },
+  "cards": {
+    "total_rooms": "Total des Chambres",
+    "occupied_avg": "Moy. Occupées",
+    "occupied_single": "Occupées",
+    "available_avg": "Moy. Disponibles",
+    "available_single": "Disponibles",
+    "room_types": "Types de Chambre"
+  },
+  "chart": {
+    "title_single": "Aperçu des chambres pour le {{date}}",
+    "title_range": "Aperçu des chambres : {{from}} - {{to}}",
+    "description": "Distribution moyenne des statuts des chambres pour la période sélectionnée.",
+    "empty_state": "Aucune donnée de chambre à afficher pour la période sélectionnée."
+  },
+  "access_denied": {
+    "title": "Accès Refusé",
+    "description": "Vous n'avez pas la permission de voir cette page. Veuillez contacter un administrateur."
+  },
+  "loading": "Chargement..."
+}

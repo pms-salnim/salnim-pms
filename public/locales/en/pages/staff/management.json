@@ -1,0 +1,196 @@
+
+{
+  "title": "Staff Management",
+  "description": "Add, edit, and manage non-login staff members for your property.",
+  "add_staff_button": "Add Staff Member",
+  "edit_modal": {
+    "title": "Edit Staff Member",
+    "description": "Update the details for this staff member."
+  },
+  "add_modal": {
+    "title": "Add New Staff Member",
+    "description": "Fill in the details to create a new staff record. This type of user will not have login access."
+  },
+  "delete_dialog": {
+    "title": "Are you absolutely sure?",
+    "description": "This action cannot be undone. This will permanently delete the record for {{name}}.",
+    "cancel_button": "Cancel",
+    "continue_button": "Continue"
+  },
+  "list": {
+    "headers": {
+      "full_name": "Full Name",
+      "role": "Position",
+      "cin": "CIN",
+      "hire_date": "Hire Date",
+      "salary": "Salary",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "no_staff_message": "No staff members found.",
+    "actions_menu": {
+      "edit": "Edit",
+      "documents": "Documents",
+      "certificate": "Salary Certificate",
+      "work_certificate": "Work Certificate",
+      "end_contract_certificate": "End of Contract Certificate",
+      "payslip": "Payslip",
+      "internship_certificate": "Internship Certificate",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "delete": "Delete"
+    }
+  },
+  "form": {
+    "sections": {
+      "base_info": "Base Information",
+      "professional_info": "Professional Information",
+      "salary_info": "Salary Information"
+    },
+    "full_name_label": "Full Name",
+    "cin_label": "CIN (National ID)",
+    "phone_label": "Phone Number",
+    "sex_label": "Sex",
+    "sex_placeholder": "Select sex",
+    "sexes": {
+      "male": "Male",
+      "female": "Female"
+    },
+    "address_label": "Address",
+    "department_label": "Department",
+    "department_placeholder": "Select a department",
+    "position_label": "Position",
+    "position_placeholder": "Select a position",
+    "contract_type_label": "Contract Type",
+    "contract_types": {
+      "cdi": "Permanent (CDI)",
+      "cdd": "Fixed-Term (CDD)",
+      "daily": "Daily",
+      "internship": "Internship"
+    },
+    "hire_date_label": "Hire Date",
+    "date_placeholder": "Pick a date",
+    "status_label": "Status",
+    "statuses": {
+      "active": "Active",
+      "terminated": "Terminated"
+    },
+    "salary_label": "Monthly Gross Salary",
+    "cnss_label": "CNSS Number",
+    "payment_method_label": "Payment Method",
+    "payment_methods": {
+      "cash": "Cash",
+      "transfer": "Bank Transfer"
+    },
+    "validation_error": {
+      "title": "Validation Error",
+      "required_fields": "Please fill in all required fields (marked with *)."
+    }
+  },
+  "statuses": {
+    "actif": "Active",
+    "résilié": "Terminated"
+  },
+  "positions": {
+    "general_manager": "General Manager",
+    "assistant_manager": "Assistant Manager",
+    "admin_finance_manager": "Administrative and Financial Manager",
+    "head_receptionist": "Head Receptionist",
+    "booking_agent": "Booking Agent",
+    "cashier": "Cashier",
+    "hr_manager": "Human Resources Manager",
+    "head_housekeeper": "Head Housekeeper",
+    "chambermaid_man": "Chambermaid/Valet",
+    "cleaning_agent": "Cleaning Agent",
+    "laundry_staff": "Laundry Staff",
+    "maintenance_technician": "Maintenance Technician",
+    "head_chef": "Head Chef",
+    "cook": "Cook",
+    "assistant_cook": "Assistant Cook",
+    "waiter_waitress": "Waiter/Waitress",
+    "head_waiter": "Head Waiter",
+    "dishwasher": "Dishwasher",
+    "receptionist": "Receptionist",
+    "bellhop_porter": "Bellhop/Porter",
+    "concierge": "Concierge",
+    "reception_reservations_manager": "Reception and Reservations Manager",
+    "night_auditor": "Night Auditor",
+    "gardener_grounds_agent": "Gardener/Grounds Agent",
+    "technician_electrician_plumber": "Technician (Electrician, Plumber)",
+    "security_guard": "Security Guard",
+    "sales_marketing_manager": "Sales and Marketing Manager",
+    "community_manager": "Community Manager",
+    "online_sales_reservations_agent": "Online Sales and Reservations Agent",
+    "photographer_content_creator": "Photographer/Content Creator",
+    "masseur_masseuse": "Masseur/Masseuse",
+    "sports_coach_activity_leader": "Sports Coach/Activity Leader",
+    "beautician_spa_manager": "Beautician/Spa Manager"
+  },
+  "departments": {
+    "direction_administration": "Management & Administration",
+    "entretien_menage": "Housekeeping & Maintenance",
+    "restauration_cuisine": "Food & Beverage / Kitchen",
+    "accueil_service_client": "Reception & Customer Service",
+    "espaces_exterieurs_maintenance": "Grounds & Technical Maintenance",
+    "commercial_communication": "Sales & Communication",
+    "bien_etre_loisirs": "Wellness & Leisure"
+  },
+  "toasts": {
+    "success_title": "Success",
+    "error_title": "Error",
+    "update_success": {
+      "title": "Staff Member Updated",
+      "description": "The details for {{name}} have been successfully updated."
+    },
+    "create_success": {
+      "title": "Staff Member Added",
+      "description": "A new record for {{name}} has been created."
+    },
+    "save_error": "Could not save the staff member's information. Please try again.",
+    "delete_success": "Staff member record deleted successfully.",
+    "delete_error": "Failed to delete the staff member record.",
+    "status_updated": "Staff member status updated to {{status}}."
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "save": "Save Changes",
+    "create": "Create Staff Member",
+    "delete": "Delete",
+    "edit_document": "Edit Document",
+    "preview_document": "Preview Document",
+    "download_pdf": "Download PDF",
+    "close": "Close"
+  },
+  "salary_certificate_modal": {
+    "title": "Salary Certificate for {{name}}",
+    "description": "Generate a salary certificate for the selected month.",
+    "month_label": "Month",
+    "language_label": "Language"
+  },
+  "work_certificate_modal": {
+    "title": "Work Certificate for {{name}}",
+    "description": "Generate a standard work certificate."
+  },
+  "end_of_contract_certificate_modal": {
+    "title": "End of Contract Certificate for {{name}}",
+    "description": "Generate a certificate for the end of a contract.",
+    "end_date_label": "End of Contract Date",
+    "end_date_required_title": "End Date Required",
+    "end_date_required_description": "Please select a valid end date for the contract."
+  },
+  "payslip_modal": {
+    "title": "Payslip for {{name}}",
+    "description": "Generate a payslip for the selected month."
+  },
+  "internship_certificate_modal": {
+    "title": "Internship Certificate for {{name}}",
+    "description": "Generate an internship certificate for the specified period.",
+    "date_range_label": "Internship Period",
+    "date_range_required_title": "Date Range Required",
+    "date_range_required_description": "Please select a valid start and end date for the internship."
+  },
+  "metric_cards": {
+    "total_employees": "Total Employees",
+    "total_salaries": "Total Monthly Salaries"
+  }
+}

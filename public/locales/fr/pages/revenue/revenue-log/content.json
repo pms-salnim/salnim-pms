@@ -1,0 +1,23 @@
+{
+  "title": "Journal des Revenus",
+  "description": "Détails des réservations contribuant aux revenus.",
+  "table": {
+    "headers": {
+      "booking_date": "Date de Réservation",
+      "guest_name": "Nom du Client",
+      "room_type": "Type de Chambre",
+      "check_in": "Arrivée",
+      "check_out": "Départ",
+      "amount": "Montant",
+      "status": "Statut",
+      "payment_status": "Statut du Paiement"
+    },
+    "empty_state": "Aucune donnée de revenus disponible pour les filtres sélectionnés."
+  },
+  "pagination": {
+    "rows_per_page": "Lignes par page",
+    "page_of": "Page {{currentPage}} sur {{totalPages}}",
+    "previous_button": "Précédent",
+    "next_button": "Suivant"
+  }
+}

@@ -1,0 +1,61 @@
+{
+    "title": "Envoyer un e-mail à {{guestName}}",
+    "description": "Sélectionnez un modèle. L'e-mail sera envoyé à {{email}}.",
+    "email_template_label": "Modèle d'e-mail",
+    "select_template_placeholder": "Sélectionnez un modèle...",
+    "template_info": "Le contenu sera rempli avec les détails de cette réservation. Vous pouvez personnaliser les modèles dans les paramètres.",
+    "buttons": {
+        "cancel": "Annuler",
+        "send": "Envoyer l'e-mail"
+    },
+    "templates": {
+        "reservation_confirmation": {
+            "name": "E-mail d'information sur la réservation"
+        },
+        "booking_confirmation": {
+            "name": "Confirmation de réservation"
+        },
+        "reservation_modification": {
+            "name": "E-mail de modification"
+        },
+        "reservation_cancellation": {
+            "name": "E-mail d'annulation"
+        },
+        "payment_confirmation": {
+            "name": "E-mail de confirmation de paiement"
+        },
+        "bank_transfer_info": {
+            "name": "E-mail d'information sur le virement bancaire"
+        },
+        "mail_order_info": {
+            "name": "E-mail d'information sur la commande par correspondance"
+        },
+        "invoice_email": {
+            "name": "E-mail de facture"
+        },
+        "internal_new_reservation": {
+            "name": "INTERNE - Alerte de nouvelle réservation"
+        },
+        "internal_cancellation_alert": {
+            "name": "INTERNE - Alerte d'annulation"
+        }
+    },
+    "toasts": {
+        "no_template_selected": {
+            "title": "Aucun modèle sélectionné",
+            "description": "Veuillez sélectionner un modèle d'e-mail à envoyer."
+        },
+        "no_guest_email": {
+            "title": "Aucune adresse e-mail d'invité",
+            "description": "Cette réservation n'a pas d'adresse e-mail d'invité."
+        },
+        "email_sent": {
+            "title": "E-mail envoyé",
+            "description": "L'e-mail '{{templateName}}' a été envoyé avec succès à {{email}}."
+        },
+        "send_error": {
+            "title": "Erreur",
+            "description": "Échec de l'envoi de l'e-mail."
+        }
+    }
+}

@@ -1,0 +1,81 @@
+
+{
+  "title": "Services et Extras",
+  "description": "Créez et gérez les services supplémentaires qui peuvent être ajoutés aux réservations, tels que les transferts d'aéroport, les soins spa ou les demandes spéciales.",
+  "access_denied": {
+    "title": "Accès refusé",
+    "description": "Vous n'avez pas la permission de gérer les services et extras. Veuillez contacter un administrateur."
+  },
+  "add_service_button": "Ajouter un service",
+  "table": {
+    "title": "Services disponibles",
+    "description": "Liste de tous les services configurés pour votre établissement.",
+    "headers": {
+      "name": "Nom",
+      "price": "Prix",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "empty_state": "Aucun service n'a encore été créé.",
+    "actions": {
+      "edit": "Modifier",
+      "deactivate": "Désactiver",
+      "activate": "Activer",
+      "delete": "Supprimer"
+    }
+  },
+  "add_modal": {
+    "title": "Ajouter un nouveau service",
+    "description": "Définissez les détails du service. Cliquez sur enregistrer lorsque vous avez terminé."
+  },
+  "edit_modal": {
+    "title": "Modifier le service",
+    "description": "Mettez à jour les détails de ce service."
+  },
+  "form": {
+    "name_label": "Nom du service",
+    "description_label": "Description",
+    "price_label": "Prix",
+    "billing_unit_label": "Unité de facturation",
+    "taxable_label": "Ce service est taxable"
+  },
+  "billing_units": {
+    "one-time": "Unique",
+    "per-booking": "Par réservation",
+    "per-night": "Par nuit",
+    "per-guest": "Par personne",
+    "per-night-per-room": "Par nuit / chambre",
+    "one-time-per-guest": "Unique / personne",
+    "per-night-per-guest": "Par nuit / personne",
+    "one-time-per-room": "Unique / chambre"
+  },
+  "status": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "delete_alert": {
+    "title": "Êtes-vous sûr ?",
+    "description": "Cela supprimera définitivement le service '{{name}}'. Cette action est irréversible.",
+    "continue_button": "Continuer"
+  },
+  "buttons": {
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "continue": "Continuer"
+  },
+  "toasts": {
+    "error": "Erreur",
+    "success": "Succès",
+    "permission_denied": "Vous n'avez pas la permission d'effectuer cette action.",
+    "validation_error": "Erreur de validation",
+    "name_price_required": "Le nom et le prix du service sont requis.",
+    "update_success": "Service mis à jour avec succès.",
+    "add_success": "Service ajouté avec succès.",
+    "save_error": "Impossible d'enregistrer le service.",
+    "activate_success": "Le service {{name}} a été activé.",
+    "deactivate_success": "Le service {{name}} a été désactivé.",
+    "status_update_error": "Impossible de mettre à jour le statut du service.",
+    "delete_success": "Service supprimé avec succès.",
+    "delete_error": "Impossible de supprimer le service."
+  }
+}

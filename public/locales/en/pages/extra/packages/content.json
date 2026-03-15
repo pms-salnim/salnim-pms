@@ -1,0 +1,121 @@
+{
+  "title": "Packages & Deals",
+  "description": "Create special offers by bundling room types with services and meal plans.",
+  "access_denied": {
+    "title": "Access Denied",
+    "description": "You do not have permission to manage packages. Please contact an administrator."
+  },
+  "add_button": "Create Package",
+  "list": {
+    "none": "None",
+    "unknown": "Unknown",
+    "price_display": {
+      "for_guests": "for {{count}} guests",
+      "per_nights": "for {{count}} nights",
+      "up_to_guests": "(up to {{count}} guests)",
+      "per_night": "/night",
+      "per_guest_per_night": "/guest/night"
+    },
+    "status_active": "Active",
+    "status_inactive": "Inactive",
+    "headers": {
+      "name": "Package Name",
+      "price": "Price",
+      "inclusions": "Inclusions",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "inclusions_labels": {
+      "rooms": "Rooms:",
+      "services": "Services:",
+      "meals": "Meals:"
+    },
+    "actions_menu": {
+      "edit": "Edit",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "delete": "Delete"
+    },
+    "empty_state": "No packages have been created yet."
+  },
+  "add_modal": {
+    "title": "Create New Package",
+    "description": "Combine room types with services and meals to create an attractive offer.",
+    "no_rate_plans_warning": "You must have at least one room type defined before creating a package."
+  },
+  "edit_modal": {
+    "title": "Edit Package"
+  },
+  "delete_dialog": {
+    "title": "Are you absolutely sure?",
+    "description": "This will permanently delete the '{{name}}' package. This action cannot be undone.",
+    "cancel_button": "Cancel",
+    "continue_button": "Confirm Delete"
+  },
+  "form": {
+    "name_label": "Package Name",
+    "name_placeholder": "e.g., Weekend Getaway, Honeymoon Special",
+    "description_label": "Description",
+    "description_placeholder": "Describe what makes this package special.",
+    "type_label": "Package Type",
+    "type_fixed": "Fixed number of nights",
+    "type_per_night": "Per night (flat rate)",
+    "type_per_guest": "Per guest per night",
+    "price_label": "Price",
+    "nights_label": "Number of Nights",
+    "guests_label": "Number of Guests",
+    "max_guests_label": "Max Number of Guests",
+    "guests_placeholder_fixed": "e.g., 2",
+    "guests_placeholder_max": "e.g., 4",
+    "capacity_note": "Based on selected room types (max capacity: {{maxCapacity}}).",
+    "room_types_label": "Included Room Types",
+    "services_label": "Included Services",
+    "meal_plans_label": "Included Meal Plans",
+    "validation_error": {
+      "title": "Validation Error",
+      "description": "Please fill out all required fields: Name, Price, Number of Guests, and select at least one Room Type.",
+      "nights_required": "Number of Nights is required for a fixed-length package.",
+      "guest_capacity": "The number of guests ({{guestCount}}) exceeds the maximum capacity ({{maxCapacity}}) of the selected room types."
+    }
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "save": "Save Changes",
+    "create": "Create Package"
+  },
+  "toasts": {
+    "permission_denied": {
+      "title": "Permission Denied",
+      "description": "You do not have permission to perform this action."
+    },
+    "save_success": {
+      "title": "Success",
+      "update_description": "Package has been updated successfully.",
+      "add_description": "New package has been created successfully."
+    },
+    "save_error": {
+      "title": "Error",
+      "description": "Could not save the package. Please try again."
+    },
+    "status_update_success": {
+      "title": "Status Updated",
+      "description": "{{name}} package has been set to {{status}}."
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "status_update_error": {
+      "title": "Error",
+      "description": "Could not update package status."
+    },
+    "delete_success": {
+      "title": "Package Deleted",
+      "description": "The package has been successfully deleted."
+    },
+    "delete_error": {
+      "title": "Error",
+      "description": "Could not delete the package."
+    }
+  }
+}

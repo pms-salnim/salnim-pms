@@ -1,0 +1,128 @@
+{
+  "title": "Détails de la réservation n°{{id}}",
+  "description": "Consultation des informations de réservation pour {{name}}.",
+  "buttons": {
+      "download_invoice": "Télécharger la facture",
+      "send_email": "Envoyer un e-mail",
+      "email_invoice": "Facture par e-mail",
+      "other_templates": "Autres modèles",
+      "check_in": "Check-in",
+      "check_out": "Check-out",
+      "edit": "Modifier",
+      "close": "Fermer"
+  },
+  "sections": {
+      "guest": {
+          "title": "Informations sur le client",
+          "full_name": "Nom complet",
+          "email": "Adresse e-mail",
+          "phone": "Numéro de téléphone",
+          "passport":"Passeport",
+          "country": "Pays",
+          "id_passport": "ID/Passeport"
+      },
+      "booking": {
+          "title": "Détails de la réservation",
+          "room_type": "Type de chambre",
+          "room": "Chambre",
+          "rate_plan": "Plan tarifaire",
+          "source": "Source",
+          "check_in": "Arrivée",
+          "check_out": "Départ",
+          "adults": "Adultes",
+          "children": "Enfants",
+          "package_booked": "Forfait réservé"
+      },
+      "booking_summary": {
+          "title": "Résumé de la réservation",
+          "checkin": "Arrivée",
+          "checkout": "Départ",
+          "guests": "Clients",
+          "stay": "Séjour",
+          "num_rooms": "Nombre de chambre(s)",
+          "rooms": "{{count}} chambre",
+          "rooms_plural": "{{count}} chambre(s)",
+          "source": "Source",
+          "room_numbers": "Numéro(s) de chambre(s)"
+      
+      },
+      "stay_details": {
+          "title": "Détails du Séjour",
+          "guest_count": "{{adults}} adulte(s), {{children}} enfant(s)",
+          "stay": "{{count}} nuits",
+          "rooms_count": "{{count}} chambres"
+      },
+      "rooms": {
+          "title": "Chambres",
+          "guests": "{{adults}} Adulte(s), {{children}} Enfant(s)"
+      },
+      "pricing": {
+          "title": "Statut et Paiement",
+          "reservation_status": "Statut de la réservation",
+          "payment_status": "Statut du paiement",
+          "stay_total": "Total du séjour",
+          "extras_total": "Total des extras",
+          "subtotal": "Sous-total",
+          "discount": "Remise",
+          "net_amount": "Montant Net",
+          "tax": "Taxe ({{rate}}%)",
+          "grand_total": "Total général",
+          "rooms_total": "Total Chambres",
+          "total_to_pay": "Total à Payer"
+      },
+      "pricing_summary": {
+          "title": "Résumé des prix",
+          "room_rate": "Tarif Chambre",
+          "room_number": "Chambre",
+          "rooms_total": "Total Chambres",
+          "extras_total": "Total Extras",
+          "subtotal": "Sous-total",
+          "discount": "Remise",
+          "net_amount": "Montant Net",
+          "tax": "Taxe ({{rate}}%)",
+          "grand_total": "Total à payer",
+          "total_paid":"Total Payé",
+          "rest_of_payment":"Reste du Payment",
+          "amount_due": "Montant Dû"
+      },
+      "package": {
+          "title": "Inclus dans le forfait",
+          "included": "Inclus",
+          "no_extras": "Aucun service supplémentaire ou plan repas n'est inclus dans ce forfait."
+      },
+      "extras": {
+          "title": "Extras sélectionnés"
+      },
+      "timestamps": {
+          "title": "Horodatages",
+          "created_at": "Créé le",
+          "last_updated": "Dernière mise à jour",
+          "actual_checkin": "Check-in effectif",
+          "actual_checkout": "Check-out effectif"
+      },
+      "notes": {
+          "special_requests_title": "demandes spéciales",
+          "internal_notes_title":"Notes Internes"
+      }
+  },
+  "toasts": {
+      "error_title": "Erreur",
+      "missing_data_error": "Les données de la facture ou de la propriété sont manquantes.",
+      "invoice_not_found_title": "Facture non trouvée",
+      "invoice_not_found_description": "Impossible de trouver la facture associée à cette réservation.",
+      "success_title": "Succès",
+      "pdf_download_success": "Le téléchargement du PDF de la facture a commencé.",
+      "pdf_download_error": "Impossible de générer le PDF de la facture.",
+      "guest_email_not_found": "E-mail du client non trouvé pour cette réservation.",
+      "no_reservation_title": "Pas de données de réservation",
+      "no_reservation_description": "Impossible d'envoyer un e-mail sans les informations de réservation.",
+      "package_details_error": "Échec du chargement des détails du forfait."
+  },
+  "breakdowns": {
+      "per_night": "{{price}} x {{nights}} nuits x {{quantity}}",
+      "per_guest": "{{price}} x {{guests}} personnes x {{quantity}}",
+      "per_night_per_guest": "{{price}} x {{nights}} nuits x {{guests}} personnes x {{quantity}}"
+  },
+  "nights": "{{count}} nuit",
+  "nights_plural": "{{count}} nuits"
+}

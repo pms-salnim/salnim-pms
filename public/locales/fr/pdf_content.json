@@ -1,0 +1,25 @@
+
+{
+  "invoice_title": "Facture",
+  "invoice_number_label": "Facture n°",
+  "date_issued_label": "Date d'émission",
+  "due_date_label": "Date d'échéance",
+  "bill_to_label": "Facturé à",
+  "reservation_id_label": "ID de réservation",
+  "description_label": "Description",
+  "qty_label": "Qté",
+  "unit_price_label": "Prix Unitaire",
+  "total_label": "Total",
+  "total_paid":"Total Payé",
+  "amount_due_label":"Montant Dû",
+  "subtotal_label": "Sous-total",
+  "discount_label": "Remise",
+  "net_amount_label": "Montant Net",
+  "tax_label": "Taxe",
+  "grand_total_label": "Total Général",
+  "status_label": "Statut",
+  "capital_label": "Capital",
+  "phone_label": "Tél",
+  "page_label": "Page",
+  "of_label": "sur"
+}

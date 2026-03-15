@@ -1,0 +1,28 @@
+
+{
+    "title": "Record a Manual Payment",
+    "description": "Manually add a payment received for a reservation.",
+    "amount_received_label": "Amount Received",
+    "amount_placeholder": "e.g., 350.00",
+    "payment_method_label": "Payment Method",
+    "method_placeholder": "Select a method",
+    "date_of_payment_label": "Date of Payment",
+    "date_placeholder": "Select a date",
+    "guest_name_label": "Guest Name (Optional)",
+    "guest_placeholder": "Search for a guest...",
+    "reservation_number_label": "Reservation Number (Optional)",
+    "reservation_number_placeholder": "e.g., R-12345",
+    "notes_label": "Notes (Optional)",
+    "notes_placeholder": "e.g., Cash payment for extra night.",
+    "buttons": {
+      "cancel": "Cancel",
+      "record_payment": "Record Payment",
+      "save": "Save Changes"
+    },
+    "validation": {
+      "amount_required": "Amount is required.",
+      "method_required": "Payment method is required.",
+      "date_required": "Date is required."
+    }
+  }
+  

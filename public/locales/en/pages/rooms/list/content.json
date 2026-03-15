@@ -1,0 +1,132 @@
+{
+    "title": "All Rooms",
+    "description": "View and manage all physical rooms in your property. You can edit details, assign them to room types, and see their current occupancy status.",
+    "add_room_button": "Add Room",
+    "loading_property": "Loading property data...",
+    "no_property_loaded": "Could not load property data. Please ensure you are assigned to a property.",
+    "access_denied": {
+        "title": "Access Denied",
+        "description": "You do not have permission to view this page. Please contact an administrator."
+    },
+    "filters": {
+        "search_placeholder": "Search by room name...",
+        "room_type_placeholder": "Filter by room type",
+        "all_room_types": "All Room Types",
+        "occupancy_placeholder": "Filter by occupancy",
+        "all_statuses": "All Statuses",
+        "available": "Available",
+        "occupied": "Occupied"
+    },
+    "edit_modal": {
+        "title": "Edit Room",
+        "description": "Update the details for this room."
+    },
+    "add_modal": {
+        "title": "Add New Room(s)",
+        "description": "You can add multiple rooms at once by selecting them from the list of unassigned room numbers for the chosen type."
+    },
+    "form": {
+        "room_type_label": "Room Type",
+        "room_type_placeholder": "Select a room type",
+        "no_room_types": "No room types found. Please create one first.",
+        "room_name_label_edit": "Room Name/Number",
+        "rooms_to_create_label": "Rooms to Create",
+        "select_all": "Select All",
+        "no_unassigned_rooms": "No unassigned room numbers for this type.",
+        "select_type_first": "Select a room type to see available numbers.",
+        "floor_label": "Floor / Location (Optional)",
+        "floor_placeholder": "e.g., 2nd Floor, Garden Wing",
+        "floor_description": "Applies to all new rooms being created.",
+        "amenities_label": "Custom Amenities (Optional)",
+        "amenities_placeholder": "e.g., Ocean view, Balcony",
+        "amenities_description": "Comma-separated list of special features for this room.",
+        "notes_label": "Internal Notes (Optional)",
+        "notes_placeholder": "e.g., Near the elevator, noisy in the morning"
+    },
+    "buttons": {
+        "close": "Close",
+        "save_changes": "Save Changes",
+        "create_rooms": "Create {{count}} Rooms",
+        "create_rooms_fallback": "Create Room(s)",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "delete_selected": "Delete Selected",
+        "update_rooms": "Update Rooms"
+    },
+    "card": {
+        "rooms_available_badge": "{{count}} rooms available",
+        "view_details": "View Details",
+        "edit": "Edit",
+        "delete": "Delete",
+        "floor_label": "Floor",
+        "manage_button": "Manage Room",
+        "delete_button": "Delete Room"
+    },
+    "select_room_aria_label": "Select room {{roomName}}",
+    "manage_button_sr": "Manage room",
+    "delete_button_sr": "Delete room",
+    "view_modal": {
+        "title": "Room Details",
+        "description": "Full details for room.",
+        "details_section_title": "Details",
+        "base_rate_label": "Base Rate",
+        "base_rate_suffix": "/ night",
+        "max_guests_label": "Max Guests",
+        "physical_rooms_label": "Number of Physical Rooms",
+        "not_set": "Not Set",
+        "description_label": "Description",
+        "room_numbers_label": "Assigned Room Numbers",
+        "amenities_section_title": "Amenities"
+    },
+    "toasts": {
+        "validation_error": {
+            "title": "Validation Error",
+            "description": "Please select a room type and provide a room name.",
+            "bulk_create_description": "Please select a room type and at least one room name/number to create."
+        },
+        "success_update": {
+            "title": "Success",
+            "description": "Room updated successfully."
+        },
+        "success_create": {
+            "title": "Success",
+            "description": "{{count}} new rooms have been created successfully."
+        },
+        "error_save": {
+            "title": "Error",
+            "description": "Could not save room(s)."
+        },
+        "success_delete": {
+            "title": "Success",
+            "description": "Room and its associations have been deleted."
+        },
+        "error_delete": {
+            "title": "Error",
+            "description": "Could not delete the room. It may have active reservations."
+        },
+        "no_changes_title": "No Changes",
+        "no_changes_description": "You haven't specified any changes to apply.",
+        "bulk_update_success_description": "{{count}} rooms have been updated successfully.",
+        "bulk_update_error_description": "Could not perform bulk update."
+    },
+    "confirm_delete": "Are you sure you want to delete this room? This will also remove it from any unbooked rate plans. This action cannot be undone.",
+    "confirm_bulk_delete": "Are you sure you want to delete {{count}} selected rooms? This action cannot be undone.",
+    "confirm_delete_title": "Are you sure?",
+    "confirm_delete_description": "You are about to delete room {{name}}. This action cannot be undone.",
+    "select_all_label": "Select All",
+    "room_badge_plural":"Rooms",
+    "occupancy_status": {
+        "available": "Available",
+        "occupied": "Occupied"
+    },
+    "bulk_actions": {
+        "selected_rooms": "{{count}} rooms selected",
+        "button": "Bulk Actions"
+    },
+    "bulk_edit_modal": {
+        "title": "Bulk Edit Rooms",
+        "description": "The changes you make here will be applied to all {{count}} selected rooms.",
+        "new_floor_label": "New Floor / Location",
+        "new_floor_placeholder": "e.g., 3rd Floor"
+    }
+}

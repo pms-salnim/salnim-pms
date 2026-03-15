@@ -1,0 +1,34 @@
+
+{
+  "title": "Check Room Availability",
+  "description": "Select dates and guest count to see real-time availability.",
+  "dates_label": "Check-in / Check-out Dates",
+  "dates_placeholder": "Pick dates",
+  "adults_label": "Adults",
+  "check_availability_button": "Check Availability",
+  "checking_button": "Checking...",
+  "table_headers": {
+    "room_name": "Room Name/No.",
+    "room_type": "Room Type",
+    "max_guests": "Max Guests",
+    "status": "Status",
+    "action": "Action"
+  },
+  "status": {
+    "available": "Available",
+    "occupied": "Occupied"
+  },
+  "action": {
+    "book_now": "Book Now"
+  },
+  "toasts": {
+    "no_room_types": "No Room Types",
+    "no_room_types_description": "Please add room types to check availability.",
+    "invalid_dates": "Invalid Dates",
+    "invalid_dates_description": "Check-out date must be after check-in."
+  },
+  "loading_property": "Loading property data...",
+  "checking_availability": "Checking availability...",
+  "no_rooms_configured": "No room types configured for this property. Please add room types in the 'Rooms' section.",
+  "no_rooms_available": "No rooms available for the selected criteria."
+}

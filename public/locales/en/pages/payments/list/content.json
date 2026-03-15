@@ -1,0 +1,128 @@
+
+{
+    "title": "Payments",
+    "description": "View, add, and manage all payments received for your property.",
+    "add_payment_button": "Add Payment",
+    "filters": {
+      "search_label": "Search",
+      "search_placeholder": "Search by guest, payment #...",
+      "date_range_label": "Date Range",
+      "date_range_placeholder": "Select a date range",
+      "today_button": "Today",
+      "this_month_button": "This Month",
+      "last_7_days_button": "Last 7 Days",
+      "last_30_days_button": "Last 30 Days",
+      "status_label": "Status",
+      "status_placeholder": "Filter by status",
+      "all_statuses": "All Statuses",
+      "statuses": {
+        "paid": "Paid",
+        "pending": "Pending",
+        "refunded": "Refunded",
+        "failed": "Failed"
+      },
+      "method_label": "Method",
+      "method_placeholder": "Filter by method",
+      "all_methods": "All Methods",
+      "methods": {
+        "credit_card": "Credit Card",
+        "cash": "Cash",
+        "bank_transfer": "Bank Transfer",
+        "online_payment": "Online Payment",
+        "other": "Other"
+      }
+    },
+    "table": {
+      "headers": {
+        "payment_id": "Payment ID",
+        "date": "Date",
+        "guest_name": "Guest Name",
+        "method": "Method",
+        "amount": "Amount",
+        "status": "Status",
+        "invoice_no": "Invoice #",
+        "actions": "Actions"
+      },
+      "empty_state": "No payments found for the current filters.",
+      "select_all_aria_label": "Select all payments",
+      "actions_menu": {
+        "view_details": "View Details",
+        "refund": "Refund",
+        "resend_receipt": "Resend Receipt",
+        "delete": "Delete"
+      },
+      "bulk_actions": {
+        "selected_text": "{{count}} selected",
+        "button_text": "Actions",
+        "change_status_option": "Change Status",
+        "mark_as_status": "Mark as {{status}}",
+        "delete_option": "Delete Selected"
+      },
+      "pagination": {
+        "rows_per_page": "Rows per page",
+        "page_of": "Page {{currentPage}} of {{totalPages}}",
+        "previous_button": "Previous",
+        "next_button": "Next"
+      }
+    },
+    "detail_modal": {
+      "title": "Payment Details",
+      "description": "Information for transaction #{{transactionId}}",
+      "date_label": "Date",
+      "guest_name_label": "Guest Name",
+      "amount_paid_label": "Amount Paid",
+      "method_label": "Method",
+      "status_label": "Status",
+      "reservation_number_label": "Reservation #",
+      "invoice_id_label": "Invoice ID",
+      "notes_label": "Notes",
+      "close_button": "Close"
+    },
+    "payment_form": {
+      "title": "Record a Manual Payment",
+      "description": "Manually add a payment received for a reservation.",
+      "amount_received_label": "Amount Received",
+      "amount_placeholder": "e.g., 350.00",
+      "payment_method_label": "Payment Method",
+      "method_placeholder": "Select a method",
+      "date_of_payment_label": "Date of Payment",
+      "date_placeholder": "Select a date",
+      "guest_name_label": "Guest Name (Optional)",
+      "guest_placeholder": "Search for a guest...",
+      "reservation_number_label": "Reservation Number (Optional)",
+      "reservation_number_placeholder": "e.g., R-12345",
+      "notes_label": "Notes (Optional)",
+      "notes_placeholder": "e.g., Cash payment for extra night.",
+      "buttons": {
+        "cancel": "Cancel",
+        "record_payment": "Record Payment",
+        "save": "Save Changes"
+      },
+      "validation": {
+          "amount_required": "Amount is required.",
+          "method_required": "Payment method is required.",
+          "date_required": "Date is required."
+      }
+    },
+    "delete_dialog": {
+      "title": "Are you sure?",
+      "description": "This will permanently delete {{count}} payment(s). This action is irreversible.",
+      "cancel_button": "Cancel",
+      "continue_button": "Confirm Delete"
+    },
+    "status_change_dialog": {
+      "title": "Confirm Status Change",
+      "description": "Are you sure you want to change the status of {{count}} payment(s) to '{{status}}'?",
+      "cancel_button": "Cancel",
+      "confirm_button": "Confirm"
+    },
+    "toasts": {
+      "error_fetching_invoices": "Could not load invoices.",
+      "error_fetching_payments": "Could not load payments.",
+      "delete_success": "{{count}} payment(s) deleted.",
+      "delete_error": "Could not delete all selected payments.",
+      "status_success": "Status for {{count}} payment(s) updated to '{{status}}'.",
+      "status_error": "Could not update all selected payments."
+    }
+  }
+  

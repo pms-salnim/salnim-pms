@@ -1,0 +1,129 @@
+{
+  "card_header": {
+    "title": "Set Availability",
+    "edit_title": "Edit Availability Rule",
+    "description": "Block dates for maintenance or open up rooms for new bookings.",
+    "edit_description": "Editing rule ID: {{id}}"
+  },
+  "form": {
+    "room_type": {
+      "label": "Room Type",
+      "loading": "Loading types...",
+      "placeholder": "Select a room type",
+      "not_found": "No room types found"
+    },
+    "rooms": {
+      "label": "Specific Rooms (Optional)",
+      "selected_rooms": "{{count}} of {{total}} rooms selected",
+      "all_in_type": "All rooms of this type",
+      "select_type_first": "Select a room type first",
+      "clear_selection": "Clear selection (apply to all)",
+      "description": "Leave this blank to apply the rule to all rooms of the selected type.",
+      "edit_description": "Editing applies to the original selection (room or type). To change scope, create a new rule."
+    },
+    "action": {
+      "label": "Action",
+      "available": "Set as Available",
+      "block": "Block Dates"
+    },
+    "date_range": {
+      "label": "Date Range",
+      "placeholder": "Pick a start and end date",
+      "open_ended":"Open-Ended",
+      "open_ended_checkbox": "This is an open-ended block (no end date)",
+      "open_ended_tooltip": "Useful for long-term maintenance. The block will extend indefinitely until removed.",
+      "end_date_required": "End date is required unless 'Open-ended' is checked."
+    },
+    "notes": {
+      "label": "Notes (Optional)",
+      "placeholder": "e.g., Annual maintenance, deep cleaning",
+      "block_default": "Blocked on {{date, PPp}}",
+      "available_default": "Set to available on {{date, PPp}}"
+    }
+  },
+  "alert": {
+    "title": "Important Note",
+    "description": "Setting a room type to 'Available' will override any individual room blocks within it for the selected period. Blocking will always take precedence over availability."
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "cancel_edit": "Cancel Edit",
+    "preview_update": "Preview Update",
+    "preview_edit": "Preview Changes",
+    "confirm_block": "Confirm & Block Dates",
+    "confirm_update": "Confirm & Set Availability"
+  },
+  "confirmation": {
+    "title": "Confirm Availability Change",
+    "description": "Please review the changes below before confirming. This action will override existing settings for the selected dates.",
+    "action_label": "Action",
+    "action_type": {
+      "block": "BLOCK DATES",
+      "available": "MAKE AVAILABLE"
+    },
+    "room_type_label": "Room Type",
+    "rooms_label": "Specific Rooms",
+    "from_label": "From",
+    "to_label": "To",
+    "notes_label": "Notes",
+    "open_ended": "Open-ended (no end date)",
+    "selected_room_type": "Selected Room Type",
+    "alert_title_block": "You are about to BLOCK these rooms.",
+    "alert_description_block": "This will make them unavailable for booking on the specified dates.",
+    "alert_title_available": "You are about to MAKE these rooms available.",
+    "alert_description_available": "This will allow them to be booked on the specified dates."
+  },
+  "log": {
+    "title": "Recent Availability Updates",
+    "description": "A log of the last 50 manual availability or block settings applied.",
+    "tabs": {
+        "all": "All Updates",
+        "blocked": "Blocked",
+        "available": "Available"
+    },
+    "no_records": "No records found.",
+    "header": {
+        "applies_to": "Applies To",
+        "start_date": "Start Date",
+        "end_date": "End Date",
+        "notes": "Notes",
+        "actions": "Actions"
+    },
+    "open_ended": "Open-ended"
+  },
+  "log_table": {
+      "delete_confirm": "Are you sure you want to delete this availability setting?",
+      "unknown_room": "Unknown Room",
+      "unknown_room_type": "Unknown Room Type",
+      "type": "All rooms of this type",
+      "open_ended": "Open-ended",
+      "no_records": "No records found.",
+      "header": {
+          "applies_to": "Applies To",
+          "start_date": "Start Date",
+          "end_date": "End Date",
+          "notes": "Notes",
+          "actions": "Actions"
+      },
+      "actions": {
+          "edit": "Edit",
+          "delete": "Delete"
+      }
+  },
+  "toasts": {
+      "log_load_error_title": "Error Loading Log",
+      "log_load_error_description": "Could not fetch recent availability updates.",
+      "success_title": "Success",
+      "success_description": "Availability for {{roomTypeName}} has been updated.",
+      "save_error_title": "Save Error",
+      "save_error_description": "Could not save availability settings. {{message}}",
+      "delete_success_title": "Setting Deleted",
+      "delete_success_description": "The availability setting has been removed.",
+      "delete_error_title": "Delete Error",
+      "delete_error_description": "Could not delete the setting. Please try again."
+  },
+  "access_denied": {
+      "title": "Access Denied",
+      "description": "You do not have permission to manage availability. Please contact an administrator."
+  }
+}

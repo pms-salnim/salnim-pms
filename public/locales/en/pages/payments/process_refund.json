@@ -1,0 +1,20 @@
+{
+  "title": "Process Refund",
+  "description": "You are about to process a refund for {{guestName}}.",
+  "type_label": "Refund Type",
+  "full_refund_label": "Full Refund",
+  "partial_refund_label": "Partial Refund",
+  "amount_label": "Refund Amount",
+  "reason_label": "Reason for Refund",
+  "reason_placeholder": "e.g., Guest dissatisfaction, cancellation policy.",
+  "buttons": {
+    "cancel": "Cancel",
+    "confirm": "Confirm Refund"
+  },
+  "validation": {
+    "invalid_amount_title": "Invalid Amount",
+    "invalid_amount_description": "Refund amount cannot exceed the original payment of {{amount}}.",
+    "reason_required_title": "Reason Required",
+    "reason_required_description": "Please provide a reason for this refund."
+  }
+}

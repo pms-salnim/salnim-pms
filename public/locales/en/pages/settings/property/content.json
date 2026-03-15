@@ -1,0 +1,66 @@
+
+{
+    "title": "Property Settings",
+    "description": "Manage your property's core details, policies, and financial settings.",
+    "general_info": {
+        "title": "General Information",
+        "description": "Basic details about your property.",
+        "name_label": "Property Name",
+        "address_label": "Address",
+        "phone_label": "Phone Number",
+        "email_label": "Contact Email",
+        "website_label": "Website"
+    },
+    "policies": {
+        "title": "Policies & Localization",
+        "description": "Set rules, times, and regional settings.",
+        "checkin_label": "Default Check-in Time",
+        "checkout_label": "Default Check-out Time",
+        "timezone_label": "Time Zone",
+        "currency_label": "Currency",
+        "same_day_booking_label": "Allow same-day bookings",
+        "same_day_turnover_label": "Allow same-day check-out and check-in for the same room",
+        "cancellation_policy_label": "Cancellation Policy",
+        "cancellation_policy_placeholder": "e.g., Free cancellation up to 48 hours before check-in..."
+    },
+    "legal_info": {
+        "title": "Legal Information",
+        "description": "This information will appear on official documents like invoices.",
+        "company_name_label": "Company Name",
+        "legal_form_label": "Legal Form (e.g., LLC, S.A.)",
+        "capital_amount_label": "Capital Amount",
+        "business_address_label": "Official Business Address",
+        "rc_number_label": "RC Number",
+        "if_number_label": "IF Number",
+        "patente_label": "Patente",
+        "ice_number_label": "ICE Number",
+        "phone_label": "Legal Phone",
+        "email_label": "Legal Email",
+        "website_label": "Legal Website",
+        "tva_label": "TVA Information",
+        "tva_placeholder": "e.g., TVA not applicable - Art 293 B of the CGI"
+    },
+    "finance": {
+        "title": "Finance & Loyalty",
+        "description": "Configure taxes and guest loyalty programs.",
+        "tax_settings_title": "Tax Settings",
+        "tax_name_label": "Tax Name",
+        "tax_name_placeholder": "e.g., VAT",
+        "tax_rate_label": "Tax Rate (%)",
+        "loyalty_program_title": "Loyalty Program",
+        "earning_rate_label": "Earning Rate (Spend {{currency}} to earn 1 point)",
+        "points_value_label": "Points Value (1 point = {{currency}})",
+        "points_value_description": "Value of a single point when redeemed.",
+        "loyalty_tiers_title": "Loyalty Tiers",
+        "loyalty_tiers_description": "Define tiers based on the total points a guest has earned over their lifetime.",
+        "loyalty_tiers_points_placeholder": "Points required"
+    },
+    "toasts": {
+        "error_property_not_found": "Property not found. Unable to save settings.",
+        "success_save": "Property settings saved successfully.",
+        "error_save": "Failed to save property settings. Please try again."
+    },
+    "buttons": {
+        "save_settings": "Save Settings"
+    }
+}

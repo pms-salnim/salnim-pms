@@ -1,0 +1,27 @@
+{
+    "title": "Performance Reports",
+    "description": "Generate detailed reports on revenue, occupancy, and other key performance indicators.",
+    "card_generate": {
+      "title": "Generate a Report",
+      "description": "Select a date range and filters to generate a new performance report."
+    },
+    "buttons": {
+      "generate": "Generate Report",
+      "generating": "Generating...",
+      "export": "Export"
+    },
+    "card_results": {
+      "title": "Report Results",
+      "description": "Report for the period from {{from}} to {{to}}.",
+      "filters_info": "Filters: Room Type - {{roomType}} | Booking Source - {{bookingSource}}",
+      "export": "Export",
+      "download_pdf": "Export PDF",
+      "export_xlsx": "Export XLSX",
+      "export_csv": "Export CSV"
+    },
+    "no_data": "No data available for the selected period and filters.",
+    "toasts": {
+      "date_range_required": "Please select a valid date range to generate the report."
+    }
+  }
+  

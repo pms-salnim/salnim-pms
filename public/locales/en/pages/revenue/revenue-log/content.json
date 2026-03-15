@@ -1,0 +1,23 @@
+{
+  "title": "Revenue Log",
+  "description": "Details of reservations contributing to revenue.",
+  "table": {
+    "headers": {
+      "booking_date": "Booking Date",
+      "guest_name": "Guest Name",
+      "room_type": "Room Type",
+      "check_in": "Check-in",
+      "check_out": "Check-out",
+      "amount": "Amount",
+      "status": "Status",
+      "payment_status": "Payment Status"
+    },
+    "empty_state": "No revenue data available for the selected filters."
+  },
+  "pagination": {
+    "rows_per_page": "Rows per page",
+    "page_of": "Page {{currentPage}} of {{totalPages}}",
+    "previous_button": "Previous",
+    "next_button": "Next"
+  }
+}

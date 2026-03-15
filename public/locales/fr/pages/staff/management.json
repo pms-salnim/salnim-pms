@@ -1,0 +1,196 @@
+
+{
+  "title": "Gestion du Personnel",
+  "description": "Ajoutez, modifiez et gérez les membres du personnel sans accès de connexion pour votre établissement.",
+  "add_staff_button": "Ajouter un membre",
+  "edit_modal": {
+    "title": "Modifier le membre du personnel",
+    "description": "Mettez à jour les détails de ce membre du personnel."
+  },
+  "add_modal": {
+    "title": "Ajouter un nouveau membre",
+    "description": "Remplissez les détails pour créer une nouvelle fiche de personnel. Ce type d'utilisateur n'aura pas d'accès de connexion."
+  },
+  "delete_dialog": {
+    "title": "Êtes-vous absolument sûr ?",
+    "description": "Cette action est irréversible. Cela supprimera définitivement la fiche de {{name}}.",
+    "cancel_button": "Annuler",
+    "continue_button": "Continuer"
+  },
+  "list": {
+    "headers": {
+      "full_name": "Nom complet",
+      "role": "Poste",
+      "cin": "CIN",
+      "hire_date": "Date d'embauche",
+      "salary": "Salaire",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "no_staff_message": "Aucun membre du personnel trouvé.",
+    "actions_menu": {
+      "edit": "Modifier",
+      "documents": "Documents",
+      "certificate": "Attestation de salaire",
+      "work_certificate": "Attestation de travail",
+      "end_contract_certificate": "Certificat de fin de contrat",
+      "payslip": "Bulletin de paie",
+      "internship_certificate": "Attestation de Stage",
+      "deactivate": "Désactiver",
+      "activate": "Activer",
+      "delete": "Supprimer"
+    }
+  },
+  "form": {
+    "sections": {
+      "base_info": "Informations de base",
+      "professional_info": "Informations professionnelles",
+      "salary_info": "Informations salariales"
+    },
+    "full_name_label": "Nom complet",
+    "cin_label": "CIN (Carte d'Identité Nationale)",
+    "phone_label": "Numéro de téléphone",
+    "sex_label": "Sexe",
+    "sex_placeholder": "Sélectionner le sexe",
+    "sexes": {
+      "male": "Masculin",
+      "female": "Féminin"
+    },
+    "address_label": "Adresse",
+    "department_label": "Département",
+    "department_placeholder": "Sélectionner un département",
+    "position_label": "Poste",
+    "position_placeholder": "Sélectionner un poste",
+    "contract_type_label": "Type de contrat",
+    "contract_types": {
+      "cdi": "CDI",
+      "cdd": "CDD",
+      "daily": "Journalier",
+      "internship": "Stage"
+    },
+    "hire_date_label": "Date d'embauche",
+    "date_placeholder": "Choisir une date",
+    "status_label": "Statut",
+    "statuses": {
+      "active": "Actif",
+      "terminated": "Résilié"
+    },
+    "salary_label": "Salaire mensuel brut",
+    "cnss_label": "Numéro CNSS",
+    "payment_method_label": "Mode de paiement",
+    "payment_methods": {
+      "cash": "Espèces",
+      "transfer": "Virement bancaire"
+    },
+    "validation_error": {
+      "title": "Erreur de validation",
+      "required_fields": "Veuillez remplir tous les champs obligatoires (marqués d'un *)."
+    }
+  },
+  "statuses": {
+    "actif": "Actif",
+    "résilié": "Résilié"
+  },
+  "positions": {
+    "general_manager": "Directeur Général",
+    "assistant_manager": "Directeur Adjoint",
+    "admin_finance_manager": "Responsable Administratif et Financier",
+    "head_receptionist": "Chef de Réception",
+    "booking_agent": "Agent de Réservation",
+    "cashier": "Caissier",
+    "hr_manager": "Responsable des Ressources Humaines",
+    "head_housekeeper": "Gouvernante Générale",
+    "chambermaid_man": "Femme de Chambre/Valet",
+    "cleaning_agent": "Agent de Nettoyage",
+    "laundry_staff": "Personnel de Blanchisserie",
+    "maintenance_technician": "Technicien de Maintenance",
+    "head_chef": "Chef de Cuisine",
+    "cook": "Cuisinier",
+    "assistant_cook": "Aide-Cuisinier",
+    "waiter_waitress": "Serveur/Serveuse",
+    "head_waiter": "Maître d'Hôtel",
+    "dishwasher": "Plongeur",
+    "receptionist": "Réceptionniste",
+    "bellhop_porter": "Bagagiste/Voiturier",
+    "concierge": "Concierge",
+    "reception_reservations_manager": "Responsable Réception et Réservations",
+    "night_auditor": "Auditeur de Nuit",
+    "gardener_grounds_agent": "Jardinier/Agent d'Entretien Extérieur",
+    "technician_electrician_plumber": "Technicien (Électricien, Plombier)",
+    "security_guard": "Agent de Sécurité",
+    "sales_marketing_manager": "Responsable Commercial et Marketing",
+    "community_manager": "Community Manager",
+    "online_sales_reservations_agent": "Agent Commercial et Réservation en Ligne",
+    "photographer_content_creator": "Photographe/Créateur de Contenu",
+    "masseur_masseuse": "Masseur/Masseuse",
+    "sports_coach_activity_leader": "Coach Sportif/Animateur d'Activités",
+    "beautician_spa_manager": "Esthéticienne/Responsable Spa"
+  },
+  "departments": {
+    "direction_administration": "Direction & Administration",
+    "entretien_menage": "Entretien & Ménage",
+    "restauration_cuisine": "Restauration & Cuisine",
+    "accueil_service_client": "Accueil & Service Client",
+    "espaces_exterieurs_maintenance": "Espaces Extérieurs & Maintenance Technique",
+    "commercial_communication": "Commercial & Communication",
+    "bien_etre_loisirs": "Bien-être & Loisirs"
+  },
+  "toasts": {
+    "success_title": "Succès",
+    "error_title": "Erreur",
+    "update_success": {
+      "title": "Membre du personnel mis à jour",
+      "description": "Les détails de {{name}} ont été mis à jour avec succès."
+    },
+    "create_success": {
+      "title": "Membre du personnel ajouté",
+      "description": "Une nouvelle fiche pour {{name}} a été créée."
+    },
+    "save_error": "Impossible d'enregistrer les informations du membre du personnel. Veuillez réessayer.",
+    "delete_success": "La fiche du membre du personnel a été supprimée avec succès.",
+    "delete_error": "Échec de la suppression de la fiche du membre du personnel.",
+    "status_updated": "Le statut du membre du personnel a été mis à jour à {{status}}."
+  },
+  "buttons": {
+    "cancel": "Annuler",
+    "save": "Enregistrer les modifications",
+    "create": "Créer le membre",
+    "delete": "Supprimer",
+    "edit_document": "Modifier le document",
+    "preview_document": "Aperçu du document",
+    "download_pdf": "Télécharger PDF",
+    "close": "Fermer"
+  },
+  "salary_certificate_modal": {
+    "title": "Attestation de Salaire pour {{name}}",
+    "description": "Générer une attestation de salaire pour le mois sélectionné.",
+    "month_label": "Mois",
+    "language_label": "Langue"
+  },
+  "work_certificate_modal": {
+    "title": "Attestation de Travail pour {{name}}",
+    "description": "Générer une attestation de travail standard."
+  },
+  "end_of_contract_certificate_modal": {
+    "title": "Certificat de Fin de Contrat pour {{name}}",
+    "description": "Générer un certificat pour la fin d'un contrat.",
+    "end_date_label": "Date de fin de contrat",
+    "end_date_required_title": "Date de fin requise",
+    "end_date_required_description": "Veuillez sélectionner une date de fin de contrat valide."
+  },
+  "payslip_modal": {
+    "title": "Bulletin de Paie pour {{name}}",
+    "description": "Générer un bulletin de paie pour le mois sélectionné."
+  },
+  "internship_certificate_modal": {
+    "title": "Attestation de Stage pour {{name}}",
+    "description": "Générer une attestation de stage pour la période spécifiée.",
+    "date_range_label": "Période du stage",
+    "date_range_required_title": "Plage de dates requise",
+    "date_range_required_description": "Veuillez sélectionner une date de début et de fin valide pour le stage."
+  },
+  "metric_cards": {
+    "total_employees": "Total des employés",
+    "total_salaries": "Masse salariale mensuelle"
+  }
+}

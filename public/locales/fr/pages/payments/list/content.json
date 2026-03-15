@@ -1,0 +1,128 @@
+
+{
+    "title": "Paiements",
+    "description": "Consultez, ajoutez et gérez tous les paiements reçus pour votre établissement.",
+    "add_payment_button": "Ajouter un paiement",
+    "filters": {
+      "search_label": "Rechercher",
+      "search_placeholder": "Rechercher par client, n° de paiement...",
+      "date_range_label": "Plage de dates",
+      "date_range_placeholder": "Sélectionner une plage de dates",
+      "today_button": "Aujourd'hui",
+      "this_month_button": "Ce mois-ci",
+      "last_7_days_button": "7 derniers jours",
+      "last_30_days_button": "30 derniers jours",
+      "status_label": "Statut",
+      "status_placeholder": "Filtrer par statut",
+      "all_statuses": "Tous les statuts",
+      "statuses": {
+        "paid": "Payé",
+        "pending": "En attente",
+        "refunded": "Remboursé",
+        "failed": "Échoué"
+      },
+      "method_label": "Méthode",
+      "method_placeholder": "Filtrer par méthode",
+      "all_methods": "Toutes les méthodes",
+      "methods": {
+        "credit_card": "Carte de crédit",
+        "cash": "Espèces",
+        "bank_transfer": "Virement bancaire",
+        "online_payment": "Paiement en ligne",
+        "other": "Autre"
+      }
+    },
+    "table": {
+      "headers": {
+        "payment_id": "ID de Paiement",
+        "date": "Date",
+        "guest_name": "Nom du client",
+        "method": "Méthode",
+        "amount": "Montant",
+        "status": "Statut",
+        "invoice_no": "N° de Facture",
+        "actions": "Actions"
+      },
+      "empty_state": "Aucun paiement trouvé pour les filtres actuels.",
+      "select_all_aria_label": "Sélectionner tous les paiements",
+      "actions_menu": {
+        "view_details": "Voir les détails",
+        "refund": "Rembourser",
+        "resend_receipt": "Renvoyer le reçu",
+        "delete": "Supprimer"
+      },
+      "bulk_actions": {
+        "selected_text": "{{count}} sélectionné(s)",
+        "button_text": "Actions",
+        "change_status_option": "Changer le statut",
+        "mark_as_status": "Marquer comme {{status}}",
+        "delete_option": "Supprimer la sélection"
+      },
+      "pagination": {
+        "rows_per_page": "Lignes par page",
+        "page_of": "Page {{currentPage}} sur {{totalPages}}",
+        "previous_button": "Précédent",
+        "next_button": "Suivant"
+      }
+    },
+    "detail_modal": {
+      "title": "Détails du Paiement",
+      "description": "Informations pour la transaction n° {{transactionId}}",
+      "date_label": "Date",
+      "guest_name_label": "Nom du client",
+      "amount_paid_label": "Montant Payé",
+      "method_label": "Méthode",
+      "status_label": "Statut",
+      "reservation_id_label": "ID Réservation",
+      "invoice_id_label": "ID Facture",
+      "notes_label": "Notes",
+      "close_button": "Fermer"
+    },
+    "payment_form": {
+      "title": "Enregistrer un paiement manuel",
+      "description": "Ajoutez manuellement un paiement reçu pour une réservation.",
+      "amount_received_label": "Montant Reçu",
+      "amount_placeholder": "ex: 350.00",
+      "payment_method_label": "Méthode de Paiement",
+      "method_placeholder": "Sélectionnez une méthode",
+      "date_of_payment_label": "Date du Paiement",
+      "date_placeholder": "Sélectionner une date",
+      "guest_name_label": "Nom du Client (Optionnel)",
+      "guest_placeholder": "Rechercher un client...",
+      "reservation_number_label": "Numéro de Réservation (Optionnel)",
+      "reservation_number_placeholder": "ex: R-12345",
+      "notes_label": "Notes (Optionnel)",
+      "notes_placeholder": "ex: Paiement en espèces pour nuit supplémentaire.",
+      "buttons": {
+        "cancel": "Annuler",
+        "record_payment": "Enregistrer le Paiement",
+        "save": "Sauvegarder"
+      },
+      "validation": {
+          "amount_required": "Le montant est requis.",
+          "method_required": "La méthode de paiement est requise.",
+          "date_required": "La date est requise."
+      }
+    },
+    "delete_dialog": {
+      "title": "Êtes-vous sûr ?",
+      "description": "Cela supprimera définitivement {{count}} paiement(s). Cette action est irréversible.",
+      "cancel_button": "Annuler",
+      "continue_button": "Confirmer la suppression"
+    },
+    "status_change_dialog": {
+      "title": "Confirmer le changement de statut",
+      "description": "Êtes-vous sûr de vouloir changer le statut de {{count}} paiement(s) en '{{status}}' ?",
+      "cancel_button": "Annuler",
+      "confirm_button": "Confirmer"
+    },
+    "toasts": {
+      "error_fetching_invoices": "Impossible de charger les factures.",
+      "error_fetching_payments": "Impossible de charger les paiements.",
+      "delete_success": "{{count}} paiement(s) supprimé(s).",
+      "delete_error": "Impossible de supprimer tous les paiements sélectionnés.",
+      "status_success": "Statut de {{count}} paiement(s) mis à jour en '{{status}}'.",
+      "status_error": "Impossible de mettre à jour tous les paiements sélectionnés."
+    }
+  }
+  

@@ -1,0 +1,52 @@
+{
+"tabs": {
+    "reservation": "Reservation",
+    "packages": "Packages"
+  },
+    "search_bar": {
+        "date_range_label": "Check-in & Check-out Dates",
+        "date_range_placeholder": "Select your dates",
+        "rooms_guests_label": "Rooms & Guests",
+        "rooms_guests_summary": "{{roomCount}} room, {{guestCount}} guest",
+        "rooms_guests_summary_plural": "{{roomCount}} rooms, {{guestCount}} guests",
+        "update_button": "Update Search",
+        "popover": {
+            "title": "Select Rooms & Guests",
+            "description": "Specify the number of rooms and guests for your stay.",
+            "rooms": "Rooms",
+            "adults": "Adults",
+            "children": "Children"
+        }
+    },
+    "room_selection": {
+        "no_rooms_title": "No Rooms Available",
+        "no_rooms_description": "We couldn't find any available rooms for your selected dates or guest count. Please try different dates or adjust the number of guests.",
+        "from_price": "From",
+        "show_rates_button": "Show Rates",
+        "hide_rates_button": "Hide Rates",
+        "more_details_link": "More details",
+        "sleeps_text": "Sleeps {{count}}",
+        "rate_plan_default_description": "Standard booking conditions apply.",
+        "policies_title": "Policies",
+        "no_policy_info": "No specific policy information available for this rate.",
+        "total_price_tooltip": "Total stay price for {{nights}} nights (before taxes)",
+        "add_room_button": "Add to Booking",
+        "total_including_taxes": "Total including taxes"
+    },
+    "details_modal": {
+        "no_images": "No images available for this room type.",
+        "description_title": "About this Room",
+        "no_description": "No description provided for this room type.",
+        "amenities_title": "Amenities",
+        "no_amenities": "No specific amenities listed.",
+        "pricing_title": "Pricing",
+        "pricing_description_start": "Prices for this room start from",
+        "pricing_description_per_night": "per night",
+        "pricing_description_end": "Actual price depends on the selected rate plan and dates."
+    },
+    "property_info_card": {
+        "welcome": "Welcome to {{propertyName}}",
+        "visit_website": "Visit our website",
+        "contact_info": "Contact Information"
+    }
+}

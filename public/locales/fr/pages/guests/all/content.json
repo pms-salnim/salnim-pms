@@ -1,0 +1,177 @@
+{
+    "title": "Liste des Clients",
+    "description": "Parcourez et gérez tous les profils de clients dans votre système.",
+    "add_guest_button": "Ajouter un Nouveau Client",
+    "filters": {
+        "search_placeholder": "Rechercher par nom ou email...",
+        "nationality_placeholder": "Filtrer par Nationalité",
+        "all_nationalities": "Toutes les Nationalités",
+        "tags_placeholder": "Filtrer par Tags",
+        "all_tags": "Tous les Tags",
+        "date_range_placeholder": "Filtrer par date de dernier séjour"
+    },
+    "list": {
+        "headers": {
+            "full_name": "Nom Complet",
+            "email": "Email",
+            "phone": "Téléphone",
+            "nationality": "Nationalité",
+            "reservations": "Réservations",
+            "last_stay": "Dernier Séjour",
+            "tags": "Tags",
+            "actions": "Actions"
+        },
+        "no_guests_message": "Aucun client trouvé. Essayez d'ajouter un nouveau client ou d'ajuster vos filtres.",
+        "actions_menu": {
+            "view_profile": "Voir le Profil",
+            "edit_guest": "Modifier le Client",
+            "unenroll_loyalty": "Désinscrire de la Fidélité",
+            "enroll_loyalty": "Inscrire à la Fidélité",
+            "delete_guest": "Supprimer le Client"
+        },
+        "bulk_actions": {
+            "selected_text": "{{count}} sélectionnés",
+            "button_text": "Actions",
+            "add_tag": "Ajouter un Tag",
+            "delete_selected": "Supprimer la Sélection"
+        },
+        "select_all_aria_label": "Sélectionner toutes les lignes",
+        "pagination": {
+            "rows_per_page": "Lignes par page",
+            "page_of": "Page {{currentPage}} sur {{totalPages}}",
+            "previous_button": "Précédent",
+            "next_button": "Suivant"
+        }
+    },
+    "form": {
+        "add_modal": {
+            "title": "Ajouter un Nouveau Profil Client",
+            "description": "Créez un nouvel enregistrement de client. Remplissez autant de détails que possible."
+        },
+        "edit_modal": {
+            "title": "Modifier le Profil Client",
+            "description": "Mettez à jour les détails de ce client."
+        },
+        "sections": {
+            "personal_details": "Détails Personnels",
+            "contact_details": "Coordonnées",
+            "internal_notes": "Notes Internes & Préférences",
+            "loyalty_program": "Programme de Fidélité"
+        },
+        "first_name_label": "Prénom",
+        "first_name_placeholder": "Ex: Jean",
+        "last_name_label": "Nom de Famille",
+        "last_name_placeholder": "Ex: Dupont",
+        "gender_label": "Genre",
+        "gender_placeholder": "Sélectionner le genre",
+        "sexes": {
+            "male": "Homme",
+            "female": "Femme"
+        },
+        "birthdate_label": "Date de Naissance",
+        "birthdate_placeholder": "Choisir une date",
+        "nationality_label": "Nationalité",
+        "nationality_placeholder": "Sélectionner la nationalité",
+        "email_label": "Email",
+        "email_placeholder": "client@example.com",
+        "phone_label": "Numéro de Téléphone",
+        "phone_placeholder": "Ex: +33 6 12 34 56 78",
+        "address_label": "Adresse",
+        "address_placeholder": "123 Rue Principale, Anytown, France",
+        "notes_label": "Notes Internes (pour le personnel uniquement)",
+        "notes_placeholder": "Ex: Préfère les chambres en étage élevé, allergique aux arachides...",
+        "enroll_loyalty_label": "Inscrire ce client au programme de fidélité.",
+        "buttons": {
+            "cancel": "Annuler",
+            "save": "Enregistrer le Client"
+        }
+    },
+    "profile": {
+        "title": "Profil : {{name}}",
+        "description": "Un aperçu complet de l'historique et des détails du client.",
+        "tabs": {
+            "history": "Historique des Réservations",
+            "loyalty": "Activité de Fidélité",
+            "notes": "Notes Internes",
+            "stats": "Statistiques"
+        },
+        "history_tab": {
+            "title": "Historique des Réservations",
+            "description": "Un journal de toutes les réservations passées, présentes et futures pour {{name}}.",
+            "table_headers": {
+                "reservation_id": "ID Réservation",
+                "check_in": "Arrivée",
+                "check_out": "Départ",
+                "room_type":"Type de Chambre",
+                "room": "Chambre",
+                "status": "Statut"
+            },
+            "empty_state": "Aucune réservation trouvée pour ce client."
+        },
+        "loyalty_tab": {
+            "title": "Activité du Programme de Fidélité",
+            "description": "Un historique détaillé de tous les points de fidélité gagnés et échangés par {{name}}.",
+            "not_enrolled": "Ce client n'est actuellement pas inscrit au programme de fidélité.",
+            "no_activity": "Aucune activité de fidélité n'a encore été enregistrée."
+        },
+        "notes_tab": {
+            "title": "Notes Internes",
+            "description": "Notes privées et préférences pour référence du personnel. Non visible par le client.",
+            "placeholder": "Ajoutez des notes sur les préférences du client, les demandes spéciales, ou les incidents...",
+            "save_button": "Enregistrer les Notes",
+            "save_success_title": "Notes Enregistrées",
+            "save_success_description": "Les notes internes pour ce client ont été mises à jour.",
+            "save_error_title": "Erreur",
+            "save_error_description": "Impossible d'enregistrer les notes. Veuillez réessayer."
+        }
+    },
+    "modals": {
+        "delete_confirmation": {
+            "title": "Êtes-vous sûr ?",
+            "description": "Cela supprimera définitivement le profil de {{name}}. Cette action est irréversible.",
+            "description_plural": "Cela supprimera définitivement {{count}} profils de clients. Cette action est irréversible.",
+            "cancel_button": "Annuler",
+            "continue_button": "Supprimer"
+        }
+    },
+    "toasts": {
+        "permission_denied": "Vous n'avez pas la permission d'effectuer cette action.",
+        "delete_success": "{{count}} client(s) supprimé(s) avec succès.",
+        "delete_error": "Une erreur est survenue lors de la suppression des clients.",
+        "tag_add_success": "Le tag '{{tag}}' a été ajouté à {{count}} client(s).",
+        "tag_add_error": "Impossible d'ajouter des tags à tous les clients sélectionnés.",
+        "update_success": "Le profil de {{name}} a été mis à jour.",
+        "add_success": "Nouveau profil client pour {{name}} créé.",
+        "save_error": "Impossible d'enregistrer les données du client. Veuillez vérifier le formulaire et réessayer.",
+        "save_error_generic": "Une erreur est survenue lors de l'enregistrement des données du client.",
+        "error_loading_property": "Impossible de charger les données de la propriété pour votre profil. Certaines fonctionnalités peuvent être désactivées.",
+        "loyalty_disabled_title": "Programme de Fidélité Désactivé",
+        "loyalty_disabled_description": "Le programme de fidélité n'est pas activé pour cette propriété. Veuillez l'activer dans les paramètres.",
+        "success_title": "Succès",
+        "error_title": "Erreur",
+        "loyalty_enroll_success": "{{name}} a été inscrit(e) au programme de fidélité.",
+        "loyalty_unenroll_success": "{{name}} a été désinscrit(e) du programme de fidélité.",
+        "loyalty_update_error": "Impossible de mettre à jour le statut d'inscription à la fidélité."
+    },
+    "bulk_tag_modal": {
+        "title": "Ajouter un Tag à {{count}} Clients",
+        "description": "Sélectionnez un tag à appliquer à tous les clients sélectionnés. Cela ne supprimera pas les tags existants.",
+        "label": "Tag à Appliquer",
+        "placeholder": "Sélectionnez un tag...",
+        "buttons": {
+            "cancel": "Annuler",
+            "apply": "Appliquer le Tag"
+        }
+    },
+    "stats": {
+        "tab_title": "Statistiques Client",
+        "title": "Statistiques Client",
+        "description": "Un aperçu de la valeur vie et des habitudes de séjour de ce client.",
+        "total_nights": "Nuitées Totales",
+        "total_spent": "Dépenses Totales",
+        "favorite_room": "Type de Chambre Préféré",
+        "avg_stay": "Durée Moy. de Séjour",
+        "avg_spend": "Dépense Moy. par Nuit",
+        "last_stay": "Dernier Séjour"
+    }
+}

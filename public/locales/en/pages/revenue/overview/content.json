@@ -1,0 +1,72 @@
+
+{
+    "loading": "Loading...",
+    "access_denied": {
+        "title": "Access Denied",
+        "description": "You do not have permission to view revenue reports. Please contact an administrator."
+    },
+    "filters": {
+        "date_range_label": "Date Range (Booking Creation)",
+        "date_range_placeholder": "Select a date range",
+        "today_button": "Today",
+        "this_week_button": "This Week",
+        "this_month_button": "This Month",
+        "last_7_days_button": "Last 7 Days",
+        "last_30_days_button": "Last 30 Days",
+        "booking_source_label": "Booking Source",
+        "booking_source_placeholder": "Filter by source",
+        "all_sources": "All Sources",
+        "room_type_label": "Room Type",
+        "room_type_placeholder": "Filter by room type",
+        "all_room_types": "All Room Types",
+        "apply_button": "Apply Filters"
+    },
+    "cards": {
+        "total_revenue": {
+            "title": "Total Booked Revenue",
+            "description": "Total value of all confirmed bookings created in this period."
+        },
+        "stay_revenue": {
+            "title": "Total Stay Revenue",
+            "description": "Revenue generated from stays occurring within the period."
+        },
+        "pending_revenue": {
+            "title": "Pending Payments",
+            "description": "Total amount due from all unpaid or partially paid reservations."
+        },
+        "total_bookings": {
+            "title": "Total Bookings",
+            "description": "Number of confirmed bookings created in this period."
+        },
+        "adr": {
+            "title": "Average Daily Rate (ADR)",
+            "description": "Average revenue earned per occupied room per day."
+        },
+        "occupancy_rate": {
+            "title": "Occupancy Rate",
+            "description": "Percentage of available rooms occupied in this period."
+        },
+        "revpar": {
+            "title": "Revenue Per Available Room (RevPAR)",
+            "description": "Average revenue generated per available room."
+        },
+        "canceled_bookings": {
+            "title": "Canceled Bookings Value",
+            "description": "Potential revenue lost from cancellations in this period."
+        }
+    },
+    "chart": {
+        "title": "Revenue Over Time",
+        "description": "Track your total booked revenue for the selected period.",
+        "empty_state": "No revenue data available for the selected filters.",
+        "tooltip_date_label": "Date"
+    },
+    "breakdown": {
+        "room_type_title": "Revenue by Room Type",
+        "room_type_description": "Breakdown of total revenue by each room type.",
+        "empty_state_room": "No revenue data for any room type in this period.",
+        "source_title": "Revenue by Booking Source",
+        "source_description": "Breakdown of total revenue by how the booking was made.",
+        "empty_state_source": "No revenue data for any source in this period."
+    }
+}

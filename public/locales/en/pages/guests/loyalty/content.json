@@ -1,0 +1,98 @@
+
+{
+    "title": "Loyalty Program",
+    "description": "Manage guest loyalty status, points, and rewards.",
+    "not_active": {
+        "title": "Loyalty Program is Not Active",
+        "description": "To start managing your loyalty program, you first need to enable it in your property settings.",
+        "go_to_settings": "Go to Settings"
+    },
+    "list": {
+        "headers": {
+            "guest_name": "Guest Name",
+            "tier": "Tier",
+            "total_earned": "Total Earned",
+            "redeemed": "Redeemed",
+            "remaining_points": "Remaining Points",
+            "actions": "Actions"
+        },
+        "bulk_actions": {
+            "selected_text": "{{count}} selected",
+            "button": "Actions",
+            "adjust_points": "Adjust Points",
+            "delete_selected": "Delete Selected"
+        },
+        "actions_menu": {
+            "view_profile": "View Profile",
+            "adjust_points": "Adjust Points",
+            "redeem_points": "Redeem Points"
+        },
+        "empty_state": "No guests are enrolled in the loyalty program yet."
+    },
+    "adjust_form": {
+        "current_balance_label": "Current Balance",
+        "points_label": "Points",
+        "action_add": "Add",
+        "action_deduct": "Deduct",
+        "points_to_action_label": "Points to {{action}}",
+        "points_placeholder": "e.g., 500",
+        "reason_label": "Reason",
+        "reason_placeholder": "e.g., Service recovery, welcome gift, etc.",
+        "validation": {
+            "points_required": "Please enter a valid number of points.",
+            "reason_required": "A reason is required for this adjustment."
+        },
+        "buttons": {
+            "cancel": "Cancel",
+            "confirm": "Confirm Adjustment"
+        }
+    },
+    "redeem_form": {
+        "current_balance_label": "Available Balance",
+        "points_label": "Points",
+        "redeem_by_amount_label": "Redeem by Amount",
+        "redeem_by_points_label": "Redeem by Points",
+        "redeem_amount_label": "Amount to Redeem",
+        "redeem_points_label": "Points to Redeem",
+        "reason_label": "Reason for Redemption",
+        "reason_placeholder": "e.g., Payment for Reservation #123",
+        "default_reason": "Redemption for stay",
+        "validation": {
+            "points_required": "Please enter a valid amount or number of points to redeem.",
+            "insufficient_points": "The guest does not have enough points to redeem this amount.",
+            "reason_required": "A reason is required for redemption."
+        },
+        "buttons": {
+            "cancel": "Cancel",
+            "redeem": "Redeem Points"
+        }
+    },
+    "bulk_adjust_form": {
+        "points_to_action_label": "Points to {{action}} for each selected guest",
+        "points_placeholder": "e.g., 100",
+        "reason_label": "Reason (common for all)",
+        "reason_placeholder": "e.g., Holiday bonus, promotional event",
+        "buttons": {
+            "apply_to_all": "Apply to All"
+        }
+    },
+    "bulk_delete_dialog": {
+        "title": "Are you sure?",
+        "description": "This will permanently delete {{count}} guest(s) from your property. This action cannot be undone.",
+        "cancel_button": "Cancel",
+        "continue_button": "Delete"
+    },
+    "profile": {
+        "title": "Profile: {{name}}",
+        "description": "View guest history and details."
+    },
+    "toasts": {
+        "success_title": "Success",
+        "error_title": "Error",
+        "loyalty_disabled_title": "Loyalty Program Disabled",
+        "loyalty_disabled_description": "Please enable the loyalty program in settings before enrolling guests.",
+        "loyalty_enroll_success": "{{name}} has been enrolled in the loyalty program.",
+        "loyalty_unenroll_success": "{{name}} has been unenrolled from the loyalty program.",
+        "loyalty_update_error": "Failed to update loyalty status."
+    }
+}

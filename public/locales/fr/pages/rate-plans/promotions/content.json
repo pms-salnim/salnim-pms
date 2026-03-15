@@ -1,0 +1,95 @@
+
+{
+  "title": "Promotions et Réductions",
+  "description": "Créez des offres spéciales et des codes promo pour attirer plus de clients.",
+  "add_button": "Nouvelle Promotion",
+  "edit_modal": {
+    "title": "Modifier la Promotion",
+    "description": "Configurez votre réduction. Elle s'appliquera aux plans tarifaires sélectionnés pendant la période de validité.",
+    "no_rate_plans_warning": "Vous devez définir au moins un Plan Tarifaire avant de créer une promotion."
+  },
+  "add_modal": {
+    "title": "Créer une Nouvelle Promotion",
+    "description": "Configurez votre réduction. Elle s'appliquera aux plans tarifaires sélectionnés pendant la période de validité.",
+    "no_rate_plans_warning": "Vous devez définir au moins un Plan Tarifaire avant de créer une promotion."
+  },
+  "list": {
+    "headers": {
+      "name": "Nom de la Promotion",
+      "discount": "Réduction",
+      "type": "Type",
+      "usage": "Utilisation",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "types": {
+      "coupon": "Coupon",
+      "automatic": "Automatique"
+    },
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif"
+    },
+    "no_promotions": "Aucune promotion trouvée. Cliquez sur \"Nouvelle Promotion\" pour commencer.",
+    "actions_menu": {
+      "edit": "Modifier",
+      "delete": "Supprimer"
+    }
+  },
+  "form": {
+    "name_label": "Nom de la Promotion",
+    "name_placeholder": "ex: Vente d'été",
+    "description_label": "Description (Optionnel)",
+    "description_placeholder": "Décrivez brièvement la promotion.",
+    "type_label": "Type de Promotion",
+    "type_auto": "Réduction Automatique",
+    "type_coupon": "Code Promo",
+    "coupon_code_label": "Code Promo",
+    "coupon_code_placeholder": "ex: ETE24",
+    "usage_limit_label": "Limite d'Utilisation (Optionnel)",
+    "usage_limit_placeholder": "Laisser vide pour illimité",
+    "rate_plans_label": "Plans Tarifaires Applicables",
+    "discount_type_label": "Type de Réduction",
+    "discount_type_percentage": "Pourcentage",
+    "discount_type_flat": "Forfaitaire",
+    "discount_value_label": "Valeur de la Réduction",
+    "discount_value_percentage_placeholder": "ex: 15",
+    "discount_value_flat_placeholder": "ex: 25",
+    "validity_period_label": "Période de Validité",
+    "validity_period_placeholder": "Choisir des dates",
+    "active_label": "La promotion est active",
+    "validation": {
+      "required_fields": "Veuillez remplir tous les champs obligatoires.",
+      "coupon_required": "Un code promo est requis pour ce type de promotion."
+    }
+  },
+  "delete_dialog": {
+    "title": "Êtes-vous absolument sûr(e) ?",
+    "description": "Cette action est irréversible. Cela supprimera définitivement la promotion \"{{name}}\".",
+    "cancel_button": "Annuler",
+    "continue_button": "Continuer"
+  },
+  "toasts": {
+    "permission_denied": "Permission refusée ou propriété non identifiée.",
+    "success_update_title": "Succès",
+    "success_update_description": "Promotion mise à jour.",
+    "success_create_title": "Succès",
+    "success_create_description": "Promotion ajoutée.",
+    "error_save_title": "Erreur",
+    "error_save_description": "Impossible d'enregistrer la promotion.",
+    "success_delete_title": "Succès",
+    "success_delete_description": "Promotion supprimée.",
+    "error_delete_title": "Erreur",
+    "error_delete_description": "Impossible de supprimer la promotion.",
+    "promo_applied_success": "\"{{name}}\" a été appliqué avec succès.",
+    "promo_applied_error": "Ce code promo n'est pas valide pour les articles de votre réservation.",
+    "promo_code_empty": "Veuillez saisir un code promo à appliquer.",
+    "promo_code_invalid": "Le code promo que vous avez entré n'est pas valide.",
+    "validation_error_title": "Erreur de validation"
+  },
+  "buttons": {
+    "cancel": "Annuler",
+    "save": "Enregistrer la Promotion",
+    "continue": "Continuer"
+  }
+}

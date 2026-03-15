@@ -1,0 +1,135 @@
+
+{
+    "title": "Dashboard",
+    "description": "A high-level overview of your property's performance and recent activity.",
+    "new_booking_button": "New Booking",
+    "date_range_picker": {
+        "placeholder": "Select a date range",
+        "today": "Today",
+        "this_week": "This Week",
+        "this_month": "This Month",
+        "last_7_days": "Last 7 Days",
+        "last_30_days": "Last 30 Days"
+    },
+    "metric_cards": {
+        "bookings": {
+            "title": "Bookings"
+        }, 
+        "arrivals": {
+            "title": "Arrivals"
+        },
+        "departures": {
+            "title": "Departures"
+        },
+        "in_house_guests": {
+            "title": "In-House"
+        },
+        "occupied_rooms": {
+            "title": "Occupied Rooms"
+        },
+        "cancellations": {
+            "title": "Cancellations"
+        }
+    },
+    "todays_activity": {
+        "title": "Today's Activity",
+        "description": "A summary of today's arrivals and departures.",
+        "show_all_button": "Show All Activity",
+        "check_ins": {
+            "title": "Check-ins Today",
+            "no_arrivals": "No arrivals scheduled for today.",
+            "table": {
+                "guest": "Guest",
+                "details": "Details",
+                "total": "Total",
+                "status": "Status",
+                "payment": "Payment",
+                "actions": "Actions"
+            },
+            "checked_in_badge": "Checked-in",
+            "check_in_button": "Check In"
+        },
+        "check_outs": {
+            "title": "Check-outs Today",
+            "no_departures": "No departures scheduled for today.",
+            "table": {
+                "guest": "Guest",
+                "details": "Details",
+                "total": "Total",
+                "status": "Status",
+                "payment": "Payment",
+                "actions": "Actions"
+            },
+            "completed_badge": "Completed",
+            "check_out_button": "Check Out"
+        },
+        "actions_menu": {
+            "label": "Actions",
+            "view": "View Details",
+            "edit": "Edit"
+        }
+    },
+    "recent_reservations": {
+        "title": "Recent Reservations",
+        "description": "The 10 most recently created bookings.",
+        "view_all_button": "View All Reservations",
+        "no_reservations": "No reservations have been made yet.",
+        "table": {
+            "guest": "Guest",
+            "room": "Room",
+            "dates": "Dates",
+            "total": "Total",
+            "status": "Status",
+            "actions": "Actions"
+        }
+    },
+    "sidebar": {
+        "sentiment_snapshot": "Sentiment Snapshot",
+        "no_recent_reviews": "No recent reviews",
+        "vip_arrivals_today": "VIP Arrivals Today",
+        "no_vips_today": "No VIPs today",
+        "live_requests": "Live Requests",
+        "no_live_requests": "No live requests",
+        "view_all_bookings": "View All Bookings"
+    },
+    "activity_table": {
+        "today_checkins": "Today's Check-ins",
+        "today_checkouts": "Today's Check-outs",
+        "headers": {
+            "guest_name": "Guest Name",
+            "room_type": "Room Type",
+            "nights": "Nights",
+            "status": "Status",
+            "action": "Action",
+            "room": "Room",
+            "balance": "Balance"
+        },
+        "actions": {
+            "manage": "Manage",
+            "checkout": "Checkout"
+        }
+    },
+    "modals": {
+        "delete_confirmation": {
+            "title": "Are you sure?",
+            "description": "This action cannot be undone. This will permanently delete the reservation.",
+            "cancel_button": "Cancel",
+            "continue_button": "Continue"
+        }
+    },
+    "loading": "Loading...",
+    "toasts": {
+        "check_in_success_title": "Success",
+        "check_in_success_description": "Guest checked-in.",
+        "check_in_error_title": "Error",
+        "check_in_error_description": "Failed to check-in.",
+        "check_out_success_title": "Success",
+        "check_out_success_description": "Guest checked-out. Room {{roomName}} set to Dirty and cleaning task created.",
+        "check_out_error_title": "Error",
+        "check_out_error_description": "Failed to process check-out.",
+        "delete_reservation_success_title": "Success",
+        "delete_reservation_success_description": "Reservation deleted.",
+        "delete_reservation_error_title": "Error",
+        "delete_reservation_error_description": "Could not delete reservation."
+    }
+}

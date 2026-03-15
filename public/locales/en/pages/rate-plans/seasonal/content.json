@@ -1,0 +1,89 @@
+
+{
+  "title": "Seasonal Pricing Rules",
+  "description": "Create rules to automatically override your standard rate plans for specific date ranges, such as holidays or peak seasons.",
+  "add_button": "Add Seasonal Rate",
+  "add_modal": {
+    "title": "Add New Seasonal Rate",
+    "description": "Define a new pricing rule for a specific period. This will override the base rate plan.",
+    "no_rate_plans_warning": "You must create a Rate Plan before you can create a seasonal rate for it."
+  },
+  "edit_modal": {
+    "title": "Edit Seasonal Rate"
+  },
+  "form": {
+    "season_name_label": "Season Name",
+    "season_name_placeholder": "e.g., Christmas Special",
+    "date_range_label": "Date Range",
+    "date_range_placeholder": "Select a date range",
+    "rate_plan_label": "Rate Plan to Override",
+    "rate_plan_placeholder": "Select a rate plan",
+    "pricing_override_title": "Pricing Override",
+    "pricing_override_description": "Leave fields blank to use the parent rate plan's price. Otherwise, enter a new price for the {{pricingMethod}} method.",
+    "override_per_night_label": "Override Base Price per Night",
+    "override_per_night_placeholder": "e.g., 150.00",
+    "override_per_guest_label": "Override Price per Guest",
+    "override_per_guest_placeholder": "e.g., 95.00",
+    "guests_label": "{{count}} Guests",
+    "select_rate_plan_prompt": "Please select a rate plan first to see pricing options.",
+    "per_night": "per night",
+    "per_guest": "per guest",
+    "active_label": "This seasonal rate is active"
+  },
+  "list": {
+    "headers": {
+      "season_name": "Season Name",
+      "date_range": "Date Range",
+      "rate_plan": "Rate Plan",
+      "pricing": "Pricing",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "unknown_plan": "Unknown Plan",
+    "not_set": "Not Set",
+    "no_rules": "No seasonal pricing rules have been created yet.",
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "actions": {
+      "edit": "Edit",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "delete": "Delete"
+    }
+  },
+  "toasts": {
+    "validation_error_title": "Validation Error",
+    "validation_error_required_fields": "Please fill out the name, date range, and select a rate plan.",
+    "conflict_error_title": "Date Overlap",
+    "conflict_error_description": "The selected date range conflicts with an existing active seasonal rate for the same rate plan.",
+    "validation_error_price_required": "You must provide at least one override price.",
+    "success_create_title": "Success",
+    "success_create_description": "New seasonal rate has been created.",
+    "success_update_title": "Success",
+    "success_update_description": "Seasonal rate updated successfully.",
+    "error_save_title": "Error Saving",
+    "error_save_description": "Could not save the seasonal rate.",
+    "success_delete_title": "Success",
+    "success_delete_description": "Seasonal rate has been deleted.",
+    "error_delete_title": "Error Deleting",
+    "error_delete_description": "Could not delete the seasonal rate.",
+    "success_status_update_title": "Status Updated",
+    "success_status_update_description": "The status for '{{name}}' has been set to {{status}}.",
+    "error_status_update_title": "Update Failed",
+    "error_status_update_description": "Could not update the status for the seasonal rate."
+  },
+  "buttons": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "delete": "Delete"
+  },
+  "delete_dialog": {
+    "title": "Are you sure?",
+    "description": "This will permanently delete the '{{name}}' seasonal rate. This action cannot be undone.",
+    "cancel_button": "Cancel",
+    "continue_button": "Delete"
+  }
+}

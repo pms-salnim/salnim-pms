@@ -1,0 +1,53 @@
+
+{
+  "loading": "Chargement...",
+  "no_room_types": "Vous n'avez aucun type de chambre configuré. Veuillez en ajouter au moins un dans la section 'Chambres > Types de chambres' pour commencer.",
+  "no_rooms": "Aucune chambre physique assignée à ce type.",
+  "today_button": "Aujourd'hui",
+  "previous_week": "Semaine précédente",
+  "next_week": "Semaine suivante",
+  "date_picker": "Sélectionner une date",
+  "quick_jump": "Navigation rapide",
+  "today": "Aujourd'hui",
+  "this_week": "Cette semaine",
+  "this_month": "Ce mois-ci",
+  "next_month": "Mois prochain",
+  "previous_days": "15 jours précédents",
+  "next_days": "15 jours suivants",
+  "modals": {
+    "confirm_change": {
+      "title": "Confirmer le changement de réservation",
+      "description": "Veuillez vérifier les modifications ci-dessous et confirmer pour mettre à jour la réservation.",
+      "original_title": "Détails originaux",
+      "new_title": "Nouveaux détails",
+      "room": "Chambre",
+      "type": "Type",
+      "dates": "Dates",
+      "rate_plan": "Plan tarifaire",
+      "price": "Prix",
+      "availability_check_title": "Vérification de la disponibilité",
+      "availability_check_description": "Le système vérifiera les conflits avant de confirmer la mise à jour. Si le nouvel emplacement est indisponible, la modification sera rejetée.",
+      "cancel_button": "Annuler",
+      "confirm_button": "Confirmer la mise à jour"
+    }
+  },
+  "toasts": {
+    "invalid_duration_title": "Durée invalide",
+    "invalid_duration_description": "Une réservation doit durer au moins une nuit.",
+    "error_title": "Erreur",
+    "conflict_title": "Conflit d'horaire",
+    "conflict_resize_description": "Les dates demandées sont en conflit avec une autre réservation pour {{roomName}}.",
+    "conflict_move_description": "Le nouvel emplacement pour cette réservation est bloqué ou chevauche une autre réservation pour {{roomName}}.",
+    "success_title": "Succès",
+    "update_success_description": "Réservation mise à jour avec succès.",
+    "update_error_description": "Échec de la mise à jour de la réservation. Veuillez réessayer.",
+    "reservation_not_found_error": "Impossible de trouver la réservation à déplacer. Veuillez actualiser et réessayer.",
+    "missing_room_type_data": "Impossible de trouver les données du nouveau type de chambre.",
+    "guest_count_high_title": "Capacité d'accueil dépassée",
+    "guest_count_high_description": "Le type de chambre '{{roomTypeName}}' n'autorise qu'un maximum de {{maxGuests}} personnes. Cette réservation en compte {{guestCount}}.",
+    "data_missing_title": "Données manquantes",
+    "data_missing_description": "Impossible de pré-remplir la réservation ; les données de la chambre ou du type de chambre sont manquantes."
+  },
+  "access_denied_title": "Accès refusé",
+  "access_denied_description": "Vous n'avez pas la permission de voir ou de gérer le calendrier. Veuillez contacter un administrateur."
+}

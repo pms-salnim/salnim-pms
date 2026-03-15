@@ -1,0 +1,34 @@
+
+{
+  "title": "Vérifier la disponibilité des chambres",
+  "description": "Sélectionnez les dates et le nombre de clients pour voir la disponibilité en temps réel.",
+  "dates_label": "Dates d'arrivée / de départ",
+  "dates_placeholder": "Choisissez les dates",
+  "adults_label": "Adultes",
+  "check_availability_button": "Vérifier la disponibilité",
+  "checking_button": "Vérification...",
+  "table_headers": {
+    "room_name": "Nom/N° de chambre",
+    "room_type": "Type de chambre",
+    "max_guests": "Max. clients",
+    "status": "Statut",
+    "action": "Action"
+  },
+  "status": {
+    "available": "Disponible",
+    "occupied": "Occupée"
+  },
+  "action": {
+    "book_now": "Réserver"
+  },
+  "toasts": {
+    "no_room_types": "Aucun type de chambre",
+    "no_room_types_description": "Veuillez ajouter des types de chambres pour vérifier la disponibilité.",
+    "invalid_dates": "Dates invalides",
+    "invalid_dates_description": "La date de départ doit être postérieure à la date d'arrivée."
+  },
+  "loading_property": "Chargement des données de la propriété...",
+  "checking_availability": "Vérification de la disponibilité...",
+  "no_rooms_configured": "Aucun type de chambre configuré pour cette propriété. Veuillez ajouter des types de chambres dans la section 'Chambres'.",
+  "no_rooms_available": "Aucune chambre disponible pour les critères sélectionnés."
+}

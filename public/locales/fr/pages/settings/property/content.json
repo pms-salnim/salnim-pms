@@ -1,0 +1,66 @@
+
+{
+    "title": "Paramètres de l'établissement",
+    "description": "Gérez les détails de base, les politiques et les paramètres financiers de votre établissement.",
+    "general_info": {
+        "title": "Informations Générales",
+        "description": "Détails de base concernant votre établissement.",
+        "name_label": "Nom de l'établissement",
+        "address_label": "Adresse",
+        "phone_label": "Numéro de téléphone",
+        "email_label": "E-mail de contact",
+        "website_label": "Site Web"
+    },
+    "policies": {
+        "title": "Politiques et Localisation",
+        "description": "Définissez les règles, les horaires et les paramètres régionaux.",
+        "checkin_label": "Heure de check-in par défaut",
+        "checkout_label": "Heure de check-out par défaut",
+        "timezone_label": "Fuseau horaire",
+        "currency_label": "Devise",
+        "same_day_booking_label": "Autoriser les réservations pour le jour même",
+        "same_day_turnover_label": "Autoriser le départ et l'arrivée le même jour pour la même chambre",
+        "cancellation_policy_label": "Politique d'annulation",
+        "cancellation_policy_placeholder": "Ex: Annulation gratuite jusqu'à 48h avant l'arrivée..."
+    },
+    "legal_info": {
+        "title": "Informations Légales",
+        "description": "Ces informations apparaîtront sur les documents officiels comme les factures.",
+        "company_name_label": "Raison Sociale",
+        "legal_form_label": "Forme Juridique (ex: SARL, SA)",
+        "capital_amount_label": "Capital Social",
+        "business_address_label": "Adresse du Siège Social",
+        "rc_number_label": "N° RC",
+        "if_number_label": "N° IF",
+        "patente_label": "Patente",
+        "ice_number_label": "N° ICE",
+        "phone_label": "Téléphone Légal",
+        "email_label": "E-mail Légal",
+        "website_label": "Site Web Légal",
+        "tva_label": "Information TVA",
+        "tva_placeholder": "Ex: TVA non applicable - Art 293 B du CGI"
+    },
+    "finance": {
+        "title": "Finance & Fidélité",
+        "description": "Configurez les taxes et les programmes de fidélité des clients.",
+        "tax_settings_title": "Paramètres de Taxe",
+        "tax_name_label": "Nom de la taxe",
+        "tax_name_placeholder": "ex: TVA",
+        "tax_rate_label": "Taux de taxe (%)",
+        "loyalty_program_title": "Programme de Fidélité",
+        "earning_rate_label": "Taux d'acquisition (Dépensez {{currency}} pour gagner 1 point)",
+        "points_value_label": "Valeur des points (1 point = {{currency}})",
+        "points_value_description": "Valeur d'un seul point lors de son utilisation.",
+        "loyalty_tiers_title": "Paliers de Fidélité",
+        "loyalty_tiers_description": "Définissez les paliers en fonction du total de points gagnés par un client.",
+        "loyalty_tiers_points_placeholder": "Points requis"
+    },
+    "toasts": {
+        "error_property_not_found": "Établissement non trouvé. Impossible de sauvegarder les paramètres.",
+        "success_save": "Paramètres de l'établissement sauvegardés avec succès.",
+        "error_save": "Échec de la sauvegarde des paramètres. Veuillez réessayer."
+    },
+    "buttons": {
+        "save_settings": "Sauvegarder les paramètres"
+    }
+}

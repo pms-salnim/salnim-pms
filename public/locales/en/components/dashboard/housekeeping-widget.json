@@ -1,0 +1,13 @@
+{
+  "title": "Housekeeping",
+  "subtitle": "Needs attention",
+  "badge": "Needs Attention",
+  "dirty_rooms_label": "Dirty Rooms",
+  "open_tasks_label": "Open Tasks",
+  "no_tasks": "No open tasks",
+  "no_title": "No title",
+  "toasts": {
+    "completed_title": "Task Completed",
+    "completed_description": "Housekeeping task marked as completed."
+  }
+}

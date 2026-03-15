@@ -1,0 +1,29 @@
+
+{
+    "add_payment_modal": {
+        "title": "Ajouter un Nouveau Paiement",
+        "description": "Enregistrez manuellement un paiement reçu d'un client. Cela créera un nouvel enregistrement de transaction de paiement."
+    },
+    "amount_received_label": "Montant Reçu",
+    "amount_placeholder": "ex: 150.00",
+    "payment_method_label": "Méthode de Paiement",
+    "method_placeholder": "Sélectionnez une méthode",
+    "date_of_payment_label": "Date du Paiement",
+    "date_placeholder": "Sélectionnez une date",
+    "guest_name_label": "Nom du Client (Optionnel)",
+    "guest_placeholder": "Commencez à taper pour rechercher des clients...",
+    "reservation_id_label": "ID de Réservation (Optionnel)",
+    "reservation_id_placeholder": "Lier à une réservation",
+    "notes_label": "Notes (Optionnel)",
+    "notes_placeholder": "ex: Paiement en espèces pour nuit supplémentaire.",
+    "buttons": {
+        "cancel": "Annuler",
+        "record_payment": "Enregistrer le Paiement",
+        "save": "Sauvegarder les Modifications"
+    },
+    "validation": {
+        "amount_required": "Le montant est requis et doit être supérieur à 0.",
+        "method_required": "Veuillez sélectionner une méthode de paiement.",
+        "date_required": "Veuillez sélectionner une date de paiement."
+    }
+}

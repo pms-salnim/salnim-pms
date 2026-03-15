@@ -1,0 +1,106 @@
+{
+    "title": "Toutes les réservations",
+    "description": "Consultez et gérez toutes les réservations, passées, présentes et futures.",
+    "search_placeholder": "Rechercher par nom de client, ID de réservation...",
+    "add_reservation_button": "Nouvelle réservation",
+    "export_button":"Exporter",
+    "export_pdf":"PDF",
+    "export_excel":"XLSX",
+    "export_csv":"CSV",
+    "filters": {
+        "button_text": "Filtres",
+        "label": "Filtrer les réservations",
+        "status_label": "Statut",
+        "status_placeholder": "Filtrer par statut...",
+        "status_all": "Tous les statuts",
+        "room_type_label": "Type de chambre",
+        "room_type_placeholder": "Filtrer par type de chambre...",
+        "room_type_all": "Tous les types",
+        "date_range_label": "Plage de dates (Chevauchement)",
+        "date_range_placeholder": "Filtrer par date",
+        "date_booked_label": "Date de réservation",
+        "check_in_date_label": "Date d'arrivée",
+        "check_out_date_label": "Date de départ",
+        "quick_today": "Aujourd'hui",
+        "quick_this_week": "Cette semaine",
+        "quick_this_month": "Ce mois",
+        "quick_next_week": "Semaine prochaine",
+        "quick_next_month": "Mois prochain",
+        "clear_button": "Effacer",
+        "cancellation_date_label": "Date d'annulation",
+        "cancellation_reason_label": "Raison de l'annulation",
+        "cancellation_reason_placeholder": "ex. Demande du client",
+        "booking_source_label": "Source de réservation",
+        "source_all": "Tous",
+        "payment_status_label": "Statut Paiement / Remboursement",
+        "payment_status_all": "Tous"
+    },
+    "list": {
+        "bulk_actions":{
+            "selected_text": "{{count}} réservation sélectionnée",
+            "selected_text_plural": "{{count}} réservations sélectionnées",
+            "button_text": "Actions",
+            "change_status_option": "Changer le statut",
+            "mark_as_status": "Marquer comme {{status}}",
+            "delete_option": "Supprimer la sélection",
+            "no_reservations_message": "Aucune réservation ne correspond à vos critères.",
+            "select_all_aria_label": "Sélectionner toutes les réservations de cette page",
+            "select_row_aria_label": "Sélectionner la réservation pour {{name}}"
+        },
+        "headers": {
+            "guest": "Client",
+            "reservation_no": "N° Rés.",
+            "dates": "Dates",
+            "check_in":"Arrivée",
+            "check_out":"Départ",
+            "room": "Chambre",
+            "room_type":"Type de Chambre",
+            "status": "Statut",
+            "payment_total": "Total Payé",
+            "total": "Total",
+            "booking_date":"Date de Réservation",
+            "actions": "Actions"
+        },
+        "actions_menu": {
+            "view": "Voir les détails",
+            "edit": "Modifier",
+            "create_guest": "Créer un profil client",
+            "send_email": "Envoyer un e-mail",
+            "check_in": "Check-in",
+            "check_out": "Check-out",
+            "delete": "Supprimer"
+        }
+    },
+    "modals": {
+        "delete_confirmation": {
+            "title": "Êtes-vous absolument sûr ?",
+            "description": "Ceci supprimera définitivement {{count}} réservation(s) et les données associées. Cette action est irréversible.",
+            "delete_related_docs": "Supprimer également la facture et les enregistrements de paiement associés.",
+            "cancel_button": "Annuler",
+            "continue_button": "Continuer"
+        },
+        "status_change_confirmation": {
+            "title": "Confirmer le changement de statut",
+            "description": "Êtes-vous sûr de vouloir changer le statut de {{count}} réservation(s) en '{{status}}' ?",
+            "cancel_button": "Annuler",
+            "continue_button": "Confirmer"
+        }
+    },
+    "toasts": {
+        "permission_denied": "Vous n'avez pas la permission d'effectuer cette action.",
+        "delete_success": "{{count}} réservation(s) ont été supprimées.",
+        "delete_error": "Échec de la suppression des réservations. Veuillez réessayer.",
+        "status_change_success": "Le statut de {{count}} réservation(s) a été mis à jour en '{{status}}'.",
+        "status_change_error": "Échec de la mise à jour du statut des réservations.",
+        "success_title": "Succès",
+        "error_title": "Erreur"
+    },
+    "table": {
+        "pagination": {
+            "rows_per_page": "Lignes par page :",
+            "page_of": "Page {{currentPage}} sur {{totalPages}}",
+            "previous_button": "Précédent",
+            "next_button": "Suivant"
+        }
+    }
+}

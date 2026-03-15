@@ -1,0 +1,70 @@
+
+{
+    "header": {
+        "title": "Activité du jour",
+        "calendar_view": "Vue Calendrier",
+        "new_reservation": "Nouvelle réservation"
+    },
+    "kpis": {
+        "arrivals": "Arrivées",
+        "departures": "Départs",
+        "stay_overs": "Recouches",
+        "no_shows": "No-Shows"
+    },
+    "filters": {
+        "search_placeholder": "Rechercher par Client, Chambre, N° de rés...",
+        "all": "Toutes les activités",
+        "arrivals": "Arrivées",
+        "departures": "Départs",
+        "in_house": "Présents",
+        "no_shows": "No-Shows"
+    },
+    "table": {
+        "guest": "Client",
+        "res_no": "N° Rés.",
+        "dates": "Dates",
+        "room_type": "Type de chambre",
+        "room": "Chambre",
+        "total": "Total",
+        "payment_total": "Total paiement",
+        "booking_date": "Date de réservation",
+        "status": "Statut",
+        "actions": "Actions",
+        "no_results": "Aucune activité correspondante trouvée."
+    },
+    "actions": {
+        "check_in": "Check-in",
+        "check_out": "Check-out",
+        "view": "Voir",
+        "edit": "Modifier"
+    },
+    "housekeeping": {
+        "title": "Statut de la Gouvernance",
+        "subtitle": "{{count}} chambres sont actuellement sales et nécessitent un nettoyage.",
+        "go_to_housekeeping": "Aller à la Gouvernance"
+    },
+    "modals": {
+        "edit_reservation": {
+            "title": "Modifier la réservation"
+        },
+        "new_reservation": {
+            "title": "Nouvelle réservation"
+        }
+    },
+    "toasts": {
+        "error_fetching_reservations_title": "Erreur de chargement des réservations",
+        "error_fetching_reservations_description": "Impossible de charger les activités du jour.",
+        "check_in_success_title": "Enregistrement réussi",
+        "check_in_success_description": "Le client a été enregistré.",
+        "check_in_error_title": "Échec de l'enregistrement",
+        "check_in_error_description": "Impossible de traiter l'enregistrement.",
+        "check_out_success_title": "Départ réussi",
+        "check_out_success_description": "Le client a quitté l'établissement. Tâche de nettoyage créée pour la chambre {{roomName}}.",
+        "check_out_error_title": "Échec du départ",
+        "check_out_error_description": "Impossible de traiter le départ."
+    },
+    "access_denied_title": "Accès refusé",
+    "access_denied_description": "Vous n'avez pas la permission de voir cette page."
+}
+
+    

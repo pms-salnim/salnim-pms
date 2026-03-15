@@ -1,0 +1,27 @@
+{
+  "fixed_stay_badge": "Séjour Fixe",
+  "flexible_stay_badge": "Séjour Flexible",
+  "whats_included_title": "Ce qui est inclus :",
+  "accommodation_inclusion": "Hébergement en {{roomTypeName}}",
+  "choose_room_type_label": "Choisissez votre type de chambre",
+  "checkin_date_label": "Date d'arrivée",
+  "date_range_label": "Plage de dates",
+  "checkin_date_placeholder": "Sélectionnez la date d'arrivée",
+  "date_range_placeholder": "Sélectionnez la plage de dates",
+  "book_package_button": "Réserver ce Forfait",
+  "not_available_button": "Non disponible",
+  "empty_state": "Il n'y a actuellement aucun forfait spécial disponible.",
+  "price_display": {
+    "for_guests": "pour {{count}} personnes",
+    "per_nights": "pour {{count}} nuits",
+    "up_to_guests": "jusqu'à {{count}} personnes",
+    "per_night": "/nuit",
+    "per_guest_per_night": "/pers./nuit"
+  },
+  "toasts": {
+    "select_room_type": "Veuillez sélectionner un type de chambre pour ce forfait.",
+    "select_checkin_date": "Veuillez sélectionner une date d'arrivée pour ce forfait.",
+    "select_date_range": "Veuillez sélectionner une plage de dates valide.",
+    "select_valid_range": "Veuillez sélectionner une plage de dates valide d'au moins une nuit."
+  }
+}

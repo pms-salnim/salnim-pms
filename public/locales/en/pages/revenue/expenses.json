@@ -1,0 +1,89 @@
+
+{
+  "title": "Expenses",
+  "description": "Track and manage all your property's expenditures.",
+  "add_expense_button": "Add Expense",
+  "stats": {
+    "total": "Total Expenses",
+    "fixed": "Total Fixed Expenses",
+    "variable": "Total Variable Expenses"
+  },
+  "list": {
+    "filters": {
+      "search_placeholder": "Search by name...",
+      "type_placeholder": "Filter by type...",
+      "category_placeholder": "Filter by category...",
+      "all_types": "All Types",
+      "all_categories": "All Categories"
+    },
+    "headers": {
+      "date": "Date",
+      "name": "Name",
+      "type": "Type",
+      "category": "Category",
+      "amount": "Amount",
+      "notes": "Notes",
+      "actions": "Actions"
+    },
+    "empty_state": "No expenses found matching the current filters.",
+    "total": "Total",
+    "pagination": {
+      "rows_per_page": "Rows per page:",
+      "page_of": "Page {{currentPage}} of {{totalPages}}",
+      "previous_button": "Previous",
+      "next_button": "Next"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete"
+    }
+  },
+  "form": {
+    "add_title": "Add New Expense",
+    "add_description": "Fill in the details below to record a new expense.",
+    "edit_title": "Edit Expense",
+    "edit_description": "Update the details of the expense.",
+    "name_label": "Expense Name",
+    "type_label": "Expense Type",
+    "category_label": "Category",
+    "amount_label": "Amount",
+    "date_label": "Date",
+    "date_placeholder": "Pick a date",
+    "notes_label": "Notes (Optional)",
+    "notes_placeholder": "e.g., specific details about the expense"
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "save": "Save Expense"
+  },
+  "toasts": {
+    "validation_error_title": "Validation Error",
+    "validation_error_description": "Please fill in all required fields (Name, Amount, Date).",
+    "error_fetching": "Could not fetch expenses.",
+    "error_title": "Error",
+    "save_error_description": "Could not save expense.",
+    "update_success_title": "Expense Updated",
+    "create_success_title": "Expense Created",
+    "delete_success_title": "Expense Deleted",
+    "delete_error_title": "Deletion Failed"
+  },
+  "types": {
+    "fixe": "Fixed",
+    "variable": "Variable"
+  },
+  "categories": {
+    "loyer": "Rent",
+    "salaires": "Salaries",
+    "fournitures": "Supplies",
+    "maintenance": "Maintenance",
+    "électricité": "Electricity",
+    "eau": "Water",
+    "divers": "Miscellaneous"
+  },
+  "confirm_delete_title": "Are you sure?",
+  "confirm_delete_description": "This will permanently delete the expense record for '{{name}}'. This action cannot be undone.",
+  "delete_dialog": {
+    "cancel_button": "Cancel",
+    "continue_button": "Delete"
+  }
+}

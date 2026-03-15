@@ -1,0 +1,51 @@
+
+{
+    "title": "Remboursements",
+    "description": "Traitez les remboursements pour les paiements terminés et consultez un journal de tous les remboursements passés.",
+    "refundable_payments": {
+        "title": "Paiements Remboursables",
+        "description": "Cette liste montre les transactions payées qui sont éligibles à un remboursement."
+    },
+    "refunded_payments": {
+        "title": "Historique des Remboursements",
+        "description": "Un journal de tous les remboursements traités avec succès."
+    },
+    "table_headers": {
+        "date": "Date",
+        "guest": "Client",
+        "amount": "Montant",
+        "method": "Méthode",
+        "actions": "Actions",
+        "original_amount": "Montant Original",
+        "refunded_amount": "Montant Remboursé",
+        "notes": "Notes"
+    },
+    "buttons": {
+        "refund": "Rembourser",
+        "cancel":"Annuler"
+    },
+    "refundable_payments.empty_state": "Aucun paiement remboursable trouvé.",
+    "refunded_payments.empty_state": "Aucun remboursement n'a encore été traité.",
+    "refund_form": {
+        "title": "Traiter le Remboursement",
+        "description": "Remboursement du paiement pour {{guestName}}. Cette action est irréversible.",
+        "type_label": "Type de Remboursement",
+        "full_refund_label": "Remboursement complet",
+        "partial_refund_label": "Remboursement partiel",
+        "amount_label": "Montant du Remboursement",
+        "reason_label": "Raison du Remboursement",
+        "reason_placeholder": "Ex: Annulation par le client, problème de service",
+        "cancel_button": "Annuler",
+        "confirm_button": "Confirmer le Remboursement"
+    },
+    "toasts": {
+        "invalid_amount": "Montant invalide",
+        "invalid_amount_description": "Le montant du remboursement doit être compris entre 0 et {{amount}}.",
+        "reason_required": "Raison Requise",
+        "reason_required_description": "Veuillez fournir une raison pour le remboursement.",
+        "success_title": "Succès",
+        "success_description": "Le remboursement a été traité avec succès.",
+        "error_title": "Erreur",
+        "error_description": "Une erreur inattendue s'est produite lors du remboursement."
+    }
+}

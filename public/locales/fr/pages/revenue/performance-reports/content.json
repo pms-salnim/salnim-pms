@@ -1,0 +1,69 @@
+{
+  "toasts": {
+    "date_range_required": "Veuillez sélectionner une plage de dates valide."
+  },
+  "pdf": {
+    "report_title": "Rapport de Performance",
+    "property_report_fallback": "Rapport de la Propriété",
+    "date_range_header": "Pour la période : du {{from}} au {{to}}",
+    "metrics_title": "Résumé des Indicateurs Clés",
+    "metrics": {
+      "total_revenue": "Revenu Total",
+      "total_bookings": "Total des Réservations",
+      "occupancy_rate": "Taux d'Occupation",
+      "adr": "Tarif Journalier Moyen (ADR)",
+      "revpar": "Revenu Par Chambre Disponible (RevPAR)"
+    },
+    "breakdown_room_title": "Répartition par Chambre",
+    "breakdown_rate_plan_title": "Répartition par Plan Tarifaire",
+    "headers": {
+      "room": "Chambre",
+      "occupancy": "Occupation",
+      "adr": "ADR",
+      "total_revenue": "Revenu Total",
+      "rate_plan": "Plan Tarifaire",
+      "bookings": "Réservations"
+    },
+    "filename": "rapport-performance-{{date}}.pdf",
+    "footer_generated_by": "Généré par Salnim Pms",
+    "footer_page": "Page {{page}} sur {{count}}"
+  },
+  "access_denied": {
+    "title": "Accès Refusé",
+    "description": "Vous n'avez pas la permission de voir cette page."
+  },
+  "card_generate": {
+    "title": "Générer un Rapport de Performance",
+    "description": "Sélectionnez des filtres pour générer un rapport de performance détaillé basées sur les réservations confirmées et payées."
+  },
+  "filters": {
+    "date_range_label": "Plage de dates",
+    "date_range_placeholder": "Choisir des dates",
+    "room_type_label": "Type de Chambre",
+    "room_type_placeholder": "Tous les types de chambres",
+    "all_room_types": "Tous les types de chambres",
+    "booking_source_label": "Source de Réservation",
+    "booking_source_placeholder": "Toutes les sources",
+    "all_sources": "Toutes les sources"
+  },
+  "buttons": {
+    "generating": "Génération...",
+    "generate": "Générer le Rapport"
+  },
+  "card_results": {
+    "title": "Résultats du Rapport",
+    "description": "Affichage des résultats du {{from}} au {{to}}.",
+    "filters_info": "Filtres : Type de chambre ({{roomType}}), Source ({{bookingSource}})",
+    "download_pdf": "Télécharger le PDF"
+  },
+  "results_table": {
+    "headers": {
+      "guest": "Client",
+      "dates": "Dates",
+      "room": "Chambre",
+      "status": "Statut",
+      "amount": "Montant"
+    },
+    "empty_state": "Aucune réservation trouvée pour les critères sélectionnés."
+  }
+}

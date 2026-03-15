@@ -1,0 +1,20 @@
+{
+  "title": "Traiter le remboursement",
+  "description": "Vous êtes sur le point de traiter un remboursement pour {{guestName}}.",
+  "type_label": "Type de remboursement",
+  "full_refund_label": "Remboursement intégral",
+  "partial_refund_label": "Remboursement partiel",
+  "amount_label": "Montant du remboursement",
+  "reason_label": "Raison du remboursement",
+  "reason_placeholder": "Ex: Insatisfaction du client, politique d'annulation.",
+  "buttons": {
+    "cancel": "Annuler",
+    "confirm": "Confirmer le remboursement"
+  },
+  "validation": {
+    "invalid_amount_title": "Montant invalide",
+    "invalid_amount_description": "Le montant du remboursement ne peut pas dépasser le paiement initial de {{amount}}.",
+    "reason_required_title": "Raison requise",
+    "reason_required_description": "Veuillez fournir une raison pour ce remboursement."
+  }
+}

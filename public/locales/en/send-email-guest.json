@@ -1,0 +1,62 @@
+
+{
+    "title": "Send Email to {{guestName}}",
+    "description": "Select a template. The email will be sent to {{email}}.",
+    "email_template_label": "Email Template",
+    "select_template_placeholder": "Select a template...",
+    "template_info": "The content will be populated with this reservation's details. You can customize templates in the settings.",
+    "buttons": {
+        "cancel": "Cancel",
+        "send": "Send Email"
+    },
+    "templates": {
+        "reservation_confirmation": {
+            "name": "Reservation Information Email"
+        },
+        "booking_confirmation": {
+            "name": "Booking Confirmation"
+        },
+        "reservation_modification": {
+            "name": "Modification Email"
+        },
+        "reservation_cancellation": {
+            "name": "Cancellation Email"
+        },
+        "payment_confirmation": {
+            "name": "Payment Confirmation Email"
+        },
+        "bank_transfer_info": {
+            "name": "Bank Transfer Information Email"
+        },
+        "mail_order_info": {
+            "name": "Mail Order Information Email"
+        },
+        "invoice_email": {
+            "name": "Invoice Email"
+        },
+        "internal_new_reservation": {
+            "name": "INTERNAL - New Reservation Alert"
+        },
+        "internal_cancellation_alert": {
+            "name": "INTERNAL - Cancellation Alert"
+        }
+    },
+    "toasts": {
+        "no_template_selected": {
+            "title": "No Template Selected",
+            "description": "Please select an email template to send."
+        },
+        "no_guest_email": {
+            "title": "No Guest Email",
+            "description": "This reservation does not have a guest email address."
+        },
+        "email_sent": {
+            "title": "Email Sent",
+            "description": "The '{{templateName}}' email has been sent to {{email}}."
+        },
+        "send_error": {
+            "title": "Error",
+            "description": "Failed to send the email."
+        }
+    }
+}

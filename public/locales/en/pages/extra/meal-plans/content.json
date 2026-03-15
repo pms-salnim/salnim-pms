@@ -1,0 +1,108 @@
+
+{
+  "title": "Meal Plans",
+  "description": "Define and manage meal plan options for your guests, such as breakfast or half-board packages.",
+  "add_button": "Add Meal Plan",
+  "access_denied": {
+    "title": "Access Denied",
+    "description": "You do not have permission to manage meal plans. Please contact an administrator."
+  },
+  "table": {
+    "title": "Available Meal Plans",
+    "description": "List of all meal plans configured for your property.",
+    "headers": {
+      "image": "Image",
+      "name": "Name",
+      "price": "Price",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "empty_state": "No meal plans have been created yet."
+  },
+  "edit_modal": {
+    "title": "Edit Meal Plan"
+  },
+  "add_modal": {
+    "title": "Add New Meal Plan",
+    "description": "Set the details for the meal plan. Click save when you're done."
+  },
+  "form": {
+    "name_label": "Plan Name",
+    "name_placeholder": "e.g., Full Board",
+    "description_label": "Description",
+    "description_placeholder": "e.g., Includes breakfast, lunch, and dinner.",
+    "price_label": "Price",
+    "billing_unit_label": "Billing Unit",
+    "menu_url_label": "Menu URL (Optional)",
+    "menu_url_placeholder": "e.g., https://example.com/menu.pdf",
+    "image_label": "Image (Optional)",
+    "image_upload_text": "Click to upload image",
+    "image_upload_subtext": "PNG or JPG up to 2MB",
+    "taxable_label": "This meal plan is taxable",
+    "required_field_indicator": "*"
+  },
+  "billing_units": {
+    "per-night-per-guest": "Per Night / Guest",
+    "per-night-per-room": "Per Night / Room",
+    "one-time-per-guest": "One-time / Guest",
+    "one-time-per-room": "One-time / Room"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "delete_dialog": {
+    "title": "Are you sure?",
+    "description": "This will permanently delete the meal plan '{{name}}'. This action is irreversible.",
+    "continue_button": "Delete"
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "save": "Save Meal Plan",
+    "close": "Close"
+  },
+  "actions_menu": {
+    "edit": "Edit",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "delete": "Delete"
+  },
+  "toasts": {
+    "permission_denied": {
+      "title": "Permission Denied",
+      "description": "You are not authorized to perform this action."
+    },
+    "validation_error": {
+      "title": "Validation Error",
+      "description": "Meal Plan Name and Price are required."
+    },
+    "update_success": {
+      "title": "Success",
+      "description": "Meal Plan updated successfully."
+    },
+    "add_success": {
+      "title": "Success",
+      "description": "Meal Plan added successfully."
+    },
+    "save_error": {
+      "title": "Error",
+      "description": "Could not save the meal plan."
+    },
+    "status_update_success": {
+      "title": "Status Updated",
+      "description": "Meal plan '{{name}}' has been set to '{{status}}'."
+    },
+    "status_update_error": {
+      "title": "Error",
+      "description": "Could not update the meal plan status."
+    },
+    "delete_success": {
+      "title": "Deleted",
+      "description": "Meal plan deleted successfully."
+    },
+    "delete_error": {
+      "title": "Error",
+      "description": "Could not delete the meal plan."
+    }
+  }
+}

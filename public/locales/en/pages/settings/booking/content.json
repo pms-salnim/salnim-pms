@@ -1,0 +1,85 @@
+
+{
+    "form": {
+        "title": "Booking Page Settings",
+        "description": "Customize the look, feel, and rules of your public-facing booking page.",
+        "tabs": {
+            "appearance": "Appearance",
+            "behavior": "Behavior",
+            "invoice": "Invoice Customization"
+        },
+        "appearance_section": {
+            "title": "Appearance & Branding",
+            "hero_image_label": "Hero Image",
+            "hero_image_upload_text": "Click to upload a hero image",
+            "logo_label": "Logo (Shared with Invoice)",
+            "logo_upload_text": "Click to upload a logo",
+            "booking_logo_size_label": "Booking Page Logo Size",
+            "primary_color_label": "Primary Color",
+            "hover_color_label": "Primary Hover Color",
+            "welcome_message_label": "Welcome Headline",
+            "welcome_message_placeholder": "e.g., Your perfect getaway awaits",
+            "button_text_label": "Header Button Text (Optional)",
+            "button_text_placeholder": "e.g., Visit Main Website",
+            "button_link_label": "Header Button Link (Optional)",
+            "button_link_placeholder": "e.g., https://myhotel.com"
+        },
+        "behavior_section": {
+            "title": "Booking Rules & Behavior",
+            "default_status_label": "Default Status for New Bookings",
+            "status_pending": "Pending",
+            "status_confirmed": "Confirmed",
+            "promo_field_label": "Show promo code field",
+            "auto_assign_label": "Auto-assign a specific room",
+            "require_phone_label": "Require guest phone number",
+            "terms_label": "Booking Terms & Conditions",
+            "terms_placeholder": "Enter your property's booking terms and conditions here. This will be shown to the guest before they confirm their booking."
+        },
+        "promo_card_section": {
+            "title": "Booking Page Pop-Up",
+            "enable_label": "Enable promotional pop-up on booking page",
+            "display_type_label": "Display Type",
+            "display_type_auto": "Automatic",
+            "display_type_manual": "Manual Design",
+            "title_label": "Card Title",
+            "description_label": "Card Description",
+            "promotion_label": "Link to Promotion",
+            "promotion_placeholder": "Select a promotion with a coupon...",
+            "promotion_none": "No promotion linked",
+            "image_label": "Card Image",
+            "image_upload_text": "Click to upload an image",
+            "manual_design_label": "Manual Promotion Design",
+            "manual_design_upload_text": "Upload your design (PNG, JPG)",
+            "manual_design_description": "Recommended size: 800x1000px. This image will be shown as-is in the popup."
+        },
+        "invoice_section": {
+            "title": "Invoice Customization",
+            "prefix_label": "Invoice Number Prefix",
+            "prefix_placeholder": "e.g., INV-",
+            "color_label": "Invoice Primary Color",
+            "logo_size_label": "Invoice Logo Size",
+            "header_notes_label": "Header Notes",
+            "header_notes_placeholder": "e.g., 'Thank you for your business!'",
+            "footer_text_label": "Footer Text",
+            "footer_text_placeholder": "e.g., 'All prices are in USD. Payment is due within 30 days.'",
+            "include_address_label": "Include property address on invoice"
+        }
+    },
+    "buttons": {
+        "save": "Save Settings",
+        "preview_booking_page": "Preview Booking Page",
+        "preview_invoice": "Preview Invoice PDF"
+    },
+    "preview_modal": {
+        "title": "Invoice Preview",
+        "description": "This is a sample of how your invoice will appear with the current settings.",
+        "loading": "Generating preview...",
+        "close": "Close"
+    },
+    "toasts": {
+        "success_save": "Booking page settings have been updated successfully.",
+        "error_property_not_found": "Property not found. Could not save settings.",
+        "error_save": "An unexpected error occurred while saving your settings.",
+        "preview_error": "Could not generate invoice preview."
+    }
+}

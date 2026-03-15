@@ -1,0 +1,39 @@
+
+{
+  "location": "{{city}}, {{timeZone}}",
+  "timezone_fallback": "Fuseau horaire",
+  "user_menu": {
+    "toggle_label": "Ouvrir/fermer le menu utilisateur",
+    "settings": "Paramètres",
+    "logout": "Se déconnecter",
+    "language": "Langue"
+  },
+  "help_menu": {
+    "toggle_label": "Aide et documentation",
+    "title": "Centre d'aide Salnim Pms",
+    "description": "Parcourez nos guides pour tirer le meilleur parti de votre tableau de bord.",
+    "contact_support": "Contacter le support",
+    "getting_started_link": "Pour commencer",
+    "rooms_rates_link": "Configuration des chambres et des tarifs",
+    "calendar_guide_link": "Guide du calendrier et des disponibilités",
+    "reservations_guide_link": "Comment gérer les réservations",
+    "payments_invoices_link": "Gestion des paiements et des factures",
+    "extras_guide_link": "Gestion des extras",
+    "revenue_reports_link": "Guide des revenus et des rapports",
+    "guest_relationships_link": "Guide des relations avec les clients",
+    "housekeeping_guide_link": "Guide de l'entretien ménager",
+    "team_workspace_link": "Guide de l'espace de travail d'équipe",
+    "users_roles_link": "Rôles des utilisateurs et du personnel"
+  },
+  "notifications": {
+    "toggle_label": "Notifications",
+    "title": "Notifications",
+    "mark_all_read": "Tout marquer comme lu",
+    "empty_state": "Aucune nouvelle notification.",
+    "view_all": "Voir toutes les notifications"
+  },
+  "sidebar": {
+    "collapse": "Réduire la barre latérale",
+    "expand": "Développer la barre latérale"
+  }
+}

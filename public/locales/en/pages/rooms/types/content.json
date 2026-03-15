@@ -1,0 +1,112 @@
+{
+  "title": "Room Types",
+  "description": "Create and manage distinct room categories to organize your inventory, set occupancy and pricing rules, and simplify rate and reservation management.",
+  "add_room_type_button": "Add Room Type",
+  "loading_property": "Loading property information...",
+  "no_property_loaded": "Property information could not be loaded. Please ensure you are assigned to a property.",
+  "access_denied": {
+    "title": "Access Denied",
+    "description": "You do not have permission to manage room types. Please contact an administrator."
+  },
+  "edit_modal": {
+    "title": "Edit Room Type",
+    "description": "Manage the details and amenities for this room type. Pricing is managed via Rate Plans."
+  },
+  "add_modal": {
+    "title": "Add New Room Type",
+    "description": "Manage the details and amenities for this room type. Pricing is managed via Rate Plans."
+  },
+  "tabs": {
+    "details": "Details",
+    "amenities": "Amenities",
+    "gallery": "Gallery",
+    "beds":"Beds"
+  
+  },
+      "bed_types": {
+        "king": "Kings",
+        "queen": "Queen",
+        "double": "Double",
+        "single":"Single",
+        "sofa-bed":"Sofa-Bed",
+        "bunk-bed":"Bunk-Bed"
+
+  },
+  "form": {
+    "type_name_label": "Type Name",
+    "type_name_placeholder": "e.g., Standard Double",
+    "default_rate_label": "Default Rate",
+    "default_rate_placeholder": "e.g., 120",
+    "default_rate_description": "Reference rate. Active pricing via Rate Plans.",
+    "max_guests_label": "Max Guests",
+    "max_guests_placeholder": "e.g., 2",
+    "rooms_count_label": "Number of Physical Rooms (Count)",
+    "rooms_count_placeholder": "e.g., 10",
+    "room_numbers_label": "Assigned Room Numbers (comma-separated)",
+    "room_numbers_placeholder": "e.g., 101, 102, 201-205, Suite A",
+    "room_numbers_description": "Enter specific room numbers or names assigned to this type.",
+    "beds_title": "Bed Configuration",
+    "beds_description": "Specify the number of each bed type available in this room category.",
+    "description_label": "Description (Optional)",
+    "description_placeholder": "Brief description of the room type.",
+    "amenities_title": "Select Amenities",
+    "amenities_description": "Choose all amenities that apply to this room type.",
+    "thumbnail_label": "Thumbnail Image (First image shown)",
+    "thumbnail_upload": "Click to upload thumbnail",
+    "gallery_label": "Additional Gallery Images",
+    "gallery_upload": "Add Images"
+  },
+  "buttons": {
+    "close": "Close",
+    "save": "Save Room Type"
+  },
+  "toasts": {
+    "validation_error": {
+      "title": "Validation Error",
+      "description": "Type Name, Default Rate, and Max Guests are required."
+    },
+    "success_update": {
+      "title": "Success",
+      "description": "Room type updated successfully."
+    },
+    "success_create": {
+      "title": "Success",
+      "description": "Room type added successfully."
+    },
+    "error_save": {
+      "title": "Error",
+      "description": "Could not save room type."
+    },
+    "success_delete": {
+      "title": "Success",
+      "description": "Room type and its associations deleted."
+    },
+    "error_delete": {
+      "title": "Error",
+      "description": "Could not complete the deletion."
+    }
+  },
+  "confirm_delete": "Are you sure? This will delete the room type, all its rooms, and associated rate plans. This action cannot be undone.",
+  "card": {
+    "view_details": "View Details",
+    "edit": "Edit",
+    "delete": "Delete",
+    "rooms_available_badge": "Hurry Up! Last {{count}} rooms",
+    "from_price": "From"
+  },
+  "view_modal": {
+    "title": "Room Type Details",
+    "description": "Viewing details for this room type.",
+    "details_section_title": "Room Details",
+    "base_rate_label": "Base Rate",
+    "base_rate_suffix": "/ night",
+    "max_guests_label": "Max Guests",
+    "physical_rooms_label": "Physical Rooms",
+    "not_set": "Not set",
+    "description_label": "Description",
+    "room_numbers_label": "Room Numbers",
+    "amenities_section_title": "Amenities",
+    "no_amenities": "No specific amenities listed."
+  },
+  "no_room_types": "No room types found. Add one to get started."
+}

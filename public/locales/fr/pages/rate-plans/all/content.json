@@ -1,0 +1,106 @@
+{
+  "title": "Tous les plans tarifaires",
+  "description": "Gérez les stratégies de tarification et les règles de disponibilité de votre propriété.",
+  "add_button": "Créer un nouveau plan tarifaire",
+  "edit_modal_title": "Modifier le plan tarifaire",
+  "add_modal_title": "Créer un nouveau plan tarifaire",
+  "modal_description": "Définissez les détails de votre plan tarifaire. Cliquez sur enregistrer lorsque vous avez terminé.",
+  "no_room_types_warning": "Vous devez définir au moins un type de chambre avant de créer un plan tarifaire.",
+  "list": {
+    "status_upcoming":"prochaine",
+    "headers": {
+      "plan_name": "Nom du plan",
+      "validity":"validité",
+      "room_type": "Type de chambre",
+      "pricing": "Tarification",
+      "default": "Défaut",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "no_plans_message": "Aucun plan tarifaire trouvé. Cliquez sur \"Créer un nouveau plan tarifaire\" pour commencer.",
+    "pricing_summary": {
+      "per_night": "{{price}} / nuit",
+      "per_guest": "{{guests}}P: {{price}}",
+      "not_set": "Non défini"
+    },
+    "status_active": "Actif",
+    "actions_menu": {
+      "edit": "Modifier",
+      "duplicate": "Dupliquer",
+      "delete": "Supprimer"
+    }
+  },
+  "form": {
+    "open_ended_label":"Ceci est un bloc ouvert (sans date de fin)",
+    "open_ended":"Ouvert (sans date de fin)",
+    "date_range_label":"Plage de Dates",
+    "sections": {
+      "basic_info": "Informations de base",
+      "room_type_assoc": "Association de type de chambre",
+      "validity_period":"Période de Validité",
+      "pricing": "Tarification",
+      "policy_settings": "Politique et paramètres"
+    },
+    "plan_name_label": "Nom du plan",
+    "plan_name_placeholder": "Ex: Tarif standard flexible",
+    "description_label": "Description (Optionnel)",
+    "description_placeholder": "Brève description de ce plan tarifaire.",
+    "room_type_label": "Type de chambre",
+    "room_type_placeholder": "Sélectionner un type de chambre",
+    "no_room_types": "Aucun type de chambre disponible",
+    "pricing_method_per_guest": "Par personne (par nuit)",
+    "pricing_method_per_night": "Par nuit (tarif fixe)",
+    "pricing_per_guest_label": "Tarification par personne (par nuit)",
+    "pricing_per_guest_description": "Entrez le prix par nuit pour le nombre de personnes spécifié. Au moins un prix est requis.",
+    "pricing_per_guest_placeholder": "Ex: 150.00",
+    "guest_label": "{{count}} Personne",
+    "guests_label": "{{count}} Personnes",
+    "no_occupancy_note": "Le type de chambre sélectionné a une occupation maximale de 0 personne.",
+    "base_price_label": "Prix de base (par nuit)",
+    "base_price_placeholder": "Ex: 200.00",
+    "base_price_description": "Ce tarif fixe s'applique par nuit quel que soit le nombre de personnes (jusqu'à l'occupation maximale de la chambre).",
+    "cancellation_policy_label": "Politique d'annulation (Optionnel)",
+    "cancellation_policy_placeholder": "Décrivez les conditions d'annulation pour ce plan tarifaire.",
+    "default_plan_label": "Définir comme plan tarifaire par défaut pour le type de chambre sélectionné"
+  },
+  "filters": {
+    "search_placeholder": "Rechercher par nom...",
+    "room_type_label": "Type de chambre",
+    "room_type_placeholder": "Filtrer par type de chambre",
+    "all_room_types": "Tous les types de chambres",
+    "status_label": "Statut",
+    "status_placeholder": "Filtrer par statut",
+    "all_statuses": "Tous les statuts",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "apply_button": "Appliquer les filtres"
+  },
+  "delete_dialog": {
+    "title": "Êtes-vous absolument sûr ?",
+    "description": "Cette action ne peut pas être annulée. Cela supprimera définitivement le plan tarifaire \"{{planName}}\".",
+    "cancel_button": "Annuler",
+    "continue_button": "Continuer"
+  },
+  "toasts": {
+    "validation_error_title": "Erreur de validation",
+    "validation_error_description": "Le nom du plan, l'association de type de chambre et au moins un prix valide sont requis.",
+    "success_update_title": "Succès",
+    "success_update_description": "Plan tarifaire mis à jour avec succès.",
+    "success_create_title": "Succès",
+    "success_create_description": "Plan tarifaire ajouté avec succès.",
+    "error_save_title": "Erreur",
+    "error_save_description": "Impossible d'enregistrer le plan tarifaire.",
+    "success_delete_title": "Succès",
+    "success_delete_description": "Plan tarifaire supprimé avec succès.",
+    "error_delete_title": "Erreur",
+    "error_delete_description": "Impossible de supprimer le plan tarifaire."
+  },
+  "buttons": {
+    "cancel": "Annuler",
+    "save": "Enregistrer le plan tarifaire"
+  },
+  "access_denied": {
+    "title": "Accès refusé",
+    "description": "Vous n'avez pas la permission de gérer les plans tarifaires. Veuillez contacter un administrateur."
+  }
+}

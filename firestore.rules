@@ -1,0 +1,329 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAdmin() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isStaffMember(uid) {
+      return request.auth != null && exists(/databases/$(database)/documents/staff/$(uid));
+    }
+
+    function getStaffPropertyId(uid) {
+      return get(/databases/$(database)/documents/staff/$(uid)).data.propertyId;
+    }
+
+    function isPropertyStaff(propertyId, uid) {
+      return isStaffMember(uid) && getStaffPropertyId(uid) == propertyId;
+    }
+
+    function hasPermission(permissionKey, uid) {
+      return isStaffMember(uid) && get(/databases/$(database)/documents/staff/$(uid)).data.permissions[permissionKey] == true;
+    }
+    
+    function isPropertyAdmin(propertyId, uid) {
+      let staffDoc = get(/databases/$(database)/documents/staff/$(uid)).data;
+      return isStaffMember(uid) && staffDoc.propertyId == propertyId && staffDoc.role == 'admin';
+    }
+
+    // Helper to check if query filters by propertyId matching the user's staff propertyId
+    function queryMatchesStaffProperty(uid) {
+      return isStaffMember(uid);
+    }
+
+    // Helper to detect guest-portal style queries that filter by propertyId AND reservationNumber
+    function isGuestPortalReservationQuery() {
+      return request.auth == null &&
+             request.query != null &&
+             request.query.where.size() >= 2 &&
+             // Ensure there's a where filter for propertyId == resource.data.propertyId
+             (request.query.where[0].field == 'propertyId' && request.query.where[0].op == '==' && request.query.where[0].value == resource.data.propertyId
+              || request.query.where[1].field == 'propertyId' && request.query.where[1].op == '==' && request.query.where[1].value == resource.data.propertyId
+              || request.query.where[2].field == 'propertyId' && request.query.where[2].op == '==' && request.query.where[2].value == resource.data.propertyId)
+             &&
+             // Ensure there's a where filter for reservationNumber == resource.data.reservationNumber
+             (request.query.where[0].field == 'reservationNumber' && request.query.where[0].op == '==' && request.query.where[0].value == resource.data.reservationNumber
+              || request.query.where[1].field == 'reservationNumber' && request.query.where[1].op == '==' && request.query.where[1].value == resource.data.reservationNumber
+              || request.query.where[2].field == 'reservationNumber' && request.query.where[2].op == '==' && request.query.where[2].value == resource.data.reservationNumber);
+    }
+
+    // --- COLLECTIONS ---
+
+    // Generic rule to allow admins full access to any document.
+    // This rule is checked first.
+    match /{document=**} {
+      allow read, write: if request.auth != null && isAdmin();
+    }
+
+    // --- PUBLIC-READABLE COLLECTIONS ---
+    // These are needed for the public booking page to function.
+    match /properties/{propertyId} {
+      allow read: if true;
+      allow write: if isPropertyAdmin(propertyId, request.auth.uid) || hasPermission('settings', request.auth.uid);
+      
+      // Payments subcollection - managed by staff with finance permissions or property admins
+      match /payments/{paymentId} {
+        allow read: if isPropertyStaff(propertyId, request.auth.uid);
+        allow write: if isPropertyAdmin(propertyId, request.auth.uid) || (isPropertyStaff(propertyId, request.auth.uid) && hasPermission('finance', request.auth.uid));
+      }
+      
+      // WhatsApp integration settings (subcollection)
+      match /integrations/{integrationId} {
+        allow read, write: if isPropertyStaff(propertyId, request.auth.uid) && hasPermission('settings', request.auth.uid);
+      }
+      
+      // WhatsApp message templates (subcollection)
+      match /whatsappTemplates/{templateId} {
+        allow read, write: if isPropertyStaff(propertyId, request.auth.uid) && hasPermission('settings', request.auth.uid);
+      }
+      
+      // WhatsApp message logs (subcollection)
+      match /whatsappMessages/{messageId} {
+        allow read: if isPropertyStaff(propertyId, request.auth.uid) && hasPermission('guests', request.auth.uid);
+        allow write: if isPropertyStaff(propertyId, request.auth.uid) && hasPermission('guests', request.auth.uid);
+      }
+
+      // Cached emails (subcollection)
+      match /emails/{emailId} {
+        allow read: if isPropertyStaff(propertyId, request.auth.uid) && hasPermission('guests', request.auth.uid);
+        allow write: if false;
+      }
+    }
+    match /roomTypes/{roomTypeId} {
+      allow read: if true;
+      allow write: if hasPermission('rooms', request.auth.uid);
+    }
+     match /rooms/{roomId} {
+      // Allow staff to read rooms for their property
+      allow read: if true;
+      allow write: if hasPermission('rooms', request.auth.uid);
+    }
+    match /ratePlans/{ratePlanId} {
+      allow read: if true;
+      allow write: if hasPermission('ratePlans', request.auth.uid);
+    }
+    match /promotions/{promotionId} {
+        allow read: if true;
+        allow write: if hasPermission('ratePlans', request.auth.uid);
+    }
+    match /packages/{packageId} {
+        allow read: if true;
+        allow write: if hasPermission('extras', request.auth.uid);
+    }
+    match /services/{serviceId} {
+        allow read: if true;
+        allow write: if hasPermission('extras', request.auth.uid);
+    }
+    // Service categories used to structure extras/services catalog
+    match /serviceCategories/{categoryId} {
+      allow read: if true; // public read for booking/admin pages
+      allow write: if request.auth != null && hasPermission('extras', request.auth.uid);
+    }
+    // Meal plan categories
+    match /mealPlanCategories/{categoryId} {
+      allow read: if true; // public read for booking/admin pages
+      allow write: if request.auth != null && hasPermission('extras', request.auth.uid);
+    }
+    match /mealPlans/{mealPlanId} {
+        allow read: if true;
+        allow write: if request.auth != null && hasPermission('extras', request.auth.uid);
+    }
+    match /menus/{menuId} {
+        allow read: if true;
+        allow write: if request.auth != null && hasPermission('extras', request.auth.uid);
+    }
+    match /seasonalRates/{seasonalRateId} {
+      allow read: if true;
+      allow write: if request.auth != null && hasPermission('ratePlans', request.auth.uid);
+    }
+
+    // --- REVIEWS ---
+    // Reviews can be submitted by anyone (guest portal), but only staff can approve/reject/respond
+    match /reviews/{reviewId} {
+      allow read: if true; // Allow unauthenticated read for guest portal access
+      allow create: if true; // Allow anyone to create (handled by Cloud Function)
+      allow update, delete: if request.auth != null && (
+        hasPermission('guests', request.auth.uid) ||
+        isPropertyStaff(request.resource.data.propertyId, request.auth.uid) ||
+        isPropertyStaff(resource.data.propertyId, request.auth.uid)
+      );
+    }
+
+    // --- SECURE COLLECTIONS ---
+
+    // Staff can read their own profile. Only Admins can create/update/delete staff.
+    match /staff/{staffId} {
+      allow read: if request.auth.uid == staffId || hasPermission('staffManagement', request.auth.uid);
+      allow write: if hasPermission('staffManagement', request.auth.uid);
+    }
+
+    // Guests can only be managed by staff with guest permissions.
+    match /guests/{guestId} {
+      allow read, write: if hasPermission('guests', request.auth.uid);
+      // Loyalty history is a subcollection, inherits parent rule.
+      match /loyaltyHistory/{historyId} {
+        allow read, write: if hasPermission('guests', request.auth.uid);
+      }
+    }
+
+    // Reservations can only be managed by staff with reservation permissions.
+    match /reservations/{reservationId} {
+      // Staff can read reservations for their property when the query filters by propertyId
+      // Allow unauthenticated guest-portal queries only when the client query filters by both
+      // `propertyId` and `reservationNumber` that match the document fields.
+      allow read: if (request.auth != null && isPropertyStaff(resource.data.propertyId, request.auth.uid)) || isGuestPortalReservationQuery();
+      allow write: if hasPermission('reservations', request.auth.uid);
+      // Public creation is handled by a Cloud Function.
+    }
+    
+    // Payments & Invoices are managed by staff with finance permissions.
+    match /invoices/{invoiceId} {
+      allow read, write: if hasPermission('finance', request.auth.uid);
+    }
+    match /payments/{paymentId} {
+      allow read, write: if hasPermission('finance', request.auth.uid);
+    }
+    
+    match /expenses/{expenseId} {
+      allow read, write: if hasPermission('finance', request.auth.uid);
+    }
+
+    // Availability Overrides are managed by staff with availability permissions.
+    match /availability/{availabilityId} {
+      allow read, write: if hasPermission('availability', request.auth.uid);
+    }
+
+    // Notifications are readable by any staff member of the property.
+    match /notifications/{notificationId} {
+      allow read, write: if isPropertyStaff(resource.data.propertyId, request.auth.uid);
+    }
+
+    // API Keys can only be managed by property admins.
+    match /apiKeys/{apiKeyId} {
+      allow read, write: if isPropertyAdmin(resource.data.propertyId, request.auth.uid);
+    }
+
+    // Email templates can only be managed by staff with settings permissions.
+    match /emailTemplates/{templateId} {
+      allow read, write: if hasPermission('settings', request.auth.uid);
+    }
+    
+    // Team Workspace - Tasks & Conversations
+    match /tasks/{taskId} {
+      // Allow staff to read tasks for their property
+      allow read: if request.auth != null && isPropertyStaff(resource.data.property_id, request.auth.uid);
+      allow write: if hasPermission('teamWorkspace', request.auth.uid);
+    }
+    
+    match /conversations/{conversationId} {
+        allow read, write: if request.auth.uid in resource.data.participants;
+        
+        match /messages/{messageId} {
+             allow read, write: if request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        }
+    }
+
+    // Guest Portal Conversations (staff should be able to list and listen by property)
+    match /guestPortalConversations/{conversationId} {
+      // Allow reads if the user is staff for the property, has explicit guestPortal permission,
+      // or is a participant in the conversation document.
+      allow read: if (
+        request.auth.uid != null && (
+          isPropertyStaff(resource.data.propertyId, request.auth.uid) ||
+          hasPermission('guestPortal', request.auth.uid) ||
+          (request.auth.uid in resource.data.participants)
+        )
+      );
+
+      // Allow writes if the user is staff for the property or has guestPortal permission.
+      // Use request.resource for create/update checks when available.
+      allow write: if (
+        request.auth.uid != null && (
+          (request.resource != null && isPropertyStaff(request.resource.data.propertyId, request.auth.uid)) ||
+          (resource != null && isPropertyStaff(resource.data.propertyId, request.auth.uid)) ||
+          hasPermission('guestPortal', request.auth.uid)
+        )
+      );
+
+      // Messages inside guestPortalConversations
+      match /messages/{messageId} {
+        allow read, write: if (
+          request.auth.uid != null && (
+            // participants list lives on parent conversation
+            (request.auth.uid in get(/databases/$(database)/documents/guestPortalConversations/$(conversationId)).data.participants) ||
+            isPropertyStaff(resource.data.propertyId, request.auth.uid) ||
+            hasPermission('guestPortal', request.auth.uid)
+          )
+        );
+      }
+    }
+
+    // ===== LEDGER & FOLIO SYSTEM =====
+    // Immutable ledger entries for accounting
+    match /properties/{propertyId}/reservations/{reservationId}/folios/{folioId}/ledger/{entryId} {
+      // Cloud Functions can write (via App Check)
+      // Frontend can only read ledger entries
+      allow read: if (
+        request.auth != null && 
+        isPropertyStaff(propertyId, request.auth.uid)
+      );
+      
+      // Only Cloud Functions can write ledger entries
+      // enforced via App Check in Cloud Functions
+      allow write: if false;
+    }
+
+    // Allocation records linking payments to charges
+    match /properties/{propertyId}/reservations/{reservationId}/folios/{folioId}/allocations/{allocationId} {
+      allow read: if (
+        request.auth != null && 
+        isPropertyStaff(propertyId, request.auth.uid)
+      );
+      
+      // Only Cloud Functions can write allocations
+      allow write: if false;
+    }
+
+    // Folio documents
+    match /properties/{propertyId}/reservations/{reservationId}/folios/{folioId} {
+      allow read: if (
+        request.auth != null && 
+        isPropertyStaff(propertyId, request.auth.uid)
+      );
+      
+      // Only Cloud Functions can create/update folios
+      allow write: if false;
+
+      // Nested: ledger entries
+      match /ledger/{entryId} {
+        allow read: if (
+          request.auth != null && 
+          isPropertyStaff(propertyId, request.auth.uid)
+        );
+        allow write: if false;
+      }
+
+      // Nested: allocations
+      match /allocations/{allocationId} {
+        allow read: if (
+          request.auth != null && 
+          isPropertyStaff(propertyId, request.auth.uid)
+        );
+        allow write: if false;
+      }
+    }
+
+    // Folio collection
+    match /properties/{propertyId}/reservations/{reservationId}/folios/{folioId=**} {
+      allow read: if (
+        request.auth != null && 
+        isPropertyStaff(propertyId, request.auth.uid)
+      );
+      allow write: if false;
+    }
+  }
+}

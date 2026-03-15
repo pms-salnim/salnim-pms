@@ -1,0 +1,106 @@
+{
+  "title": "All Rate Plans",
+  "description": "Manage your property's pricing strategies and availability rules.",
+  "add_button": "Create New Rate Plan",
+  "edit_modal_title": "Edit Rate Plan",
+  "add_modal_title": "Create New Rate Plan",
+  "modal_description": "Define the details for your rate plan. Click save when you're done.",
+  "no_room_types_warning": "You must define at least one Room Type before creating a Rate Plan.",
+  "list": {
+    "status_upcoming":"upcoming",
+    "headers": {
+      "plan_name": "Plan Name",
+      "validity":"validity",
+      "room_type": "Room Type",
+      "pricing": "Pricing",
+      "default": "Default",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "no_plans_message": "No rate plans found. Click \"Create New Rate Plan\" to get started.",
+    "pricing_summary": {
+      "per_night": "{{price}} / night",
+      "per_guest": "{{guests}}G: {{price}}",
+      "not_set": "Not set"
+    },
+    "status_active": "Active",
+    "actions_menu": {
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "delete": "Delete"
+    }
+  },
+  "form": {
+    "open_ended_label":"This is an open-ended block (no end date)",
+    "open_ended":"Open-Ended (no end date)",
+    "date_range_label":"Date Range",
+    "sections": {
+      "basic_info": "Basic Information",
+      "room_type_assoc": "Room Type Association",
+      "validity_period":"Validity Period",
+      "pricing": "Pricing",
+      "policy_settings": "Policy & Settings"
+    },
+    "plan_name_label": "Plan Name",
+    "plan_name_placeholder": "e.g., Standard Flexible Rate",
+    "description_label": "Description (Optional)",
+    "description_placeholder": "Brief description of this rate plan.",
+    "room_type_label": "Room Type",
+    "room_type_placeholder": "Select Room Type",
+    "no_room_types": "No room types available",
+    "pricing_method_per_guest": "Per Guest (per night)",
+    "pricing_method_per_night": "Per Night (flat rate)",
+    "pricing_per_guest_label": "Pricing Per Guest (Per Night)",
+    "pricing_per_guest_description": "Enter the price per night for the specified number of guests. At least one price is required.",
+    "pricing_per_guest_placeholder": "e.g., 150.00",
+    "guest_label": "{{count}} Guest",
+    "guests_label": "{{count}} Guests",
+    "no_occupancy_note": "The selected room type has a max occupancy of 0 guests.",
+    "base_price_label": "Base Price (Per Night)",
+    "base_price_placeholder": "e.g., 200.00",
+    "base_price_description": "This flat rate applies per night regardless of the number of guests (up to the room's max occupancy).",
+    "cancellation_policy_label": "Cancellation Policy (Optional)",
+    "cancellation_policy_placeholder": "Describe the cancellation terms for this rate plan.",
+    "default_plan_label": "Set as default rate plan for the selected room type"
+  },
+  "filters": {
+    "search_placeholder": "Search by name...",
+    "room_type_label": "Room Type",
+    "room_type_placeholder": "Filter by Room Type",
+    "all_room_types": "All Room Types",
+    "status_label": "Status",
+    "status_placeholder": "Filter by Status",
+    "all_statuses": "All Statuses",
+    "active": "Active",
+    "inactive": "Inactive",
+    "apply_button": "Apply Filters"
+  },
+  "delete_dialog": {
+    "title": "Are you absolutely sure?",
+    "description": "This action cannot be undone. This will permanently delete the rate plan \"{{planName}}\".",
+    "cancel_button": "Cancel",
+    "continue_button": "Continue"
+  },
+  "toasts": {
+    "validation_error_title": "Validation Error",
+    "validation_error_description": "Plan Name, Room Type association, and at least one valid Price are required.",
+    "success_update_title": "Success",
+    "success_update_description": "Rate plan updated successfully.",
+    "success_create_title": "Success",
+    "success_create_description": "Rate plan added successfully.",
+    "error_save_title": "Error",
+    "error_save_description": "Could not save rate plan.",
+    "success_delete_title": "Success",
+    "success_delete_description": "Rate plan deleted successfully.",
+    "error_delete_title": "Error",
+    "error_delete_description": "Could not delete rate plan."
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "save": "Save Rate Plan"
+  },
+  "access_denied": {
+    "title": "Access Denied",
+    "description": "You do not have permission to manage rate plans. Please contact an administrator."
+  }
+}

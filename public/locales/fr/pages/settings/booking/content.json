@@ -1,0 +1,85 @@
+
+{
+    "form": {
+        "title": "Paramètres de la page de réservation",
+        "description": "Personnalisez l'apparence, le comportement et les règles de votre page de réservation publique.",
+        "tabs": {
+            "appearance": "Apparence",
+            "behavior": "Comportement",
+            "invoice": "Personnalisation des factures"
+        },
+        "appearance_section": {
+            "title": "Apparence et image de marque",
+            "hero_image_label": "Image de la bannière",
+            "hero_image_upload_text": "Cliquez pour télécharger une image de bannière",
+            "logo_label": "Logo (partagé avec la facture)",
+            "logo_upload_text": "Cliquez pour télécharger un logo",
+            "booking_logo_size_label": "Taille du logo sur la page de réservation",
+            "primary_color_label": "Couleur principale",
+            "hover_color_label": "Couleur au survol",
+            "welcome_message_label": "Titre de bienvenue",
+            "welcome_message_placeholder": "ex: Votre escapade parfaite vous attend",
+            "button_text_label": "Texte du bouton d'en-tête (Optionnel)",
+            "button_text_placeholder": "ex: Visitez notre site web",
+            "button_link_label": "Lien du bouton d'en-tête (Optionnel)",
+            "button_link_placeholder": "ex: https://monhotel.com"
+        },
+        "behavior_section": {
+            "title": "Règles et comportement de réservation",
+            "default_status_label": "Statut par défaut des nouvelles réservations",
+            "status_pending": "En attente",
+            "status_confirmed": "Confirmée",
+            "promo_field_label": "Afficher le champ du code promotionnel",
+            "auto_assign_label": "Attribuer automatiquement une chambre spécifique",
+            "require_phone_label": "Exiger le numéro de téléphone du client",
+            "terms_label": "Termes et conditions de réservation",
+            "terms_placeholder": "Entrez ici les termes et conditions de réservation de votre établissement. Ils seront affichés au client avant la confirmation."
+        },
+        "promo_card_section": {
+            "title": "Pop-up de la page de réservation",
+            "enable_label": "Activer le pop-up promotionnel sur la page de réservation",
+            "display_type_label": "Type d'affichage",
+            "display_type_auto": "Automatique",
+            "display_type_manual": "Design manuel",
+            "title_label": "Titre de la carte",
+            "description_label": "Description de la carte",
+            "promotion_label": "Lier à une promotion",
+            "promotion_placeholder": "Sélectionnez une promotion avec un coupon...",
+            "promotion_none": "Aucune promotion liée",
+            "image_label": "Image de la carte",
+            "image_upload_text": "Cliquez pour télécharger une image",
+            "manual_design_label": "Design de promotion manuel",
+            "manual_design_upload_text": "Téléchargez votre design (PNG, JPG)",
+            "manual_design_description": "Taille recommandée : 800x1000px. Cette image sera affichée telle quelle dans le pop-up."
+        },
+        "invoice_section": {
+            "title": "Personnalisation des factures",
+            "prefix_label": "Préfixe du numéro de facture",
+            "prefix_placeholder": "ex: FAC-",
+            "color_label": "Couleur principale de la facture",
+            "logo_size_label": "Taille du logo sur la facture",
+            "header_notes_label": "Notes d'en-tête",
+            "header_notes_placeholder": "ex: 'Merci pour votre confiance !'",
+            "footer_text_label": "Texte de pied de page",
+            "footer_text_placeholder": "ex: 'Tous les prix sont en MAD. Paiement dû sous 30 jours.'",
+            "include_address_label": "Inclure l'adresse de l'établissement sur la facture"
+        }
+    },
+    "buttons": {
+        "save": "Enregistrer les paramètres",
+        "preview_booking_page": "Aperçu de la page de réservation",
+        "preview_invoice": "Aperçu de la facture PDF"
+    },
+    "preview_modal": {
+        "title": "Aperçu de la facture",
+        "description": "Ceci est un exemple de l'apparence de votre facture avec les paramètres actuels.",
+        "loading": "Génération de l'aperçu...",
+        "close": "Fermer"
+    },
+    "toasts": {
+        "success_save": "Les paramètres de la page de réservation ont été mis à jour avec succès.",
+        "error_property_not_found": "Propriété non trouvée. Impossible d'enregistrer les paramètres.",
+        "error_save": "Une erreur inattendue est survenue lors de l'enregistrement de vos paramètres.",
+        "preview_error": "Impossible de générer l'aperçu de la facture."
+    }
+}

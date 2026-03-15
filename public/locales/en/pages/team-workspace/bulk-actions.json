@@ -1,0 +1,8 @@
+
+{
+  "selected_text": "{{count}} selected",
+  "button_text": "Actions",
+  "change_status": "Change status",
+  "delete_selected": "Delete selected",
+  "mark_as": "Mark as {{status}}"
+}

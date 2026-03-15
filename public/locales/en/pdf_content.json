@@ -1,0 +1,25 @@
+
+{
+  "invoice_title": "Invoice",
+  "invoice_number_label": "Invoice #",
+  "date_issued_label": "Date Issued",
+  "due_date_label": "Due Date",
+  "bill_to_label": "Bill To",
+  "reservation_id_label": "Reservation ID",
+  "description_label": "Description",
+  "qty_label": "Qty",
+  "unit_price_label": "Unit Price",
+  "total_label": "Total",
+  "total_paid":"Total Paid",
+  "amount_due_label":"Amount Due",
+  "subtotal_label": "Subtotal",
+  "discount_label": "Discount",
+  "net_amount_label": "Net Amount",
+  "tax_label": "Tax",
+  "grand_total_label": "Grand Total",
+  "status_label": "Status",
+  "capital_label": "Capital",
+  "phone_label": "Phone",
+  "page_label": "Page",
+  "of_label": "of"
+}

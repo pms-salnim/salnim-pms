@@ -1,0 +1,22 @@
+
+{
+    "title": "Dates Bloquées",
+    "access_denied": {
+        "title": "Accès Refusé",
+        "description": "Vous n'avez pas la permission de voir cette page. Veuillez contacter un administrateur."
+    },
+    "table": {
+        "headers": {
+            "room_type": "Type de Chambre",
+            "start_date": "Date de Début",
+            "applies_to":"S'applique à",
+            "end_date": "Date de Fin",
+            "notes": "Remarques"
+        },
+        "empty_state": "Aucune date n'a été bloquée manuellement."
+    },
+    "toasts": {
+        "error_title": "Erreur",
+        "error_description": "Impossible de récupérer les dates bloquées."
+    }
+}

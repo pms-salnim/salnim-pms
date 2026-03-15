@@ -1,0 +1,107 @@
+
+{
+    "loading_property": "Chargement de la propriété...",
+    "access_denied": {
+        "title": "Accès Refusé",
+        "description": "Vous n'avez pas la permission de gérer les types de chambres. Veuillez contacter un administrateur."
+    },
+    "title": "Types de Chambres",
+    "description": "Créez et gérez les différentes catégories de chambres disponibles dans votre établissement.",
+    "no_property_loaded": "Les informations sur la propriété n'ont pas pu être chargées. Veuillez vous assurer que vous êtes assigné à une propriété.",
+    "add_room_type_button": "Ajouter un Type de Chambre",
+    "edit_modal": {
+        "title": "Modifier le Type de Chambre",
+        "description": "Apportez des modifications à votre type de chambre ci-dessous. Cliquez sur enregistrer lorsque vous avez terminé."
+    },
+    "add_modal": {
+        "title": "Ajouter un Nouveau Type de Chambre",
+        "description": "Définissez une nouvelle catégorie de chambre pour votre propriété."
+    },
+    "tabs": {
+        "details": "Détails",
+        "beds": "Lits",
+        "amenities": "Équipements",
+        "gallery": "Galerie"
+    },
+    "form": {
+        "type_name_label": "Nom du Type",
+        "type_name_placeholder": "ex: Suite King de Luxe",
+        "max_guests_label": "Invités Max.",
+        "max_guests_placeholder": "ex: 2",
+        "rooms_count_label": "Nombre de Chambres de ce Type (Optionnel)",
+        "rooms_count_placeholder": "ex: 10",
+        "room_numbers_label": "Numéros de Chambre Attribués (Optionnel)",
+        "room_numbers_placeholder": "ex: 101, 102, 203A",
+        "room_numbers_description": "Si vous connaissez les numéros de chambre spécifiques pour ce type, listez-les ici séparés par des virgules.",
+        "description_label": "Description",
+        "description_placeholder": "ex: Une suite spacieuse avec vue sur la mer et un balcon privé.",
+        "beds_title": "Configuration des Lits",
+        "beds_description": "Spécifiez le nombre de chaque type de lit disponible dans cette catégorie de chambre.",
+        "amenities_title": "Équipements",
+        "amenities_description": "Sélectionnez tous les équipements qui s'appliquent à ce type de chambre.",
+        "thumbnail_label": "Image Miniature",
+        "thumbnail_upload": "Cliquez pour télécharger une image principale",
+        "gallery_label": "Images de la Galerie",
+        "gallery_upload": "Ajouter plus d'images"
+    },
+    "view_modal": {
+        "title": "Détails du Type de Chambre",
+        "description": "Un résumé de la configuration du type de chambre.",
+        "details_section_title": "Détails",
+        "max_guests_label": "Invités Max.",
+        "physical_rooms_label": "Nombre de Chambres Physiques",
+        "not_set": "Non défini",
+        "description_label": "Description",
+        "room_numbers_label": "Chambres Attribuées",
+        "beds_section_title": "Configuration des Lits",
+        "amenities_section_title": "Équipements"
+    },
+    "card": {
+        "rooms_available_badge": "{{count}} restantes",
+        "view_details": "Voir les détails",
+        "edit": "Modifier",
+        "delete": "Supprimer"
+    },
+    "bed_types": {
+        "king": "King",
+        "queen": "Queen",
+        "double": "Double",
+        "single": "Simple",
+        "sofa_bed": "Canapé-lit",
+        "bunk_bed": "Lit superposé"
+    },
+    "toasts": {
+        "validation_error": {
+            "title": "Erreur de Validation",
+            "description": "Veuillez remplir tous les champs obligatoires (Nom du Type, Invités Max.)."
+        },
+        "success_update": {
+            "title": "Succès",
+            "description": "Type de chambre mis à jour avec succès."
+        },
+        "success_create": {
+            "title": "Succès",
+            "description": "Nouveau type de chambre créé avec succès."
+        },
+        "error_save": {
+            "title": "Erreur",
+            "description": "Impossible d'enregistrer le type de chambre. Veuillez réessayer."
+        },
+        "success_delete": {
+            "title": "Succès",
+            "description": "Le type de chambre et toutes les chambres et plans tarifaires associés ont été supprimés."
+        },
+        "error_delete": {
+            "title": "Erreur",
+            "description": "Impossible de supprimer le type de chambre. Veuillez réessayer."
+        }
+    },
+    "buttons": {
+        "save": "Enregistrer les Modifications",
+        "close": "Fermer",
+        "create_rooms": "Créer des Chambres",
+        "edit": "Modifier"
+    },
+    "confirm_delete": "Êtes-vous sûr de vouloir supprimer ce type de chambre ? Cela supprimera également toutes les chambres physiques et les plans tarifaires qui lui sont associés. Cette action est irréversible.",
+    "no_room_types": "Aucun type de chambre n'a encore été créé. Ajoutez-en un pour commencer."
+}

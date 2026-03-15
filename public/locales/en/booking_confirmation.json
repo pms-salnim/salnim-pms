@@ -1,0 +1,68 @@
+{
+  "header": {
+    "title": "Confirm Your Booking",
+    "description": "You're just one step away. Please provide your details to finalize your reservation."
+  },
+  "guest_details_form": {
+    "title": "Guest Details",
+    "description": "This information will be used to create your booking.",
+    "full_name_label": "Full Name",
+    "full_name_placeholder": "e.g. John Doe",
+    "email_label": "Email Address",
+    "email_placeholder": "you@example.com",
+    "phone_label": "Phone Number",
+    "phone_placeholder": "e.g. +1 234 567 890",
+    "notes_label": "Special Requests (Optional)",
+    "notes_placeholder": "Let us know if you have any special requirements...",
+    "confirm_button_default": "Confirm & Book Now",
+    "confirm_button_loading": "Confirming...",
+    "validation": {
+      "full_name": "Full name must be at least 3 characters.",
+      "email": "Please enter a valid email address.",
+      "phone": "Please enter a valid phone number.",
+      "country": "Please select your country."
+    }
+  },
+  "summary": {
+    "title": "Booking Summary",
+    "checkin_label": "Check-in",
+    "checkout_label": "Check-out",
+    "guests_label": "Guests",
+    "adults_text_single": "{{count}} adult",
+    "adults_text_plural": "{{count}} adults",
+    "children_text_single": "{{count}} child",
+    "children_text_plural": "{{count}} children",
+    "stay_label": "Stay",
+    "night_text_single": "{{count}} night",
+    "night_text_plural": "{{count}} nights",
+    "empty_selection": "Your selection is empty.",
+    "extras_title": "Extras",
+    "rooms_total": "Rooms Total",
+    "extras_total": "Extras Total",
+    "subtotal": "Subtotal",
+    "promo_discount": "Promo Discount",
+    "net_amount": "Net Amount",
+    "taxes_and_fees": "Taxes & Fees ({{rate}}%)",
+    "total": "Total",
+    "continue_button": "Continue",
+    "promo_code_placeholder": "Promo code",
+    "apply_button": "Apply"
+  },
+  "toasts": {
+    "empty_booking_title": "Empty Booking",
+    "empty_booking_description": "Please select a room before proceeding.",
+    "session_not_found_title": "Booking Session Not Found",
+    "session_not_found_description": "Your booking session has expired or is invalid. Please start over.",
+    "success_title": "Booking Confirmed!",
+    "success_description": "Your reservation has been successfully created. A confirmation email is on its way.",
+    "booking_failed_title": "Booking Failed",
+    "booking_failed_description": "We were unable to complete your booking at this time. Please try again."
+  },
+  "success_page": {
+    "title": "Thank You For Your Booking!",
+    "thank_you": "Thank you, {{name}}!",
+    "confirmation_message": "Your reservation has been successfully processed and a confirmation email has been sent to your address.",
+    "follow_up_message": "If you have any questions, feel free to contact us.",
+    "make_another_booking_button": "Make Another Booking"
+  }
+}

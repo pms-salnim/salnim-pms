@@ -1,0 +1,111 @@
+{
+  "title": "Types de chambres",
+  "description": "Créez et gérez des catégories de chambres distinctes pour organiser votre inventaire, définir des règles d'occupation et de tarification, et simplifier la gestion des tarifs et des réservations.",
+  "add_room_type_button": "Ajouter un type de chambre",
+  "loading_property": "Chargement des informations sur la propriété...",
+  "no_property_loaded": "Impossible de charger les informations sur la propriété. Veuillez vous assurer que vous êtes affecté à une propriété.",
+  "access_denied": {
+    "title": "Accès refusé",
+    "description": "Vous n'avez pas la permission de gérer les types de chambres. Veuillez contacter un administrateur."
+  },
+  "edit_modal": {
+    "title": "Modifier le type de chambre",
+    "description": "Gérez les détails et les équipements pour ce type de chambre. La tarification est gérée via les plans tarifaires."
+  },
+  "add_modal": {
+    "title": "Ajouter un nouveau type de chambre",
+    "description": "Gérez les détails et les équipements pour ce type de chambre. La tarification est gérée via les plans tarifaires."
+  },
+  "tabs": {
+    "details": "Détails",
+    "amenities": "Équipements",
+    "beds":"Lits",
+    "gallery": "Galerie"
+
+  },
+    "bed_types": {
+    "king": "Kings",
+    "queen": "Queen",
+    "double": "Double",
+    "single":"Simple",
+    "sofa-bed":"Canapés-Lits",
+    "bunk-bed":"Lits Superposés"
+  },
+  "form": {
+    "type_name_label": "Nom du type",
+    "type_name_placeholder": "ex: Double Standard",
+    "default_rate_label": "Tarif par défaut",
+    "default_rate_placeholder": "ex: 120",
+    "default_rate_description": "Tarif de référence. Tarification active via les plans tarifaires.",
+    "max_guests_label": "Invités max.",
+    "max_guests_placeholder": "ex: 2",
+    "rooms_count_label": "Nombre de chambres physiques (total)",
+    "rooms_count_placeholder": "ex: 10",
+    "room_numbers_label": "Numéros de chambre attribués (séparés par des virgules)",
+    "room_numbers_placeholder": "ex: 101, 102, 201-205, Suite A",
+    "room_numbers_description": "Entrez les numéros ou noms de chambre spécifiques attribués à ce type.",
+    "beds_title": "Configuration des Lits",
+    "beds_description": "Spécifiez le nombre de chaque type de lit disponible dans cette catégorie de chambre.",
+    "description_label": "Description (Optionnel)",
+    "description_placeholder": "Brève description du type de chambre.",
+    "amenities_title": "Sélectionner les équipements",
+    "amenities_description": "Choisissez tous les équipements qui s'appliquent à ce type de chambre.",
+    "thumbnail_label": "Image miniature (première image affichée)",
+    "thumbnail_upload": "Cliquez pour télécharger la miniature",
+    "gallery_label": "Images de galerie supplémentaires",
+    "gallery_upload": "Ajouter des images"
+  },
+  "buttons": {
+    "close": "Fermer",
+    "save": "Enregistrer le type de chambre"
+  },
+  "toasts": {
+    "validation_error": {
+      "title": "Erreur de validation",
+      "description": "Le nom du type, le tarif par défaut et le nombre maximum d'invités sont requis."
+    },
+    "success_update": {
+      "title": "Succès",
+      "description": "Type de chambre mis à jour avec succès."
+    },
+    "success_create": {
+      "title": "Succès",
+      "description": "Type de chambre ajouté avec succès."
+    },
+    "error_save": {
+      "title": "Erreur",
+      "description": "Impossible d'enregistrer le type de chambre."
+    },
+    "success_delete": {
+      "title": "Succès",
+      "description": "Le type de chambre et ses associations ont été supprimés."
+    },
+    "error_delete": {
+      "title": "Erreur",
+      "description": "Impossible de finaliser la suppression."
+    }
+  },
+  "confirm_delete": "Êtes-vous sûr ? Cela supprimera le type de chambre, toutes ses chambres et les plans tarifaires associés. Cette action est irréversible.",
+  "card": {
+    "view_details": "Voir les détails",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "rooms_available_badge": "Dépêchez-vous ! {{count}} dernières chambres",
+    "from_price": "À partir de"
+  },
+  "view_modal": {
+    "title": "Détails du type de chambre",
+    "description": "Affichage des détails pour ce type de chambre.",
+    "details_section_title": "Détails de la chambre",
+    "base_rate_label": "Tarif de base",
+    "base_rate_suffix": "/ nuit",
+    "max_guests_label": "Invités max.",
+    "physical_rooms_label": "Chambres physiques",
+    "not_set": "Non défini",
+    "description_label": "Description",
+    "room_numbers_label": "Numéros de chambre",
+    "amenities_section_title": "Équipements",
+    "no_amenities": "Aucun équipement spécifique listé."
+  },
+  "no_room_types": "Aucun type de chambre trouvé. Ajoutez-en un pour commencer."
+}

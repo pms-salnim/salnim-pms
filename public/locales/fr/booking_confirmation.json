@@ -1,0 +1,68 @@
+{
+  "header": {
+    "title": "Confirmez Votre Réservation",
+    "description": "Vous n'êtes plus qu'à une étape. Veuillez fournir vos informations pour finaliser votre réservation."
+  },
+  "guest_details_form": {
+    "title": "Coordonnées du Client",
+    "description": "Ces informations seront utilisées pour créer votre réservation.",
+    "full_name_label": "Nom Complet",
+    "full_name_placeholder": "ex. Jean Dupont",
+    "email_label": "Adresse E-mail",
+    "email_placeholder": "vous@exemple.com",
+    "phone_label": "Numéro de Téléphone",
+    "phone_placeholder": "ex. +33 6 12 34 56 78",
+    "notes_label": "Demandes Spéciales (Optionnel)",
+    "notes_placeholder": "Faites-nous savoir si vous avez des exigences particulières...",
+    "confirm_button_default": "Confirmer et Réserver",
+    "confirm_button_loading": "Confirmation...",
+    "validation": {
+      "full_name": "Le nom complet doit comporter au moins 3 caractères.",
+      "email": "Veuillez saisir une adresse e-mail valide.",
+      "phone": "Veuillez saisir un numéro de téléphone valide.",
+      "country": "Veuillez sélectionner votre pays."
+    }
+  },
+  "summary": {
+    "title": "Résumé de la Réservation",
+    "checkin_label": "Arrivée",
+    "checkout_label": "Départ",
+    "guests_label": "Invités",
+    "adults_text_single": "{{count}} adulte",
+    "adults_text_plural": "{{count}} adultes",
+    "children_text_single": "{{count}} enfant",
+    "children_text_plural": "{{count}} enfants",
+    "stay_label": "Séjour",
+    "night_text_single": "{{count}} nuit",
+    "night_text_plural": "{{count}} nuits",
+    "empty_selection": "Votre sélection est vide.",
+    "extras_title": "Extras",
+    "rooms_total": "Total Chambres",
+    "extras_total": "Total Extras",
+    "subtotal": "Sous-total",
+    "promo_discount": "Réduction Promotionnelle",
+    "net_amount": "Montant Net",
+    "taxes_and_fees": "Taxes et Frais ({{rate}}%)",
+    "total": "Total",
+    "continue_button": "Continuer",
+    "promo_code_placeholder": "Code promo",
+    "apply_button": "Appliquer"
+  },
+  "toasts": {
+    "empty_booking_title": "Réservation Vide",
+    "empty_booking_description": "Veuillez sélectionner une chambre avant de continuer.",
+    "session_not_found_title": "Session de Réservation Introuvable",
+    "session_not_found_description": "Votre session de réservation a expiré ou est invalide. Veuillez recommencer.",
+    "success_title": "Réservation Confirmée !",
+    "success_description": "Votre réservation a été créée avec succès. Un e-mail de confirmation est en route.",
+    "booking_failed_title": "Échec de la Réservation",
+    "booking_failed_description": "Nous n'avons pas pu finaliser votre réservation pour le moment. Veuillez réessayer."
+  },
+  "success_page": {
+    "title": "Merci Pour Votre Réservation !",
+    "thank_you": "Merci, {{name}} !",
+    "confirmation_message": "Votre réservation a été traitée avec succès et un e-mail de confirmation a été envoyé à votre adresse.",
+    "follow_up_message": "Si vous avez des questions, n'hésitez pas à nous contacter.",
+    "make_another_booking_button": "Effectuer une Autre Réservation"
+  }
+}

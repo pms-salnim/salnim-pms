@@ -1,0 +1,53 @@
+
+{
+  "title": "Refunds",
+  "description": "Process refunds for paid transactions and view a history of all refunds issued.",
+  "refundable_payments": {
+    "title": "Refundable Payments",
+    "description": "This list shows all successfully paid transactions that are eligible for a refund."
+  },
+  "refunded_payments": {
+    "title": "Refund History",
+    "description": "A log of all refunds that have been processed."
+  },
+  "table_headers": {
+    "date": "Date",
+    "guest": "Guest",
+    "amount": "Amount",
+    "method": "Method",
+    "actions": "Actions",
+    "original_amount": "Original Amount",
+    "refunded_amount": "Refunded Amount",
+    "notes": "Notes"
+  },
+  "buttons": {
+    "refund": "Refund",
+    "cancel":"Cancel"
+
+  },
+  "refundable_payments.empty_state": "No refundable payments found.",
+  "refunded_payments.empty_state": "No refunds have been processed yet.",
+  "refund_form": {
+    "title": "Process Refund",
+    "description": "Refunding payment for {{guestName}}. This action cannot be undone."
+  
+  },
+  "amount_label": "Refund Amount",
+  "type_label":"Refund Type",
+  "full_refund_label":"Full Refund",
+  "partial_refund_label":"Partial Refund",
+  "reason_label": "Reason for Refund",
+  "reason_placeholder": "e.g., Guest cancellation, Service issue",
+  "confirm_button": "Confirm Refund",
+  "cancel_button": "Cancel",
+  "validation": {
+    "amount_invalid": "Refund amount must be between 0 and {{maxAmount}}.",
+    "reason_required": "Please provide a reason for the refund."
+  
+
+  },
+  "toasts": {
+      "refund_success": "Refund has been processed successfully.",
+      "refund_error": "An unexpected error occurred during refund."
+  }
+}
