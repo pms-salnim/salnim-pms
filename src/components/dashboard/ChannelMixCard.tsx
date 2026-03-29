@@ -18,7 +18,7 @@ export function ChannelMixCard({
   const { t } = useTranslation('pages/dashboard/content');
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mt-4">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
       <div className="flex items-center gap-2 mb-4">
         <LucidePieChart size={18} style={{ color: '#003166' }} />
         <h2 className="text-sm font-bold text-slate-800">Channel Mix</h2>

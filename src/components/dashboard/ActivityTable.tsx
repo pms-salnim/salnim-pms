@@ -67,9 +67,9 @@ export function ActivityTable({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-6 gap-6 items-start">
       {/* Left Column - Occupancy & Channel Mix - 1/6 width */}
-      <div className="lg:col-span-1">
+      <div className="lg:col-span-1 flex flex-col gap-4" id="left-column">
         <OccupancyDonutCard 
           occupancyPercent={occupancyPercent}
           bookedUnits={bookedUnits}
@@ -85,8 +85,8 @@ export function ActivityTable({
       </div>
 
       {/* Activity Table - 5/6 width */}
-      <div className="lg:col-span-5">
-    <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="lg:col-span-5 w-full">
+    <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[560px]">
       <div className="flex border-b border-slate-100 bg-slate-50/30">
         <button onClick={() => setActivityTab('checkins')} className={`px-6 py-4 text-sm font-bold transition-all relative ${activityTab === 'checkins' ? 'text-[#003166]' : 'text-slate-400 hover:text-slate-600'}`}>
           {t('todays_activity.check_ins.title')} ({todaysArrivals.length}){activityTab === 'checkins' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#003166]"></div>}
@@ -96,7 +96,7 @@ export function ActivityTable({
         </button>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto flex-1 overflow-y-auto">
         {activityTab === 'checkins' ? (
           <table className="w-full text-left text-sm">
             <thead>
