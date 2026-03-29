@@ -10,6 +10,7 @@ import { Users, Moon } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
 import { Icons } from "@/components/icons";
+import { OccupancyDonutCard } from "./OccupancyDonutCard";
 
 interface ActivityTableProps {
   todaysArrivals: Reservation[];
@@ -21,6 +22,11 @@ interface ActivityTableProps {
   onCheckOut: (reservation: Reservation) => void;
   onCancel: (reservation: Reservation) => void;
   propertySettings: Property | null;
+  occupancyPercent: number;
+  bookedUnits: number;
+  availableUnits: number;
+  outOfService: number;
+  blockedDates: number;
 }
 
 export function ActivityTable({ 
@@ -32,7 +38,12 @@ export function ActivityTable({
   onCheckIn,
   onCheckOut,
   onCancel,
-  propertySettings 
+  propertySettings,
+  occupancyPercent,
+  bookedUnits,
+  availableUnits,
+  outOfService,
+  blockedDates
 }: ActivityTableProps) {
   const { t } = useTranslation('pages/dashboard/content');
   const [completedCheckIns, setCompletedCheckIns] = useState<Set<string>>(new Set());
@@ -49,6 +60,20 @@ export function ActivityTable({
   };
 
   return (
+    <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
+      {/* Occupancy Donut Chart - 1/6 width */}
+      <div className="lg:col-span-1">
+        <OccupancyDonutCard 
+          occupancyPercent={occupancyPercent}
+          bookedUnits={bookedUnits}
+          availableUnits={availableUnits}
+          outOfService={outOfService}
+          blockedDates={blockedDates}
+        />
+      </div>
+
+      {/* Activity Table - 5/6 width */}
+      <div className="lg:col-span-5">
     <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="flex border-b border-slate-100 bg-slate-50/30">
         <button onClick={() => setActivityTab('checkins')} className={`px-6 py-4 text-sm font-bold transition-all relative ${activityTab === 'checkins' ? 'text-[#003166]' : 'text-slate-400 hover:text-slate-600'}`}>
@@ -259,5 +284,7 @@ export function ActivityTable({
         )}
       </div>
     </section>
+      </div>
+    </div>
   );
 }

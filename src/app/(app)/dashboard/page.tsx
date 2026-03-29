@@ -493,6 +493,56 @@ export default function DashboardPage() {
     return { adr, revpar };
   }, [allReservations, dateRange, allRooms, dashboardMetrics]);
 
+  const occupancyDonutMetrics = useMemo(() => {
+    // Calculate today's occupancy metrics
+    const today = startOfDay(new Date());
+    const todayEnd = endOfDay(today);
+
+    let bookedUnits = new Set<string>();
+    let outOfServiceUnits = new Set<string>();
+    let blockedDatesCount = 0;
+
+    // Check active reservations for today
+    allReservations.forEach(res => {
+      const resStart = toDate(res.startDate);
+      const resEnd = toDate(res.endDate);
+      if (resStart && resEnd && startOfDay(resStart) <= today && startOfDay(resEnd) > today) {
+        if ((res.status === 'Confirmed' || res.status === 'Checked-in') && res.rooms) {
+          res.rooms.forEach(room => bookedUnits.add(room.roomId));
+        }
+      }
+    });
+
+    // Check availability blocks for today
+    availabilitySettings.forEach(setting => {
+      if (setting.status === 'blocked' && isWithinInterval(today, { start: parseISO(setting.startDate), end: parseISO(setting.endDate) })) {
+        if (setting.roomId) {
+          outOfServiceUnits.add(setting.roomId);
+          blockedDatesCount += 1;
+        } else if (setting.roomTypeId) {
+          allRooms.forEach(room => {
+            if (room.roomTypeId === setting.roomTypeId) {
+              outOfServiceUnits.add(room.id);
+            }
+          });
+          blockedDatesCount += 1;
+        }
+      }
+    });
+
+    const totalRooms = allRooms.length;
+    const availableUnits = totalRooms - bookedUnits.size - outOfServiceUnits.size;
+    const occupancyPercent = totalRooms > 0 ? Math.round((bookedUnits.size / totalRooms) * 100) : 0;
+
+    return {
+      occupancyPercent,
+      bookedUnits: bookedUnits.size,
+      availableUnits: Math.max(0, availableUnits),
+      outOfService: outOfServiceUnits.size,
+      blockedDates: blockedDatesCount
+    };
+  }, [allReservations, allRooms, availabilitySettings]);
+
   const handleCheckIn = async (reservation: Reservation) => {
     if (!propertyId || !reservation.rooms?.[0]?.roomId || !canManageReservations) return;
     try {
@@ -615,6 +665,11 @@ export default function DashboardPage() {
           onCheckOut={handleCheckOut}
           onCancel={handleViewReservationDetails}
           propertySettings={propertySettings}
+          occupancyPercent={occupancyDonutMetrics.occupancyPercent}
+          bookedUnits={occupancyDonutMetrics.bookedUnits}
+          availableUnits={occupancyDonutMetrics.availableUnits}
+          outOfService={occupancyDonutMetrics.outOfService}
+          blockedDates={occupancyDonutMetrics.blockedDates}
         />
         <RevenueAnalytics 
           chartPeriod={chartPeriod} 
