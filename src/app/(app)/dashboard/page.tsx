@@ -10,7 +10,6 @@ import { toDate } from '@/lib/dateUtils';
 import { History, UserPlus, Clock, ChevronRight } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import type { FirestoreUser } from '@/types/firestoreUser';
-import CheckAvailabilityCard from "@/components/dashboard/check-availability-card";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardMetrics } from "@/components/dashboard/DashboardMetrics";
 import { RevenueAnalytics } from "@/components/dashboard/RevenueAnalytics";
@@ -623,13 +622,6 @@ export default function DashboardPage() {
           propertySettings={propertySettings}
           propertyId={propertyId}
           dateRange={dateRange}
-          checkAvailabilityWidget={
-            <CheckAvailabilityCard
-              propertyId={propertyId}
-              propertySettings={propertySettings}
-              onBook={canManageReservations ? handleOpenReservationForm : undefined}
-            />
-          }
           housekeepingWidget={
             <DashboardSidebar 
               propertyId={propertyId}
