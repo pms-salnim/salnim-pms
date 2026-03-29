@@ -120,13 +120,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const refetchEmails = useCallback(async (isPolling = false) => {
-    if (!user || !property?.imapConfiguration) return;
-
-    const now = Date.now();
-    if (lastEmailSyncAt && now - lastEmailSyncAt < emailSyncCooldownMs) {
+    // ✅ Strict IMAP configuration check - don't fetch if not configured
+    if (!user || !property || !property.imapConfiguration) {
+      if (!isPolling) {
+        console.warn('Email fetch attempted without IMAP configuration');
+      }
       return;
     }
-    if (isSyncingEmails) return;
+
+    // ✅ Prevent concurrent requests - exit if already syncing
+    if (isSyncingEmails) {
+      console.debug('Email sync already in progress, skipping duplicate request');
+      return;
+    }
+
+    // ✅ Enforce cooldown between sync attempts
+    const now = Date.now();
+    if (lastEmailSyncAt && now - lastEmailSyncAt < emailSyncCooldownMs) {
+      if (!isPolling) {
+        console.debug(`Email sync cooldown active. Next sync available in ${Math.ceil((emailSyncCooldownMs - (now - lastEmailSyncAt)) / 1000)}s`);
+      }
+      return;
+    }
 
     setIsSyncingEmails(true);
     if (!isPolling) setIsLoadingEmails(true);
@@ -175,6 +190,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return newEmails;
       });
 
+      // ✅ Update last sync timestamp only on successful sync
+      setLastEmailSyncAt(Date.now());
+
     } catch (error: any) {
       if (!isPolling) {
         toast({ title: "Error Fetching Emails", description: error.message || "Could not retrieve emails.", variant: "destructive" });
@@ -185,7 +203,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsSyncingEmails(false);
       setInitialEmailFetchDone(true);
     }
-  }, [user, property?.imapConfiguration, lastEmailSyncAt, isSyncingEmails]);
+  }, [user, property?.imapConfiguration, lastEmailSyncAt, isSyncingEmails, property]);
 
 
   const fetchAndSetUser = async (firebaseUser: import('firebase/auth').User) => {
@@ -323,23 +341,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [user?.propertyId]);
 
-  // Background sync with cooldown (no IMAP call on load)
+  // ✅ Background sync with strict IMAP config check and cooldown (no IMAP call on load)
   useEffect(() => {
-    if (!user || !property?.imapConfiguration) return;
+    // Exit immediately if required conditions not met
+    if (!user || !property || !property.imapConfiguration) {
+      return;
+    }
 
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const timeoutId = setTimeout(() => {
       refetchEmails(true);
       intervalId = setInterval(() => {
         refetchEmails(true);
-      }, 5 * 60 * 1000);
-    }, 2 * 60 * 1000);
+      }, 5 * 60 * 1000); // Poll every 5 minutes
+    }, 2 * 60 * 1000); // Start polling after 2 minutes
 
     return () => {
       clearTimeout(timeoutId);
       if (intervalId) clearInterval(intervalId);
     };
-  }, [user, property?.imapConfiguration, refetchEmails]);
+  }, [user, property, refetchEmails]);
 
   // Internal Conversation Unread Count Effect
   useEffect(() => {
