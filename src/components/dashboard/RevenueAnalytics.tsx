@@ -360,14 +360,16 @@ export function RevenueAnalytics({ chartPeriod, setChartPeriod, propertySettings
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 space-y-6">
-          {/* Check Availability Widget */}
-          {checkAvailabilityWidget && checkAvailabilityWidget}
-        </div>
+      <div className="space-y-6">
+        {/* Check Availability Widget - Full Width */}
+        {checkAvailabilityWidget && (
+          <div>
+            {checkAvailabilityWidget}
+          </div>
+        )}
 
         {/* Sidebar: Housekeeping, Pending Payments, Performance, Channel Mix */}
-        <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Housekeeping Widget */}
         {housekeepingWidget && housekeepingWidget}
 
