@@ -543,6 +543,24 @@ export default function DashboardPage() {
     };
   }, [allReservations, allRooms, availabilitySettings]);
 
+  const channelMixMetrics = useMemo(() => {
+    // Calculate channel mix from all reservations
+    let direct = 0, ota = 0, walkIn = 0;
+
+    allReservations.forEach(res => {
+      if (res.source === 'Direct') direct += 1;
+      else if (res.source === 'OTA') ota += 1;
+      else if (res.source === 'Walk-in') walkIn += 1;
+    });
+
+    const total = direct + ota + walkIn;
+    return {
+      direct: total > 0 ? Number(((direct / total) * 100).toFixed(1)) : 0,
+      ota: total > 0 ? Number(((ota / total) * 100).toFixed(1)) : 0,
+      walkIn: total > 0 ? Number(((walkIn / total) * 100).toFixed(1)) : 0,
+    };
+  }, [allReservations]);
+
   const handleCheckIn = async (reservation: Reservation) => {
     if (!propertyId || !reservation.rooms?.[0]?.roomId || !canManageReservations) return;
     try {
@@ -670,6 +688,9 @@ export default function DashboardPage() {
           availableUnits={occupancyDonutMetrics.availableUnits}
           outOfService={occupancyDonutMetrics.outOfService}
           blockedDates={occupancyDonutMetrics.blockedDates}
+          channelDirect={channelMixMetrics.direct}
+          channelOta={channelMixMetrics.ota}
+          channelWalkIn={channelMixMetrics.walkIn}
         />
         <RevenueAnalytics 
           chartPeriod={chartPeriod} 

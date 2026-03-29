@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
 import { Icons } from "@/components/icons";
 import { OccupancyDonutCard } from "./OccupancyDonutCard";
+import { ChannelMixCard } from "./ChannelMixCard";
 
 interface ActivityTableProps {
   todaysArrivals: Reservation[];
@@ -27,6 +28,9 @@ interface ActivityTableProps {
   availableUnits: number;
   outOfService: number;
   blockedDates: number;
+  channelDirect: number;
+  channelOta: number;
+  channelWalkIn: number;
 }
 
 export function ActivityTable({ 
@@ -43,7 +47,10 @@ export function ActivityTable({
   bookedUnits,
   availableUnits,
   outOfService,
-  blockedDates
+  blockedDates,
+  channelDirect,
+  channelOta,
+  channelWalkIn
 }: ActivityTableProps) {
   const { t } = useTranslation('pages/dashboard/content');
   const [completedCheckIns, setCompletedCheckIns] = useState<Set<string>>(new Set());
@@ -61,7 +68,7 @@ export function ActivityTable({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
-      {/* Occupancy Donut Chart - 1/6 width */}
+      {/* Left Column - Occupancy & Channel Mix - 1/6 width */}
       <div className="lg:col-span-1">
         <OccupancyDonutCard 
           occupancyPercent={occupancyPercent}
@@ -69,6 +76,11 @@ export function ActivityTable({
           availableUnits={availableUnits}
           outOfService={outOfService}
           blockedDates={blockedDates}
+        />
+        <ChannelMixCard 
+          direct={channelDirect}
+          ota={channelOta}
+          walkIn={channelWalkIn}
         />
       </div>
 
