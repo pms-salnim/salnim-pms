@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { DollarSign, Filter, ArrowUpRight, TrendingUp as LucideTrendingUp, ChevronRight as LucideChevronRight, PieChart as LucidePieChart, AlertCircle } from 'lucide-react';
+import { DollarSign, Filter, ArrowUpRight, TrendingUp as LucideTrendingUp, ChevronRight as LucideChevronRight, AlertCircle } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import type { Property } from '@/types/property';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -60,12 +60,6 @@ export function RevenueAnalytics({ chartPeriod, setChartPeriod, propertySettings
     }
     return path;
   };
-
-  const [channelData, setChannelData] = useState({
-    direct: 0,
-    ota: 0,
-    walkIn: 0,
-  });
 
   const [yieldData, setYieldData] = useState({
     adr: 0,
@@ -187,33 +181,6 @@ export function RevenueAnalytics({ chartPeriod, setChartPeriod, propertySettings
 
     return { labels, revenueTrend, totalRevenue, revenueChangePercentage };
   }, [chartPeriod, allReservations, toDate]);
-
-  useEffect(() => {
-    if (!propertyId) return;
-
-    const fetchChannelData = async () => {
-      const snapshot = await getDocs(query(collection(db, 'reservations'), where('propertyId', '==', propertyId)));
-      const data = snapshot.docs.reduce(
-        (acc, doc) => {
-          const { source } = doc.data();
-          if (source === 'Direct') acc.direct += 1;
-          else if (source === 'OTA') acc.ota += 1;
-          else if (source === 'Walk-in') acc.walkIn += 1;
-          return acc;
-        },
-        { direct: 0, ota: 0, walkIn: 0 }
-      );
-
-      const total = data.direct + data.ota + data.walkIn;
-      setChannelData({
-        direct: total > 0 ? Number(((data.direct / total) * 100).toFixed(1)) : 0,
-        ota: total > 0 ? Number(((data.ota / total) * 100).toFixed(1)) : 0,
-        walkIn: total > 0 ? Number(((data.walkIn / total) * 100).toFixed(1)) : 0,
-      });
-    };
-
-    fetchChannelData();
-  }, [propertyId]);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -368,7 +335,7 @@ export function RevenueAnalytics({ chartPeriod, setChartPeriod, propertySettings
           </div>
         )}
 
-        {/* Sidebar: Housekeeping, Pending Payments, Performance, Channel Mix */}
+        {/* Sidebar: Housekeeping, Pending Payments, Performance */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Housekeeping Widget */}
         {housekeepingWidget && housekeepingWidget}
@@ -420,33 +387,6 @@ export function RevenueAnalytics({ chartPeriod, setChartPeriod, propertySettings
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-4"><LucidePieChart size={18} style={{ color: '#003166' }} /><h2 className="text-sm font-bold text-slate-800">Channel Mix</h2></div>
-          <div className="flex items-center gap-6">
-            <div className="relative w-20 h-20">
-              <svg viewBox="0 0 36 36" className="w-full h-full">
-                <circle cx="18" cy="18" r="16" fill="none" stroke="#eee" strokeWidth="4"></circle>
-                <circle cx="18" cy="18" r="16" fill="none" stroke="#003166" strokeWidth="4" strokeDasharray={`${channelData.direct} 100`}></circle>
-                <circle cx="18" cy="18" r="16" fill="none" stroke="#3b82f6" strokeWidth="4" strokeDasharray={`${channelData.ota} 100`} strokeDashoffset={`-${channelData.direct}`}></circle>
-                <circle cx="18" cy="18" r="16" fill="none" stroke="#fbbf24" strokeWidth="4" strokeDasharray={`${channelData.walkIn} 100`} strokeDashoffset={`-${channelData.direct + channelData.ota}`}></circle>
-              </svg>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#003166]"></div>
-                <span className="text-[10px] font-bold">Direct ({channelData.direct}%)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
-                <span className="text-[10px] font-bold">OTA ({channelData.ota}%)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
-                <span className="text-[10px] font-bold">Walk-in ({channelData.walkIn}%)</span>
-              </div>
-            </div>
-          </div>
-        </div>
         </div>
       </div>
     </>

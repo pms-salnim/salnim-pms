@@ -24,7 +24,7 @@ export function ChannelMixCard({
         <h2 className="text-sm font-bold text-slate-800">Channel Mix</h2>
       </div>
       
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4">
         <div className="relative w-20 h-20">
           <svg viewBox="0 0 36 36" className="w-full h-full">
             <circle cx="18" cy="18" r="16" fill="none" stroke="#eee" strokeWidth="4"></circle>
