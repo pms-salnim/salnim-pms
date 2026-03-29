@@ -163,15 +163,23 @@ export default function CommunicationHubPage() {
   }, [activeView, emails, currentPage, itemsPerPage, searchQuery, filterUnread, filterStarred, filterAttachments]);
 
   useEffect(() => {
-    // This effect runs once when the component mounts to do the initial fetch.
+    // This effect runs once when the component mounts.
+    // Just track when IMAP configuration is available
     if (!initialFetchDone && user?.propertyId && property?.imapConfiguration) {
       setInitialFetchDone(true);
     }
-  }, [user, property, initialFetchDone, refetchEmails]);
+  }, [user, property, initialFetchDone]);
 
   const emailSyncCooldownMs = 2 * 60 * 1000;
   const isEmailSyncOnCooldown = lastEmailSyncAt ? (Date.now() - lastEmailSyncAt) < emailSyncCooldownMs : false;
   const lastSyncLabel = lastEmailSyncAt ? format(new Date(lastEmailSyncAt), 'PPp') : 'Never';
+
+  // ✅ Safe wrapper for refetchEmails - only calls if IMAP configured
+  const safeRefetchEmails = useCallback(() => {
+    if (property?.imapConfiguration) {
+      refetchEmails();
+    }
+  }, [property?.imapConfiguration, refetchEmails]);
 
 
   const handleTestSmtpConnection = async (settingsToTest: any) => {
@@ -351,7 +359,7 @@ export default function CommunicationHubPage() {
           },
           body: JSON.stringify({ messageUid: emailToSelect.uid })
         });
-            refetchEmails();
+            safeRefetchEmails();
         } catch (error: any) {
             console.error("Failed to mark email as read on server:", error);
             toast({
@@ -417,7 +425,7 @@ export default function CommunicationHubPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => refetchEmails()}
+                      onClick={() => safeRefetchEmails()}
                       disabled={isLoadingEmails || isSyncingEmails || isEmailSyncOnCooldown}
                     >
                       {(isLoadingEmails || isSyncingEmails) ? <Icons.Spinner className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -486,7 +494,7 @@ export default function CommunicationHubPage() {
                         <p className="text-muted-foreground">
                             {activeView === 'inbox_all' || activeView === 'channel_email' ? t('views.inbox_empty') : t('views.inbox_unread_empty')}
                         </p>
-                        {(activeView === 'inbox_all' || activeView === 'channel_email') && <Button variant="link" onClick={() => refetchEmails()}>{t('views.fetch_now_button')}</Button>}
+                        {(activeView === 'inbox_all' || activeView === 'channel_email') && <Button variant="link" onClick={() => safeRefetchEmails()}>{t('views.fetch_now_button')}</Button>}
                      </div>
                 )}
             </div>
@@ -749,7 +757,7 @@ export default function CommunicationHubPage() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => refetchEmails()}
+                      onClick={() => safeRefetchEmails()}
                       disabled={isLoadingEmails || isSyncingEmails || isEmailSyncOnCooldown}
                     >
                       {(isLoadingEmails || isSyncingEmails) ? <Icons.Spinner className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}

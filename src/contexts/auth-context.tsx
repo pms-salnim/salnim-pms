@@ -194,10 +194,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLastEmailSyncAt(Date.now());
 
     } catch (error: any) {
-      if (!isPolling) {
+      // ✅ Don't log or show errors if IMAP not configured (expected case)
+      if (!property?.imapConfiguration) {
+        // Silent fail for unconfigured IMAP
+      } else if (!isPolling) {
+        // Only show toast for user-initiated fetches, not background polling
         toast({ title: "Error Fetching Emails", description: error.message || "Could not retrieve emails.", variant: "destructive" });
+        console.error("Email fetch failed:", error);
+      } else {
+        // Background polling - log but don't show to user
+        console.debug("Background email sync failed:", error.message);
       }
-      console.error("Email fetch failed:", error);
     } finally {
       if (!isPolling) setIsLoadingEmails(false);
       setIsSyncingEmails(false);
@@ -350,6 +357,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const timeoutId = setTimeout(() => {
+      // Call refetchEmails(true) directly without adding to dependency array
       refetchEmails(true);
       intervalId = setInterval(() => {
         refetchEmails(true);
@@ -360,7 +368,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       clearTimeout(timeoutId);
       if (intervalId) clearInterval(intervalId);
     };
-  }, [user, property, refetchEmails]);
+    // Note: Intentionally excluding refetchEmails from deps to prevent effect restarts
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, property]);
 
   // Internal Conversation Unread Count Effect
   useEffect(() => {
