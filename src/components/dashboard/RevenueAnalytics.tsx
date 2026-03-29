@@ -336,52 +336,68 @@ export function RevenueAnalytics({ chartPeriod, setChartPeriod, propertySettings
         )}
 
         {/* Sidebar: Housekeeping, Pending Payments, Performance */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Housekeeping Widget */}
         {housekeepingWidget && housekeepingWidget}
 
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-amber-200 flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertCircle size={18} style={{ color: '#f59e0b' }} />
-            <h2 className="text-sm font-bold text-slate-800">Pending Payments</h2>
+        <div className="bg-gradient-to-br from-amber-50 to-white rounded-xl p-6 shadow-sm border border-amber-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <AlertCircle size={18} style={{ color: '#f59e0b' }} />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-800">Pending Payments</h2>
+                <p className="text-[9px] text-slate-400 font-medium">Outstanding balance</p>
+              </div>
+            </div>
           </div>
           <div className="space-y-3">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black tracking-tighter text-amber-600">
+            <div>
+              <span className="text-4xl font-black tracking-tighter text-amber-600">
                 {propertySettings?.currency || '$'}{pendingPayments.totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
-            <p className="text-[10px] text-slate-500 font-medium">
-              {pendingPayments.count} {pendingPayments.count === 1 ? 'reservation' : 'reservations'} with outstanding balance
-            </p>
+            <div className="flex items-center justify-between pt-2 border-t border-amber-100">
+              <p className="text-[10px] text-slate-500 font-medium">
+                {pendingPayments.count} {pendingPayments.count === 1 ? 'reservation' : 'reservations'}
+              </p>
+              <div className="px-2.5 py-1 bg-amber-100 rounded text-[10px] font-bold text-amber-700">
+                Action needed
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 flex flex-col justify-between">
-          <div className="flex flex-col gap-1 mb-4">
+        <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <LucideTrendingUp size={18} style={{ color: '#003166' }} />
-              <h2 className="text-sm font-bold text-slate-800">Performance</h2>
-            </div>
-            <p className="text-[9px] text-slate-400 font-medium">Based on stayed nights</p>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">ADR</p>
-              <div className="flex items-center justify-between">
-                <span className="text-l font-bold">{propertySettings?.currency || '$'}{yieldData.adr.toFixed(2)}</span>
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <LucideTrendingUp size={18} style={{ color: '#003166' }} />
               </div>
-              <p className={`text-[9px] font-bold ${yieldData.adrChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {yieldData.adrChange >= 0 ? '+' : ''}{propertySettings?.currency || '$'}{Math.abs(yieldData.adrChange).toFixed(2)} vs yesterday
+              <div>
+                <h2 className="text-sm font-bold text-slate-800">Performance</h2>
+                <p className="text-[9px] text-slate-400 font-medium">Based on stayed nights</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ADR</p>
+                <span className="text-2xl font-black text-slate-800">{propertySettings?.currency || '$'}{yieldData.adr.toFixed(2)}</span>
+              </div>
+              <p className={`text-[10px] font-bold px-2 py-1 rounded ${yieldData.adrChange >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                {yieldData.adrChange >= 0 ? '↑' : '↓'} {Math.abs(yieldData.adrChange).toFixed(2)}
               </p>
             </div>
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">RevPAR</p>
-              <div className="flex items-center justify-between">
-                <span className="text-l font-bold">{propertySettings?.currency || '$'}{yieldData.revpar.toFixed(2)}</span>
+            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">RevPAR</p>
+                <span className="text-2xl font-black text-slate-800">{propertySettings?.currency || '$'}{yieldData.revpar.toFixed(2)}</span>
               </div>
-              <p className={`text-[9px] font-bold ${yieldData.revparChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {yieldData.revparChange >= 0 ? '+' : ''}{Math.abs(yieldData.revparChange).toFixed(1)}% vs yesterday
+              <p className={`text-[10px] font-bold px-2 py-1 rounded ${yieldData.revparChange >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                {yieldData.revparChange >= 0 ? '↑' : '↓'} {Math.abs(yieldData.revparChange).toFixed(1)}%
               </p>
             </div>
           </div>

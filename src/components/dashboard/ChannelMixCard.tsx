@@ -17,37 +17,43 @@ export function ChannelMixCard({
 }: ChannelMixCardProps) {
   const { t } = useTranslation('pages/dashboard/content');
 
+  const channels = [
+    { name: 'Direct', value: direct, color: '#003166' },
+    { name: 'OTA', value: ota, color: '#3b82f6' },
+    { name: 'Walk-in', value: walkIn, color: '#fbbf24' },
+  ];
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
       <div className="flex items-center gap-2 mb-3">
-        <LucidePieChart size={18} style={{ color: '#003166' }} />
-        <h2 className="text-sm font-bold text-slate-800">Channel Mix</h2>
+        
+        <h2 className="text-sm font-bold text-slate-800">Booking Source</h2>
       </div>
       
-      <div className="flex flex-col items-center gap-3">
-        <div className="relative w-20 h-20">
-          <svg viewBox="0 0 36 36" className="w-full h-full">
-            <circle cx="18" cy="18" r="16" fill="none" stroke="#eee" strokeWidth="4"></circle>
-            <circle cx="18" cy="18" r="16" fill="none" stroke="#003166" strokeWidth="4" strokeDasharray={`${direct} 100`}></circle>
-            <circle cx="18" cy="18" r="16" fill="none" stroke="#3b82f6" strokeWidth="4" strokeDasharray={`${ota} 100`} strokeDashoffset={`-${direct}`}></circle>
-            <circle cx="18" cy="18" r="16" fill="none" stroke="#fbbf24" strokeWidth="4" strokeDasharray={`${walkIn} 100`} strokeDashoffset={`-${direct + ota}`}></circle>
-          </svg>
-        </div>
-        
-        <div className="w-full space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[#003166]"></div>
-            <span className="text-[9px] font-bold">Direct ({direct}%)</span>
+      <div className="space-y-2.5">
+        {channels.map((channel) => (
+          <div key={channel.name} className="space-y-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-2.5 h-2.5 rounded-full" 
+                  style={{ backgroundColor: channel.color }}
+                ></div>
+                <span className="text-[9px] font-semibold text-slate-700">{channel.name}</span>
+              </div>
+              <span className="text-sm font-bold text-slate-800">{channel.value}%</span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${channel.value}%`,
+                  backgroundColor: channel.color,
+                }}
+              ></div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-            <span className="text-[9px] font-bold">OTA ({ota}%)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-            <span className="text-[9px] font-bold">Walk-in ({walkIn}%)</span>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
