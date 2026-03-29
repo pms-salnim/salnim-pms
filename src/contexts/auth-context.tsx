@@ -120,97 +120,101 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const refetchEmails = useCallback(async (isPolling = false) => {
-    // ✅ Strict IMAP configuration check - don't fetch if not configured
-    if (!user || !property || !property.imapConfiguration) {
-      if (!isPolling) {
-        console.warn('Email fetch attempted without IMAP configuration');
-      }
-      return;
-    }
-
-    // ✅ Prevent concurrent requests - exit if already syncing
-    if (isSyncingEmails) {
-      console.debug('Email sync already in progress, skipping duplicate request');
-      return;
-    }
-
-    // ✅ Enforce cooldown between sync attempts
-    const now = Date.now();
-    if (lastEmailSyncAt && now - lastEmailSyncAt < emailSyncCooldownMs) {
-      if (!isPolling) {
-        console.debug(`Email sync cooldown active. Next sync available in ${Math.ceil((emailSyncCooldownMs - (now - lastEmailSyncAt)) / 1000)}s`);
-      }
-      return;
-    }
-
-    setIsSyncingEmails(true);
-    if (!isPolling) setIsLoadingEmails(true);
-
     try {
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) {
-        throw new Error("Unauthenticated: could not retrieve ID token");
-      }
-
-      // Use the Cloud Run function URL for Gen2 HTTP functions
-      const endpoint = 'https://europe-west1-protrack-hub.cloudfunctions.net/fetchEmailsHttp';
-
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ mode: 'sync', maxNew: 200 }),
-      }).catch(err => {
-        console.error('Fetch error:', err);
-        throw new Error('Network error: Unable to connect to email server');
-      });
-
-      if (!resp.ok) {
-        let message = 'Failed to fetch emails';
-        try {
-          const err = await resp.json();
-          message = err?.message || message;
-        } catch (_) {
-          message = `Server error: ${resp.status} ${resp.statusText}`;
+      // ✅ Strict IMAP configuration check - don't fetch if not configured
+      if (!user || !property || !property.imapConfiguration) {
+        if (!isPolling) {
+          console.debug('Email fetch skipped: IMAP not configured');
         }
-        throw new Error(message);
+        return;
       }
 
-      const newEmails: Email[] = await resp.json();
-      setEmails(currentEmails => {
-        if (isPolling) {
-          const currentUids = new Set(currentEmails.map(e => e.uid));
-          const hasNew = newEmails.some(e => !currentUids.has(e.uid) && e.unread);
-          if (hasNew) {
-            toast({ title: "New Mail", description: "You have new messages in your inbox." });
+      // ✅ Prevent concurrent requests - exit if already syncing
+      if (isSyncingEmails) {
+        console.debug('Email sync already in progress, skipping duplicate request');
+        return;
+      }
+
+      // ✅ Enforce cooldown between sync attempts
+      const now = Date.now();
+      if (lastEmailSyncAt && now - lastEmailSyncAt < emailSyncCooldownMs) {
+        if (!isPolling) {
+          console.debug(`Email sync cooldown active. Next sync available in ${Math.ceil((emailSyncCooldownMs - (now - lastEmailSyncAt)) / 1000)}s`);
+        }
+        return;
+      }
+
+      setIsSyncingEmails(true);
+      if (!isPolling) setIsLoadingEmails(true);
+
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        if (!idToken) {
+          throw new Error("Unauthenticated: could not retrieve ID token");
+        }
+
+        // Use the Cloud Run function URL for Gen2 HTTP functions
+        const endpoint = 'https://europe-west1-protrack-hub.cloudfunctions.net/fetchEmailsHttp';
+
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ mode: 'sync', maxNew: 200 }),
+        }).catch(err => {
+          console.error('Fetch error:', err);
+          throw new Error('Network error: Unable to connect to email server');
+        });
+
+        if (!resp.ok) {
+          let message = 'Failed to fetch emails';
+          try {
+            const err = await resp.json();
+            message = err?.message || message;
+          } catch (_) {
+            message = `Server error: ${resp.status} ${resp.statusText}`;
           }
+          throw new Error(message);
         }
-        return newEmails;
-      });
 
-      // ✅ Update last sync timestamp only on successful sync
-      setLastEmailSyncAt(Date.now());
+        const newEmails: Email[] = await resp.json();
+        setEmails(currentEmails => {
+          if (isPolling) {
+            const currentUids = new Set(currentEmails.map(e => e.uid));
+            const hasNew = newEmails.some(e => !currentUids.has(e.uid) && e.unread);
+            if (hasNew) {
+              toast({ title: "New Mail", description: "You have new messages in your inbox." });
+            }
+          }
+          return newEmails;
+        });
 
-    } catch (error: any) {
-      // ✅ Don't log or show errors if IMAP not configured (expected case)
-      if (!property?.imapConfiguration) {
-        // Silent fail for unconfigured IMAP
-      } else if (!isPolling) {
-        // Only show toast for user-initiated fetches, not background polling
-        toast({ title: "Error Fetching Emails", description: error.message || "Could not retrieve emails.", variant: "destructive" });
-        console.error("Email fetch failed:", error);
-      } else {
-        // Background polling - log but don't show to user
-        console.debug("Background email sync failed:", error.message);
+        // ✅ Update last sync timestamp only on successful sync
+        setLastEmailSyncAt(Date.now());
+
+      } catch (fetchError: any) {
+        // ✅ Only show errors for user-initiated fetches, not background polling
+        if (!isPolling && property?.imapConfiguration) {
+          toast({ title: "Error Fetching Emails", description: fetchError.message || "Could not retrieve emails.", variant: "destructive" });
+          console.error("Email fetch failed:", fetchError);
+        } else if (isPolling) {
+          console.debug("Background email sync failed:", fetchError.message);
+        }
+      } finally {
+        if (!isPolling) setIsLoadingEmails(false);
+        setIsSyncingEmails(false);
+        setInitialEmailFetchDone(true);
       }
-    } finally {
-      if (!isPolling) setIsLoadingEmails(false);
+    } catch (outerError: any) {
+      // ✅ Blanket catch to prevent ANY unhandled errors from escaping
+      console.debug('Email fetch wrapper caught error:', outerError?.message);
       setIsSyncingEmails(false);
+      if (!isPolling) setIsLoadingEmails(false);
       setInitialEmailFetchDone(true);
     }
-  }, [user, property?.imapConfiguration, lastEmailSyncAt, isSyncingEmails, property]);
+  }, [user, property, lastEmailSyncAt, isSyncingEmails]);
 
 
   const fetchAndSetUser = async (firebaseUser: import('firebase/auth').User) => {
