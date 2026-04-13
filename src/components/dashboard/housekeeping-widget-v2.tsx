@@ -76,61 +76,31 @@ export default function HousekeepingWidgetV2({ propertyId, propertySettings }: H
   }, [propertyId]);
 
   return (
-    <section className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-5">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: BRAND_COLOR }}></div>
-          <h2 className="text-sm font-bold text-slate-800">Housekeeping Dashboard</h2>
-        </div>
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="text-xs h-7"
-        >
-          <Link href="/housekeeping/operations-dashboard">
-            View All
-          </Link>
-        </Button>
+    <section className="bg-white rounded-xl shadow-sm border border-emerald-200 overflow-hidden hover:shadow-md transition-shadow">
+      {/* Compact Header */}
+      <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2">
+        <h2 className="text-xs font-bold text-white">Housekeeping</h2>
       </div>
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      {/* Compact Metric Cards */}
+      <div className="px-3 py-3 grid grid-cols-3 gap-2">
         {/* Clean Card */}
-        <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
-          <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wide">Clean</p>
-          <p className="text-2xl font-bold text-emerald-700 mt-1">{stats.cleanRooms}</p>
-          <p className="text-[9px] text-emerald-500 mt-0.5">Ready</p>
+        <div className="bg-white border border-emerald-200 rounded p-2 text-center">
+          <p className="text-2xl font-black text-emerald-700">{stats.cleanRooms}</p>
+          <p className="text-[8px] text-emerald-600 font-semibold mt-1">Clean</p>
         </div>
         
         {/* Dirty Card */}
-        <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-          <p className="text-[10px] text-yellow-700 font-semibold uppercase tracking-wide">Dirty</p>
-          <p className="text-2xl font-bold text-yellow-700 mt-1">{stats.dirtyRooms}</p>
-          <p className="text-[9px] text-yellow-600 mt-0.5">Need Clean</p>
+        <div className="bg-white border border-amber-200 rounded p-2 text-center">
+          <p className="text-2xl font-black text-amber-700">{stats.dirtyRooms}</p>
+          <p className="text-[8px] text-amber-600 font-semibold mt-1">Dirty</p>
         </div>
         
         {/* In Progress Card */}
-        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-          <p className="text-[10px] text-blue-600 font-semibold uppercase tracking-wide">Progress</p>
-          <p className="text-2xl font-bold text-blue-700 mt-1">{stats.inProgressRooms}</p>
-          <p className="text-[9px] text-blue-500 mt-0.5">Cleaning</p>
+        <div className="bg-white border border-blue-200 rounded p-2 text-center">
+          <p className="text-2xl font-black text-blue-700">{stats.inProgressRooms}</p>
+          <p className="text-[8px] text-blue-600 font-semibold mt-1">In Progress</p>
         </div>
-      </div>
-
-      {/* Footer Action */}
-      <div className="pt-4">
-        <Button
-          asChild
-          size="sm"
-          className="w-full text-xs h-8"
-          style={{ backgroundColor: BRAND_COLOR }}
-        >
-          <Link href="/housekeeping/attendant-worksheets">
-            Manage Housekeeping
-          </Link>
-        </Button>
       </div>
     </section>
   );

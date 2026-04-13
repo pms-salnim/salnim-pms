@@ -36,8 +36,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle, Trash2, Grid3X3, List, Settings2 } from "lucide-react";
 import { Icons } from "@/components/icons";
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch, type Timestamp, getDocs } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
 import type { Room, RoomStatus } from '@/types/room';
 import { roomStatuses } from '@/types/room';
@@ -60,6 +59,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 interface RoomsListProps {
   propertyId: string;
 }
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 export default function RoomsList({ propertyId }: RoomsListProps) {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -125,6 +130,26 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
   const [itemsPerPage, setItemsPerPage] = useState(12);
   const [enableVirtualScroll, setEnableVirtualScroll] = useState(false);
 
+  // Helper function to transform API response to RoomType format
+  // API returns data in camelCase from /api/rooms/room-types/list
+  const transformRoomTypesResponse = (roomTypesData: any[]): RoomType[] => {
+    return (roomTypesData || []).map((rt: any) => {
+      return {
+        id: rt.id,
+        name: rt.name,
+        maxGuests: rt.maxGuests,
+        description: rt.description,
+        propertyId: rt.propertyId,
+        numberOfRoomsAvailable: rt.numberOfRoomsAvailable || null,
+        assignedRoomNumbers: rt.assignedRoomNumbers || [],
+        selectedAmenities: rt.selectedAmenities || [],
+        beds: rt.beds || [],
+        thumbnailImageUrl: rt.thumbnailImageUrl || '',
+        galleryImageUrls: rt.galleryImageUrls || [],
+        createdAt: new Date(rt.createdAt),
+      };
+    });
+  };
 
   useEffect(() => {
     if (!propertyId) {
@@ -137,49 +162,54 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
 
     setIsLoading(true);
 
-    const roomTypesColRef = collection(db, "roomTypes");
-    const rtq = query(roomTypesColRef, where("propertyId", "==", propertyId));
-    const unsubRoomTypes = onSnapshot(rtq, (snapshot) => {
-      setRoomTypes(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as RoomType)));
-    });
+    const loadRoomsData = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          console.error('Not authenticated');
+          setIsLoading(false);
+          return;
+        }
 
-    const roomsColRef = collection(db, "rooms");
-    const rq = query(roomsColRef, where("propertyId", "==", propertyId));
-    const unsubRooms = onSnapshot(rq, (snapshot) => {
-      setRooms(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Room)));
-    });
+        // Fetch room types
+        const rtResponse = await fetch(
+          `/api/rooms/room-types/list?propertyId=${propertyId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+        if (rtResponse.ok) {
+          const data = await rtResponse.json();
+          const transformed = transformRoomTypesResponse(data.roomTypes);
+          setRoomTypes(transformed);
+        }
 
-    const reservationsColRef = collection(db, "reservations");
-    const resq = query(reservationsColRef, where("propertyId", "==", propertyId));
-    const unsubReservations = onSnapshot(resq, (snapshot) => {
-        const fetchedReservations = snapshot.docs.map(docSnap => {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                ...data,
-                startDate: (data.startDate as Timestamp).toDate(),
-                endDate: (data.endDate as Timestamp).toDate(),
-            } as Reservation;
-        });
-        setReservations(fetchedReservations);
-    });
-
-    const propDocRef = doc(db, "properties", propertyId);
-    const unsubProp = onSnapshot(propDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setPropertySettings(docSnap.data() as Property);
-      } else {
-        setPropertySettings(null);
+        // Fetch rooms
+        const rResponse = await fetch(
+          `/api/rooms/list?propertyId=${propertyId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+        if (rResponse.ok) {
+          const data = await rResponse.json();
+          setRooms(data.rooms || []);
+        }
+      } catch (error) {
+        console.error("Error fetching rooms data:", error);
+        toast({ title: "Error", description: "Could not fetch rooms data.", variant: "destructive" });
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false); 
-    });
-
-    return () => {
-      unsubRoomTypes();
-      unsubRooms();
-      unsubReservations();
-      unsubProp();
     };
+
+    loadRoomsData();
   }, [propertyId]);
 
   const occupancyStatusMap = useMemo(() => {
@@ -267,72 +297,117 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
     event.preventDefault();
     setIsLoading(true);
 
-    if (editingRoom) {
-      // --- SINGLE EDIT LOGIC ---
-      if (!propertyId || !roomName || !selectedRoomTypeId) {
-        toast({ title: t('toasts.validation_error.title'), description: t('toasts.validation_error.single_edit_description'), variant: "destructive" });
-        setIsLoading(false);
-        return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Not authenticated');
       }
-      
-      const roomDataPayload: { [key: string]: any } = {
-        name: roomName.trim(),
-        roomTypeId: selectedRoomTypeId,
-        amenities: amenities.split(',').map(a => a.trim()).filter(a => a),
-        propertyId,
-      };
-      
-      // Note: We are not updating 'status' here. That is for housekeeping.
 
-      if (floor.trim()) roomDataPayload.floor = floor.trim();
-      if (notes.trim()) roomDataPayload.notes = notes.trim();
+      if (editingRoom) {
+        // --- SINGLE EDIT LOGIC ---
+        if (!propertyId || !roomName || !selectedRoomTypeId) {
+          toast({ title: t('toasts.validation_error.title'), description: t('toasts.validation_error.single_edit_description'), variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+        
+        const response = await fetch('/api/rooms/crud', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+          body: JSON.stringify({
+            action: 'update',
+            propertyId,
+            roomId: editingRoom.id,
+            name: roomName.trim(),
+            floor: floor.trim() || null,
+            status: editingRoom.status,
+            notes: notes.trim() || '',
+          }),
+        });
 
-      try {
-        const docRef = doc(db, "rooms", editingRoom.id);
-        await updateDoc(docRef, { ...roomDataPayload, updatedAt: serverTimestamp() });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+
         toast({ title: t('toasts.success_title'), description: t('toasts.update_success_description') });
         setIsModalOpen(false);
         resetForm();
-      } catch (error) {
-        console.error("Error updating room:", error);
-        toast({ title: t('toasts.error_title'), description: t('toasts.update_error_description'), variant: "destructive" });
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      // --- BULK CREATE LOGIC ---
-      if (!propertyId || selectedRoomNames.length === 0 || !selectedRoomTypeId) {
-        toast({ title: t('toasts.validation_error.title'), description: t('toasts.validation_error.bulk_create_description'), variant: "destructive" });
-        setIsLoading(false);
-        return;
-      }
 
-      try {
-        const batch = writeBatch(db);
-        selectedRoomNames.forEach(name => {
-          const newRoomRef = doc(collection(db, "rooms"));
-          const roomDataPayload: { [key: string]: any } = {
-            name: name.trim(),
-            roomTypeId: selectedRoomTypeId,
-            status: "Available", // New rooms default to Available
-            propertyId,
-            createdAt: serverTimestamp(),
-          };
-          if (floor.trim()) roomDataPayload.floor = floor.trim();
-          if (notes.trim()) roomDataPayload.notes = notes.trim();
-          if (amenities.trim()) roomDataPayload.amenities = amenities.split(',').map(a => a.trim()).filter(a => a);
-          batch.set(newRoomRef, roomDataPayload);
-        });
-        await batch.commit();
+        // Reload rooms
+        const listResponse = await fetch(
+          `/api/rooms/list?propertyId=${propertyId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+        if (listResponse.ok) {
+          const data = await listResponse.json();
+          setRooms(data.rooms || []);
+        }
+      } else {
+        // --- BULK CREATE LOGIC ---
+        if (!propertyId || selectedRoomNames.length === 0 || !selectedRoomTypeId) {
+          toast({ title: t('toasts.validation_error.title'), description: t('toasts.validation_error.bulk_create_description'), variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+
+        // Create rooms one by one (or batch if API supports it in the future)
+        for (const name of selectedRoomNames) {
+          const response = await fetch('/api/rooms/crud', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+            body: JSON.stringify({
+              action: 'create',
+              propertyId,
+              roomTypeId: selectedRoomTypeId,
+              name: name.trim(),
+              floor: floor.trim() || null,
+              status: 'Available',
+              notes: notes.trim() || '',
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+          }
+        }
+
         toast({ title: t('toasts.success_title'), description: t('toasts.create_success_description', { count: selectedRoomNames.length }) });
         setIsModalOpen(false);
         resetForm();
-      } catch (error) {
-        console.error("Error saving rooms:", error);
-        toast({ title: t('toasts.error_title'), description: t('toasts.create_error_description'), variant: "destructive" });
-      } finally {
-        setIsLoading(false);
+
+        // Reload rooms
+        const listResponse = await fetch(
+          `/api/rooms/list?propertyId=${propertyId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+        if (listResponse.ok) {
+          const data = await listResponse.json();
+          setRooms(data.rooms || []);
+        }
       }
+    } catch (error: any) {
+      console.error("Error saving rooms:", error);
+      toast({ title: t('toasts.error_title'), description: error.message || t('toasts.create_error_description'), variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -345,38 +420,55 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
     setSelectedRoomForDetails(room);
     setIsDetailsModalOpen(true);
 
-    // Fetch recent reservations for this room
-    const resQuery = query(
-      collection(db, 'reservations'),
-      where('roomId', '==', room.id),
-      where('propertyId', '==', propertyId || '')
-    );
-    const resSnapshot = await getDocs(resQuery);
-    const reservations = resSnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        startDate: data.startDate?.toDate ? data.startDate.toDate() : new Date(data.startDate),
-        endDate: data.endDate?.toDate ? data.endDate.toDate() : new Date(data.endDate),
-      } as Reservation;
-    }).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-    
-    setRoomReservations(reservations);
+    // Fetch recent reservations for this room from Supabase
+    try {
+      const { data: reservationsData, error: resError } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('room_id', room.id)
+        .eq('property_id', propertyId || '')
+        .order('start_date', { ascending: false });
+
+      if (!resError && reservationsData) {
+        const formattedReservations = reservationsData.map((res: any) => ({
+          id: res.id,
+          ...res,
+          roomId: res.room_id,
+          propertyId: res.property_id,
+          startDate: new Date(res.start_date),
+          endDate: new Date(res.end_date),
+        })) as Reservation[];
+        setRoomReservations(formattedReservations);
+      } else {
+        setRoomReservations([]);
+      }
+    } catch (error) {
+      console.error('Error fetching reservations:', error);
+      setRoomReservations([]);
+    }
 
     // Fetch maintenance logs if they exist
-    const maintenanceQuery = query(
-      collection(db, 'maintenanceLogs'),
-      where('roomId', '==', room.id)
-    );
-    const maintenanceSnapshot = await getDocs(maintenanceQuery);
-    const logs = maintenanceSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.() || new Date(doc.data().createdAt),
-    })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    setRoomMaintenanceLogs(logs);
+    try {
+      const { data: logsData, error: logsError } = await supabase
+        .from('maintenance_logs')
+        .select('*')
+        .eq('room_id', room.id)
+        .order('created_at', { ascending: false });
+
+      if (!logsError && logsData) {
+        const formattedLogs = logsData.map((log: any) => ({
+          id: log.id,
+          ...log,
+          createdAt: new Date(log.created_at),
+        }));
+        setRoomMaintenanceLogs(formattedLogs);
+      } else {
+        setRoomMaintenanceLogs([]);
+      }
+    } catch (error) {
+      console.error('Error fetching maintenance logs:', error);
+      setRoomMaintenanceLogs([]);
+    }
   };
 
   const handleOpenTimeline = async (room: Room) => {
@@ -426,9 +518,46 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
     if (!roomToDelete) return;
     setIsLoading(true);
     try {
-      await deleteDoc(doc(db, "rooms", roomToDelete.id));
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/rooms/crud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'delete',
+          propertyId,
+          roomId: roomToDelete.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
       toast({ title: t('toasts.success_title'), description: t('toasts.delete_success_description') });
-    } catch (error) {
+
+      // Reload rooms
+      const listResponse = await fetch(
+        `/api/rooms/list?propertyId=${propertyId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        }
+      );
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setRooms(data.rooms || []);
+      }
+    } catch (error: any) {
       console.error("Error deleting room:", error);
       toast({ title: t('toasts.error_title'), description: t('toasts.delete_error_description'), variant: "destructive" });
     } finally {
@@ -485,21 +614,55 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
     }
       
     setIsLoading(true);
-    const batch = writeBatch(db);
-    selectedRoomIds.forEach(id => {
-        const roomRef = doc(db, "rooms", id);
-        batch.update(roomRef, { ...updates, updatedAt: serverTimestamp() });
-    });
-
     try {
-        await batch.commit();
-        toast({ title: t('toasts.success_title'), description: t('toasts.bulk_update_success_description', { count: selectedRoomIds.size }) });
-        setSelectedRoomIds(new Set());
-        setIsBulkEditModalOpen(false);
-        setBulkEditFloor('');
-        setBulkEditAmenities('');
-        setBulkEditNotes('');
-        setBulkEditCleaningStatus('no-change');
+      // Get session and token
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
+      }
+
+      // Call bulk-update API endpoint
+      const response = await fetch('/api/rooms/crud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'bulk-update',
+          propertyId: userProperty?.id,
+          roomIds: Array.from(selectedRoomIds),
+          updates,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to bulk update rooms');
+      }
+
+      toast({ title: t('toasts.success_title'), description: t('toasts.bulk_update_success_description', { count: selectedRoomIds.size }) });
+      
+      // Reset form and reload rooms list
+      setSelectedRoomIds(new Set());
+      setIsBulkEditModalOpen(false);
+      setBulkEditFloor('');
+      setBulkEditAmenities('');
+      setBulkEditNotes('');
+      setBulkEditCleaningStatus('no-change');
+      
+      // Reload rooms list
+      const listResponse = await fetch(`/api/rooms/list?propertyId=${userProperty?.id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setRooms(data.rooms || []);
+      }
     } catch (error) {
         console.error("Error performing bulk update:", error);
         toast({ title: t('toasts.error_title'), description: t('toasts.bulk_update_error_description'), variant: "destructive" });
@@ -514,17 +677,48 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
         return;
     }
     setIsLoading(true);
-    const batch = writeBatch(db);
-    selectedRoomIds.forEach(id => {
-      const roomRef = doc(db, "rooms", id);
-      batch.delete(roomRef);
-    });
-
     try {
-      await batch.commit();
+      // Get session and token
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
+      }
+
+      // Call bulk-delete API endpoint
+      const response = await fetch('/api/rooms/crud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'bulk-delete',
+          propertyId: userProperty?.id,
+          roomIds: Array.from(selectedRoomIds),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to bulk delete rooms');
+      }
+
       toast({ title: t('toasts.success_title'), description: t('toasts.bulk_delete_success_description', { count: selectedRoomIds.size })});
       setSelectedRoomIds(new Set());
       setIsBulkEditModalOpen(false);
+      
+      // Reload rooms list
+      const listResponse = await fetch(`/api/rooms/list?propertyId=${userProperty?.id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setRooms(data.rooms || []);
+      }
     } catch(error) {
       console.error("Error performing bulk delete:", error);
       toast({ title: t('toasts.error_title'), description: t('toasts.bulk_delete_error_description'), variant: "destructive" });
@@ -600,9 +794,14 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
         }
 
         setIsLoading(true);
-        const batch = writeBatch(db);
         let importedCount = 0;
         let errorCount = 0;
+
+        // Get session for authentication
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('No active session');
+        }
 
         for (let i = 1; i < lines.length; i++) {
           try {
@@ -630,7 +829,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
               name: roomName,
               roomTypeId: roomType.id,
               propertyId: propertyId || '',
-              status: 'Available',
+              status: 'Available' as RoomStatus,
               cleaningStatus: 'clean',
               floor: floorIdx !== -1 ? fields[floorIdx] : undefined,
               amenities: amenitiesIdx !== -1 ? fields[amenitiesIdx].split(';').map(a => a.trim()).filter(a => a) : undefined,
@@ -638,21 +837,50 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
               createdAt: new Date(),
             };
 
-            const newRoomRef = doc(collection(db, 'rooms'));
-            batch.set(newRoomRef, { ...newRoom, createdAt: serverTimestamp() });
-            importedCount++;
+            // Create room using API
+            const response = await fetch('/api/rooms/crud', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionData.session.access_token}`,
+              },
+              body: JSON.stringify({
+                action: 'create',
+                propertyId: propertyId || '',
+                room: newRoom,
+              }),
+            });
+
+            if (response.ok) {
+              importedCount++;
+            } else {
+              errorCount++;
+              console.error(`Error creating room for row ${i + 1}`);
+            }
           } catch (err) {
             console.error(`Error processing row ${i + 1}:`, err);
             errorCount++;
           }
         }
 
-        await batch.commit();
         setIsImportModalOpen(false);
         toast({
           title: 'Import Complete',
           description: `Imported ${importedCount} rooms${errorCount > 0 ? ` (${errorCount} errors)` : ''}`,
         });
+
+        // Reload rooms list
+        const listResponse = await fetch(`/api/rooms/list?propertyId=${propertyId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session?.access_token || ''}`,
+          },
+        });
+
+        if (listResponse.ok) {
+          const data = await listResponse.json();
+          setRooms(data.rooms || []);
+        }
       } catch (err) {
         console.error('Import error:', err);
         setImportError('Failed to process CSV file. Please check the format and try again.');

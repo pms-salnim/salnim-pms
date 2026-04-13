@@ -3,11 +3,10 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { Icons } from '@/components/icons';
 import AddPackageForm from '@/components/extras/add-package-form';
 import PackageDetailsModal from '@/components/extras/package-details-modal';
+import DebugPanel from '@/components/extras/debug-panel';
 import { PropertySettingsSubtabs } from '@/components/property-settings/property-settings-subtabs';
 import type { Package } from '@/types/package';
 
@@ -24,6 +23,18 @@ type Service = {
 type MealPlan = {
   id: string;
   name: string;
+};
+
+type DebugLog = {
+  timestamp: string;
+  type: 'request' | 'response' | 'error';
+  method: string;
+  endpoint: string;
+  requestBody?: any;
+  status?: number;
+  responseBody?: any;
+  error?: string;
+  details?: any;
 };
 
 const tabs = [
@@ -61,6 +72,10 @@ export default function PackagesPage() {
   const [visibilityFilter, setVisibilityFilter] = useState<string>('all');
   const [dateRangeFilter, setDateRangeFilter] = useState<{ from?: Date; to?: Date }>({});
 
+  // Debug Panel
+  const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+
   // Modals
   const [showAddPackageModal, setShowAddPackageModal] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
@@ -74,43 +89,44 @@ export default function PackagesPage() {
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; right?: number } | null>(null);
   const dropdownRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
 
-  useEffect(() => {
-    if (!propertyId) return;
-
-    const pkgCol = collection(db, 'packages');
-    const pkgQ = query(pkgCol, where('propertyId', '==', propertyId));
-    const unsubPkgs = onSnapshot(pkgQ, (snap) => {
-      const items: Package[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      setPackages(items);
-    });
-
-    const rtCol = collection(db, 'roomTypes');
-    const rtQ = query(rtCol, where('propertyId', '==', propertyId));
-    const unsubRT = onSnapshot(rtQ, (snap) => {
-      const items: RoomType[] = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
-      setRoomTypes(items);
-    });
-
-    const svcCol = collection(db, 'services');
-    const svcQ = query(svcCol, where('propertyId', '==', propertyId));
-    const unsubSvc = onSnapshot(svcQ, (snap) => {
-      const items: Service[] = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
-      setServices(items);
-    });
-
-    const mealCol = collection(db, 'mealPlans');
-    const mealQ = query(mealCol, where('propertyId', '==', propertyId));
-    const unsubMeal = onSnapshot(mealQ, (snap) => {
-      const items: MealPlan[] = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
-      setMealPlans(items);
-    });
-
-    return () => {
-      unsubPkgs();
-      unsubRT();
-      unsubSvc();
-      unsubMeal();
+  const addDebugLog = (type: 'request' | 'response' | 'error', method: string, endpoint: string, data: any) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const newLog: DebugLog = {
+      timestamp,
+      type,
+      method,
+      endpoint,
+      ...(type === 'request' && { requestBody: data }),
+      ...(type === 'response' && { status: data.status, responseBody: data.responseBody }),
+      ...(type === 'error' && { error: data.error, details: data.details }),
     };
+    setDebugLogs(prev => [...prev, newLog]);
+    console.log(`DEBUG: ${type.toUpperCase()} [${method}] ${endpoint}`, newLog);
+  };
+
+  const fetchPackages = async () => {
+    if (!propertyId) return;
+    try {
+      addDebugLog('request', 'GET', '/api/packages/list', { propertyId });
+      const response = await fetch(`/api/packages/list?property_id=${propertyId}`);
+      const data = await response.json();
+      
+      addDebugLog('response', 'GET', '/api/packages/list', { status: response.status, responseBody: data });
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch packages');
+      }
+      
+      setPackages(data);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addDebugLog('error', 'GET', '/api/packages/list', { error: errorMessage });
+      console.error('Error fetching packages:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPackages();
   }, [propertyId]);
 
   useEffect(() => {
@@ -198,42 +214,123 @@ export default function PackagesPage() {
     
     try {
       const { id, createdAt, updatedAt, ...pkgData } = packageToDuplicate as any;
-      const newPkg = {
-        ...pkgData,
+      
+      addDebugLog('request', 'POST', '/api/packages/crud', {
+        action: 'create',
+        propertyId,
         name: `${pkgData.name} (Copy)`,
         status: 'Draft',
-        createdAt: new Date(),
-      };
+        ...pkgData,
+      });
+
+      const response = await fetch('/api/packages/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          propertyId,
+          name: `${pkgData.name} (Copy)`,
+          status: 'Draft',
+          ...pkgData,
+        }),
+      });
+
+      const data = await response.json();
       
-      await addDoc(collection(db, 'packages'), newPkg);
+      addDebugLog('response', 'POST', '/api/packages/crud', { status: response.status, responseBody: data });
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to duplicate package');
+      }
+
       setShowDuplicateConfirm(false);
       setPackageToDuplicate(null);
+      await fetchPackages();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addDebugLog('error', 'POST', '/api/packages/crud', { error: errorMessage });
       console.error('Error duplicating package:', error);
+      alert(errorMessage);
     }
   };
 
   const confirmDelete = async () => {
-    if (!packageToDelete) return;
+    if (!packageToDelete || !propertyId) return;
     
     try {
-      await deleteDoc(doc(db, 'packages', packageToDelete.id));
+      addDebugLog('request', 'POST', '/api/packages/crud', {
+        action: 'delete',
+        propertyId,
+        id: packageToDelete.id,
+      });
+
+      const response = await fetch('/api/packages/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          propertyId,
+          id: packageToDelete.id,
+        }),
+      });
+
+      const data = await response.json();
+      
+      addDebugLog('response', 'POST', '/api/packages/crud', { status: response.status, responseBody: data });
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete package');
+      }
+
       setShowDeleteConfirm(false);
       setPackageToDelete(null);
+      await fetchPackages();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addDebugLog('error', 'POST', '/api/packages/crud', { error: errorMessage });
       console.error('Error deleting package:', error);
+      alert(errorMessage);
     }
   };
 
   const toggleStatus = async (pkg: Package) => {
+    if (!propertyId) return;
+    
     try {
       const newStatus = pkg.status === 'Active' ? 'Draft' : 'Active';
-      await updateDoc(doc(db, 'packages', pkg.id), {
+      
+      addDebugLog('request', 'POST', '/api/packages/crud', {
+        action: 'update',
+        propertyId,
+        id: pkg.id,
         status: newStatus,
-        updatedAt: new Date(),
       });
+
+      const response = await fetch('/api/packages/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          propertyId,
+          id: pkg.id,
+          status: newStatus,
+        }),
+      });
+
+      const data = await response.json();
+      
+      addDebugLog('response', 'POST', '/api/packages/crud', { status: response.status, responseBody: data });
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update package');
+      }
+
+      await fetchPackages();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addDebugLog('error', 'POST', '/api/packages/crud', { error: errorMessage });
       console.error('Error updating package status:', error);
+      alert(errorMessage);
     }
   };
 
@@ -255,10 +352,12 @@ export default function PackagesPage() {
       
       let matchesDateRange = true;
       if (dateRangeFilter.from && pkg.validFrom) {
-        matchesDateRange = pkg.validFrom.toDate() >= dateRangeFilter.from;
+        const validFromDate = pkg.validFrom instanceof Date ? pkg.validFrom : new Date(pkg.validFrom);
+        matchesDateRange = validFromDate >= dateRangeFilter.from;
       }
       if (dateRangeFilter.to && pkg.validTo) {
-        matchesDateRange = matchesDateRange && pkg.validTo.toDate() <= dateRangeFilter.to;
+        const validToDate = pkg.validTo instanceof Date ? pkg.validTo : new Date(pkg.validTo);
+        matchesDateRange = matchesDateRange && validToDate <= dateRangeFilter.to;
       }
       
       return matchesSearch && matchesPricingModel && matchesStatus && matchesVisibility && matchesDateRange;
@@ -332,16 +431,25 @@ export default function PackagesPage() {
           <PropertySettingsSubtabs subtabs={tabs} />
         </div>
         {canManage && (
-          <button
-            onClick={() => {
-              setPackageToEdit(null);
-              setShowAddPackageModal(true);
-            }}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Icons.PlusCircle className="h-4 w-4" />
-            Add Package
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setPackageToEdit(null);
+                setShowAddPackageModal(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Icons.PlusCircle className="h-4 w-4" />
+              Add Package
+            </button>
+            <button
+              onClick={() => setShowDebugPanel(!showDebugPanel)}
+              className="inline-flex items-center gap-2 rounded-md bg-yellow-50 px-4 py-2 text-sm font-medium text-yellow-700 hover:bg-yellow-100 border border-yellow-200"
+            >
+              <Icons.Bug className="h-4 w-4" />
+              Debug
+            </button>
+          </div>
         )}
       </div>
 
@@ -774,6 +882,15 @@ export default function PackagesPage() {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Debug Panel */}
+      {showDebugPanel && (
+        <DebugPanel
+          logs={debugLogs}
+          onClear={() => setDebugLogs([])}
+          isOpen={showDebugPanel}
+        />
       )}
     </div>
   );

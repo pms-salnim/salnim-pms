@@ -2,9 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { Icons } from '@/components/icons';
-import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, onSnapshot } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface Category {
   id: string;
@@ -47,6 +44,7 @@ interface AddMealPlanFormProps {
   propertyId: string;
   categories: Category[];
   mealPlanToEdit?: any;
+  onSuccess?: () => void;
 }
 
 const STEPS = [
@@ -80,11 +78,9 @@ const MEAL_OPTIONS = [
   { value: 'drinks', label: 'Drinks' },
 ];
 
-export default function AddMealPlanForm({ isOpen, onClose, propertyId, categories, mealPlanToEdit }: AddMealPlanFormProps) {
+export default function AddMealPlanForm({ isOpen, onClose, propertyId, categories, mealPlanToEdit, onSuccess }: AddMealPlanFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [availableRoomTypes, setAvailableRoomTypes] = useState<{ id: string; name: string }[]>([]);
   const [availableRatePlans, setAvailableRatePlans] = useState<{ id: string; name: string; roomTypeId?: string }[]>([]);
 
@@ -155,24 +151,18 @@ export default function AddMealPlanForm({ isOpen, onClose, propertyId, categorie
 
   useEffect(() => {
     if (!propertyId) return;
-    const rtCol = collection(db, 'roomTypes');
-    const rtQ = query(rtCol, where('propertyId', '==', propertyId));
-    const unsub = onSnapshot(rtQ, (snap) => {
-      const items = snap.docs.map(d => ({ id: d.id, name: (d.data() as any).name || 'Unnamed' }));
-      setAvailableRoomTypes(items);
-    });
-    return () => unsub();
+    
+    // TODO: Fetch room types from Supabase API when available
+    // For now, leave empty - will be populated via Supabase API
+    setAvailableRoomTypes([]);
   }, [propertyId]);
 
   useEffect(() => {
     if (!propertyId) return;
-    const rpCol = collection(db, 'ratePlans');
-    const rpQ = query(rpCol, where('propertyId', '==', propertyId));
-    const unsub = onSnapshot(rpQ, (snap) => {
-      const items = snap.docs.map(d => ({ id: d.id, name: (d.data() as any).planName || (d.data() as any).name || 'Unnamed', roomTypeId: (d.data() as any).roomTypeId || (d.data() as any).roomType }));
-      setAvailableRatePlans(items);
-    });
-    return () => unsub();
+    
+    // TODO: Fetch rate plans from Supabase API when available
+    // For now, leave empty - will be populated via Supabase API
+    setAvailableRatePlans([]);
   }, [propertyId]);
 
   const updateField = <K extends keyof MealPlanFormData>(field: K, value: MealPlanFormData[K]) => {
@@ -190,32 +180,6 @@ export default function AddMealPlanForm({ isOpen, onClose, propertyId, categorie
         ? prev.includedMeals.filter(m => m !== meal)
         : [...prev.includedMeals, meal]
     }));
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    setImageFiles(prev => [...prev, ...files]);
-    
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreviews(prev => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const removeImage = (index: number) => {
-    setImagePreviews(prev => prev.filter((_, i) => i !== index));
-    setImageFiles(prev => prev.filter((_, i) => i !== index));
-    if (formData.images[index]) {
-      setFormData(prev => ({
-        ...prev,
-        images: prev.images.filter((_, i) => i !== index)
-      }));
-    }
   };
 
   const validateStep = () => {
@@ -255,36 +219,77 @@ export default function AddMealPlanForm({ isOpen, onClose, propertyId, categorie
   const handleSubmit = async (asDraft: boolean = false) => {
     setSaving(true);
     try {
-      // Upload images
-      const uploadedUrls: string[] = [...formData.images];
-      for (const file of imageFiles) {
-        const storageRef = ref(storage, `mealPlans/${propertyId}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
-        uploadedUrls.push(url);
-      }
-
       const mealPlanData = {
-        ...formData,
-        images: uploadedUrls,
+        name: formData.name,
+        description: formData.fullDescription || formData.shortDescription,
+        shortDescription: formData.shortDescription,
+        fullDescription: formData.fullDescription,
+        categoryId: formData.categoryId,
+        subcategoryId: formData.subcategoryId,
+        mealPlanType: formData.mealPlanType,
+        includedMeals: formData.includedMeals,
+        pricingModel: formData.pricingModel,
+        basePrice: formData.basePrice,
+        adultPrice: formData.adultPrice,
+        childPrice: formData.childPrice,
+        infantPrice: formData.infantPrice,
+        infantFree: formData.infantFree,
+        enableAgePricing: formData.enableAgePricing,
+        availableDatesStart: formData.availableDates?.start || null,
+        availableDatesEnd: formData.availableDates?.end || null,
+        minimumStay: formData.minimumStay,
+        blackoutDates: formData.blackoutDates,
+        cancellationPolicy: formData.cancellationPolicy,
+        upgradeAllowed: formData.upgradeAllowed,
+        applicableRoomTypes: formData.applicableRoomTypes,
+        applicableRatePlans: formData.applicableRatePlans,
+        isDefault: formData.isDefault,
+        visibleOnBooking: formData.visibleOnBooking,
+        visibleInGuestPortal: formData.visibleInGuestPortal,
         status: asDraft ? 'Draft' : formData.status,
-        propertyId,
-        updatedAt: serverTimestamp(),
       };
 
-      if (mealPlanToEdit) {
-        await updateDoc(doc(db, 'mealPlans', mealPlanToEdit.id), mealPlanData);
-      } else {
-        await addDoc(collection(db, 'mealPlans'), {
-          ...mealPlanData,
-          createdAt: serverTimestamp(),
+      if (mealPlanToEdit?.id) {
+        // UPDATE existing meal plan
+        const response = await fetch('/api/meal-plans/crud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            propertyId,
+            id: mealPlanToEdit.id,
+            ...mealPlanData,
+          }),
         });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to update meal plan');
+        }
+      } else {
+        // CREATE new meal plan
+        const response = await fetch('/api/meal-plans/crud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create',
+            propertyId,
+            ...mealPlanData,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to create meal plan');
+        }
       }
 
+      onSuccess?.();
       onClose();
     } catch (err) {
       console.error('Error saving meal plan:', err);
-      alert('Failed to save meal plan');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save meal plan';
+      alert(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -352,12 +357,34 @@ export default function AddMealPlanForm({ isOpen, onClose, propertyId, categorie
                   Meal Plan Type <span className="text-red-500">*</span>
                 </label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {MEAL_PLAN_TYPES.map(type => (
+                    <button
+                      key={type.value}
+                      onClick={() => {
+                        updateField('mealPlanType', type.value);
+                      }}
+                      className={`p-4 border-2 rounded-xl font-medium transition-all ${
+                        formData.mealPlanType === type.value
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-3">
+                  Category (Optional)
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {parentCategories.map(category => (
                     <button
                       key={category.id}
                       onClick={() => {
                         updateField('categoryId', category.id);
-                        updateField('mealPlanType', category.id);
                       }}
                       className={`p-4 border-2 rounded-xl font-medium transition-all ${
                         formData.categoryId === category.id
@@ -443,40 +470,6 @@ export default function AddMealPlanForm({ isOpen, onClose, propertyId, categorie
                       <span className="font-medium text-slate-700">{meal.label}</span>
                     </label>
                   ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Images (Optional)
-                </label>
-                <div className="space-y-3">
-                  {imagePreviews.length > 0 && (
-                    <div className="grid grid-cols-3 gap-3">
-                      {imagePreviews.map((preview, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border-2 border-slate-200">
-                          <img src={preview} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
-                          <button
-                            onClick={() => removeImage(idx)}
-                            className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                          >
-                            <Icons.X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-slate-300 rounded-xl hover:border-primary hover:bg-primary/5 cursor-pointer transition-all">
-                    <Icons.UploadCloud className="w-8 h-8 text-slate-400 mb-2" />
-                    <span className="text-sm text-slate-600">Click to upload images</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </label>
                 </div>
               </div>
             </div>

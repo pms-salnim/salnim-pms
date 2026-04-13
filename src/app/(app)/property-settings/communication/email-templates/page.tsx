@@ -34,8 +34,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, getDoc, serverTimestamp, setDoc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { defaultEmailTemplateContents } from '@/lib/email-templates/defaults';
 
@@ -239,54 +237,71 @@ export default function EmailTemplatesPage() {
   });
   const [currentFormData, setCurrentFormData] = useState<any>(null);
 
-  // Load templates from Firestore
+  // Load templates from Supabase
   useEffect(() => {
     if (!user?.propertyId) return;
 
-    const templatesRef = collection(db, 'properties', user.propertyId, 'emailTemplates');
-    const q = query(templatesRef);
+    const loadTemplates = async () => {
+      try {
+        const url = new URL('/api/property-settings/email-templates', window.location.origin);
+        url.searchParams.set('propertyId', user.propertyId);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const customTemplates = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          // Ensure required fields have default values
-          languages: data.languages || ['en'],
-          enabled: data.enabled !== undefined ? data.enabled : true,
-        };
-      }) as EmailTemplate[];
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
 
-      // Separate custom templates into overrides and truly custom ones
-      const defaultIds = DEFAULT_TEMPLATES.map(t => t.id);
-      const customOverrides = customTemplates.filter(t => defaultIds.includes(t.id));
-      const trulyCustom = customTemplates.filter(t => !defaultIds.includes(t.id));
+        if (!response.ok) {
+          console.warn('Error loading templates:', response.statusText);
+          setAllTemplates(DEFAULT_TEMPLATES);
+          return;
+        }
 
-      // Build the map of custom overrides for quick lookup
-      const overrideMap = new Map(customOverrides.map(t => [t.id, t]));
+        const data = await response.json();
+        const customTemplates = (data.templates || []).map((template: any) => ({
+          id: template.template_id,
+          name: template.name,
+          category: template.category,
+          enabled: template.enabled !== undefined ? template.enabled : true,
+          isDefault: template.is_default || false,
+          languages: template.languages || ['en'],
+          subject: template.subject || '',
+          preheaderText: template.preheader_text || '',
+          htmlContent: template.html_content || '',
+          description: template.description || '',
+          fromName: template.from_name || '',
+          fromEmail: template.from_email || '',
+          replyTo: template.reply_to || '',
+          ccList: template.cc_list || '',
+          bccList: template.bcc_list || '',
+          emailType: template.email_type || 'transactional',
+        }));
 
-      // Merge: Default templates (using override if exists), then truly custom
-      const merged = [
-        ...DEFAULT_TEMPLATES.map(defaultTemplate => 
-          overrideMap.get(defaultTemplate.id) || defaultTemplate
-        ),
-        ...trulyCustom,
-      ];
+        // Separate custom templates into overrides and truly custom ones
+        const defaultIds = DEFAULT_TEMPLATES.map(t => t.id);
+        const customOverrides = customTemplates.filter(t => defaultIds.includes(t.id));
+        const trulyCustom = customTemplates.filter(t => !defaultIds.includes(t.id));
 
-      // Sort all templates by most recent activity (updatedAt or createdAt)
-      merged.sort((a, b) => {
-        const aTime = a.updatedAt?.seconds || a.createdAt?.seconds || a.updatedAt?.getTime?.() / 1000 || a.createdAt?.getTime?.() / 1000 || 0;
-        const bTime = b.updatedAt?.seconds || b.createdAt?.seconds || b.updatedAt?.getTime?.() / 1000 || b.createdAt?.getTime?.() / 1000 || 0;
-        return bTime - aTime; // Most recent first
-      });
+        // Build the map of custom overrides for quick lookup
+        const overrideMap = new Map(customOverrides.map(t => [t.id, t]));
 
-      setAllTemplates(merged);
-    }, (error) => {
-      console.error('Error loading templates:', error);
-    });
+        // Merge: Default templates (using override if exists), then truly custom
+        const merged = [
+          ...DEFAULT_TEMPLATES.map(defaultTemplate => 
+            overrideMap.get(defaultTemplate.id) || defaultTemplate
+          ),
+          ...trulyCustom,
+        ];
 
-    return () => unsubscribe();
+        setAllTemplates(merged);
+      } catch (error) {
+        console.error('Error loading templates:', error);
+        setAllTemplates(DEFAULT_TEMPLATES);
+      }
+    };
+
+    loadTemplates();
   }, [user?.propertyId]);
 
   // Return all templates without filtering
@@ -301,35 +316,62 @@ export default function EmailTemplatesPage() {
     const newEnabled = !template.enabled;
 
     try {
-      const templateRef = doc(db, 'properties', user.propertyId, 'emailTemplates', templateId);
+      const defaultTemplate = DEFAULT_TEMPLATES.find(t => t.id === templateId);
       
-      if (template.isDefault) {
+      if (template.isDefault && defaultTemplate) {
         // For default templates, save as custom override with isDefault: false
-        // Get the default template to copy all fields
-        const defaultTemplate = DEFAULT_TEMPLATES.find(t => t.id === templateId);
-        if (defaultTemplate) {
-          await setDoc(templateRef, {
-            name: defaultTemplate.name,
-            category: defaultTemplate.category,
-            description: defaultTemplate.description,
-            subject: defaultTemplate.subject,
-            preheaderText: defaultTemplate.preheaderText,
-            htmlContent: defaultTemplate.htmlContent,
-            enabled: newEnabled,
-            isDefault: false,
-            languages: defaultTemplate.languages || ['en'],
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          console.log('Default template override created for:', templateId);
+        const response = await fetch('/api/property-settings/email-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            propertyId: user.propertyId,
+            template: {
+              template_id: templateId,
+              name: defaultTemplate.name,
+              category: defaultTemplate.category,
+              description: defaultTemplate.description,
+              subject: defaultTemplate.subject,
+              preheader_text: defaultTemplate.preheaderText,
+              html_content: defaultTemplate.htmlContent,
+              enabled: newEnabled,
+              is_default: false,
+              languages: defaultTemplate.languages || ['en'],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
         }
+        console.log('Default template override created for:', templateId);
       } else {
         // For custom templates, just update the enabled status
-        await setDoc(templateRef, {
-          enabled: newEnabled,
-          updatedAt: serverTimestamp(),
-        }, { merge: true });
+        const response = await fetch('/api/property-settings/email-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            propertyId: user.propertyId,
+            template: {
+              template_id: templateId,
+              enabled: newEnabled,
+              updated_at: new Date().toISOString(),
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
       }
+      
+      // Update local state
+      setAllTemplates(prev => prev.map(t =>
+        t.id === templateId ? { ...t, enabled: newEnabled } : t
+      ));
       
       toast({ title: 'Success', description: `Template ${newEnabled ? 'enabled' : 'disabled'}` });
     } catch (error) {
@@ -358,26 +400,88 @@ export default function EmailTemplatesPage() {
     }
   };
 
-  const handleBulkEnable = () => {
-    setAllTemplates(prev => prev.map(t =>
-      selectedTemplates.has(t.id) ? { ...t, enabled: true } : t
-    ));
-    setSelectedTemplates(new Set());
-    toast({ title: 'Success', description: 'Templates enabled' });
+  const handleBulkEnable = async () => {
+    try {
+      const templateIds = Array.from(selectedTemplates);
+      const response = await fetch('/api/property-settings/email-templates/bulk-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          propertyId: user.propertyId,
+          templateIds,
+          enabled: true,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      setAllTemplates(prev => prev.map(t =>
+        selectedTemplates.has(t.id) ? { ...t, enabled: true } : t
+      ));
+      setSelectedTemplates(new Set());
+      toast({ title: 'Success', description: 'Templates enabled' });
+    } catch (error) {
+      console.error('Error enabling templates:', error);
+      toast({ title: 'Error', description: 'Failed to enable templates' });
+    }
   };
 
-  const handleBulkDisable = () => {
-    setAllTemplates(prev => prev.map(t =>
-      selectedTemplates.has(t.id) ? { ...t, enabled: false } : t
-    ));
-    setSelectedTemplates(new Set());
-    toast({ title: 'Success', description: 'Templates disabled' });
+  const handleBulkDisable = async () => {
+    try {
+      const templateIds = Array.from(selectedTemplates);
+      const response = await fetch('/api/property-settings/email-templates/bulk-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          propertyId: user.propertyId,
+          templateIds,
+          enabled: false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      setAllTemplates(prev => prev.map(t =>
+        selectedTemplates.has(t.id) ? { ...t, enabled: false } : t
+      ));
+      setSelectedTemplates(new Set());
+      toast({ title: 'Success', description: 'Templates disabled' });
+    } catch (error) {
+      console.error('Error disabling templates:', error);
+      toast({ title: 'Error', description: 'Failed to disable templates' });
+    }
   };
 
-  const handleBulkDelete = () => {
-    setAllTemplates(prev => prev.filter(t => !selectedTemplates.has(t.id)));
-    setSelectedTemplates(new Set());
-    toast({ title: 'Success', description: 'Templates deleted' });
+  const handleBulkDelete = async () => {
+    try {
+      const templateIds = Array.from(selectedTemplates);
+      const response = await fetch('/api/property-settings/email-templates/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          propertyId: user.propertyId,
+          templateIds,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      setAllTemplates(prev => prev.filter(t => !selectedTemplates.has(t.id)));
+      setSelectedTemplates(new Set());
+      toast({ title: 'Success', description: 'Templates deleted' });
+    } catch (error) {
+      console.error('Error deleting templates:', error);
+      toast({ title: 'Error', description: 'Failed to delete templates' });
+    }
   };
 
   const handleDuplicateTemplate = (templateId: string) => {
@@ -404,10 +508,17 @@ export default function EmailTemplatesPage() {
     try {
       const template = allTemplates.find(t => t.id === templateId);
       
-      // Only delete custom templates from Firestore
+      // Only delete custom templates via API
       if (template && !template.isDefault) {
-        const templateRef = doc(db, 'properties', user.propertyId, 'emailTemplates', templateId);
-        await deleteDoc(templateRef);
+        const response = await fetch(`/api/property-settings/email-templates?propertyId=${user.propertyId}&templateId=${templateId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
       }
 
       setAllTemplates(prev => prev.filter(t => t.id !== templateId));
@@ -537,34 +648,34 @@ export default function EmailTemplatesPage() {
       return;
     }
 
-    console.log('Saving to Firestore with propertyId:', user.propertyId);
+    console.log('Saving to Supabase with propertyId:', user.propertyId);
 
     try {
       const templateData = {
         name: data.name,
         category: data.category,
         enabled: data.enabled !== undefined ? data.enabled : true,
-        fromName: data.fromName || '',
-        fromEmail: data.fromEmail || '',
-        replyTo: data.replyTo || '',
-        ccList: data.ccList || '',
-        bccList: data.bccList || '',
-        emailType: data.emailType || 'transactional',
+        from_name: data.fromName || '',
+        from_email: data.fromEmail || '',
+        reply_to: data.replyTo || '',
+        cc_list: data.ccList || '',
+        bcc_list: data.bccList || '',
+        email_type: data.emailType || 'transactional',
         subject: data.subject || '',
-        preheaderText: data.preheaderText || '',
+        preheader_text: data.preheaderText || '',
         description: data.description || '',
-        htmlContent: data.htmlContent || '',
+        html_content: data.htmlContent || '',
         // Signature fields
-        signatureTemplateId: data.signatureTemplateId || '',
-        signatureName: data.signatureName || '',
-        signaturePropertyName: data.signaturePropertyName || '',
-        signaturePhone: data.signaturePhone || '',
-        signatureEmail: data.signatureEmail || '',
-        signatureAddress: data.signatureAddress || '',
-        signatureWebsite: data.signatureWebsite || '',
-        signatureLogo: data.signatureLogo || '',
-        signatureSocialMedia: data.signatureSocialMedia || {},
-        updatedAt: serverTimestamp(),
+        signature_template_id: data.signatureTemplateId || '',
+        signature_name: data.signatureName || '',
+        signature_property_name: data.signaturePropertyName || '',
+        signature_phone: data.signaturePhone || '',
+        signature_email: data.signatureEmail || '',
+        signature_address: data.signatureAddress || '',
+        signature_website: data.signatureWebsite || '',
+        signature_logo: data.signatureLogo || '',
+        signature_social_media: data.signatureSocialMedia || {},
+        updated_at: new Date().toISOString(),
       };
 
       // Check if this is an update to an existing template
@@ -574,36 +685,73 @@ export default function EmailTemplatesPage() {
         
         if (defaultTemplate) {
           // Editing a default template - save as custom override with same ID
-          const templateRef = doc(db, 'properties', user.propertyId, 'emailTemplates', editingTemplateId);
           console.log('Overriding default template:', editingTemplateId);
-          await setDoc(templateRef, {
-            ...templateData,
-            createdAt: serverTimestamp(),
-            isDefault: false,
-            languages: ['en'],
+          const response = await fetch('/api/property-settings/email-templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              propertyId: user.propertyId,
+              template: {
+                template_id: editingTemplateId,
+                is_default: false,
+                languages: ['en'],
+                ...templateData,
+              },
+            }),
           });
+
+          if (!response.ok) {
+            throw new Error(`API error: ${response.statusText}`);
+          }
           console.log('Default template overridden successfully');
           toast({ title: 'Success', description: 'Template updated' });
         } else {
           // Updating a custom template
-          const templateRef = doc(db, 'properties', user.propertyId, 'emailTemplates', editingTemplateId);
           console.log('Updating custom template:', editingTemplateId);
-          await setDoc(templateRef, templateData, { merge: true });
+          const response = await fetch('/api/property-settings/email-templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              propertyId: user.propertyId,
+              template: {
+                template_id: editingTemplateId,
+                ...templateData,
+              },
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`API error: ${response.statusText}`);
+          }
           console.log('Template updated successfully');
           toast({ title: 'Success', description: 'Template updated' });
         }
       } else {
         // Create new template
         const newTemplateId = `custom-${Date.now()}`;
-        const templateRef = doc(db, 'properties', user.propertyId, 'emailTemplates', newTemplateId);
         
         console.log('Creating new template with ID:', newTemplateId);
-        await setDoc(templateRef, {
-          ...templateData,
-          createdAt: serverTimestamp(),
-          isDefault: false,
-          languages: ['en'],
+        const response = await fetch('/api/property-settings/email-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            propertyId: user.propertyId,
+            template: {
+              template_id: newTemplateId,
+              is_default: false,
+              languages: ['en'],
+              created_at: new Date().toISOString(),
+              ...templateData,
+            },
+          }),
         });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
         console.log('Template created successfully');
         toast({ title: 'Success', description: 'Template created' });
       }

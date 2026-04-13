@@ -27,16 +27,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PropertySettingsSubtabs } from '@/components/property-settings/property-settings-subtabs';
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch, getDocs } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
-import type { FirestoreUser } from '@/types/firestoreUser';
 import type { RatePlan } from '@/types/ratePlan';
 import type { RoomType } from '@/types/roomType';
 import { Icons } from '@/components/icons';
 import type { Property } from '@/types/property';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTranslation } from 'react-i18next';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 const RatePlanForm = dynamic(() => import('@/components/rate-plans/rate-plan-form'), {
   loading: () => <div className="h-48 flex items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
@@ -47,17 +50,17 @@ const ratesDiscountsSubtabs = [
   { id: 'rates', label: 'Rate Plans', href: '/property-settings/rates-discounts/rates' },
   { id: 'seasonal', label: 'Seasonal Pricing', href: '/property-settings/rates-discounts/seasonal' },
   { id: 'discounts', label: 'Discounts', href: '/property-settings/rates-discounts/discounts' },
+  { id: 'availability', label: 'Availability', href: '/property-settings/rates-discounts/availability' },
 ];
 
 export default function AllRatePlansPage() {
-  const { user, isLoadingAuth } = useAuth();
+  const { user, isLoadingAuth, property } = useAuth();
   const { t } = useTranslation('pages/rate-plans/all/content');
   const [ratePlans, setRatePlans] = useState<RatePlan[]>([]);
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRatePlan, setEditingRatePlan] = useState<RatePlan | null>(null);
-  const [propertyId, setPropertyId] = useState<string | null>(null);
   const [propertySettings, setPropertySettings] = useState<Property | null>(null);
   
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -71,70 +74,62 @@ export default function AllRatePlansPage() {
   
   const canManage = user?.permissions?.ratePlans;
 
+  // Fetch rate plans and room types when property loads
   useEffect(() => {
-    if (user?.id) {
-      const staffDocRef = doc(db, "staff", user.id);
-      const unsubStaff = onSnapshot(staffDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const staffData = docSnap.data() as FirestoreUser;
-          setPropertyId(staffData.propertyId);
-        } else {
-          setPropertyId(null);
-          toast({ title: "Error", description: "Could not load property information.", variant: "destructive" });
-        }
-      });
-      return () => unsubStaff();
-    }
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (!propertyId) {
+    if (!property?.id || !user?.id) {
       setRatePlans([]);
       setRoomTypes([]);
       setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // Get session for authentication
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('No active session');
+        }
 
-    const propDocRef = doc(db, "properties", propertyId);
-    const unsubProp = onSnapshot(propDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setPropertySettings(docSnap.data() as Property);
+        // Fetch room types
+        const roomTypesResponse = await fetch(`/api/rooms/room-types/list?propertyId=${property.id}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        });
+
+        if (roomTypesResponse.ok) {
+          const roomTypesData = await roomTypesResponse.json();
+          setRoomTypes(roomTypesData.roomTypes || []);
+        }
+
+        // Fetch rate plans
+        const ratePlansResponse = await fetch(`/api/rate-plans/list?propertyId=${property.id}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        });
+
+        if (ratePlansResponse.ok) {
+          const ratePlansData = await ratePlansResponse.json();
+          setRatePlans(ratePlansData.ratePlans || []);
+        }
+
+        // Set property settings
+        setPropertySettings(property as Property);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast({ title: 'Error', description: 'Could not fetch rate plans or room types.', variant: 'destructive' });
+      } finally {
+        setIsLoading(false);
       }
-    });
-
-    const roomTypesColRef = collection(db, "roomTypes");
-    const rtq = query(roomTypesColRef, where("propertyId", "==", propertyId));
-    const unsubRoomTypes = onSnapshot(rtq, (snapshot) => {
-      const fetchedRoomTypes = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as RoomType));
-      setRoomTypes(fetchedRoomTypes);
-    }, (error) => {
-      console.error("Error fetching room types:", error);
-      toast({ title: "Error", description: "Could not fetch room types.", variant: "destructive" });
-    });
-
-    const ratePlansColRef = collection(db, "ratePlans");
-    const rpq = query(ratePlansColRef, where("propertyId", "==", propertyId));
-    const unsubRatePlans = onSnapshot(rpq, (snapshot) => {
-      const fetchedRatePlans = snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      } as RatePlan));
-      setRatePlans(fetchedRatePlans);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching rate plans:", error);
-      toast({ title: "Error", description: "Could not fetch rate plans.", variant: "destructive" });
-      setIsLoading(false);
-    });
-
-    return () => {
-      unsubRoomTypes();
-      unsubRatePlans();
-      unsubProp();
     };
-  }, [propertyId]);
+
+    fetchData();
+  }, [property?.id, user?.id]);
 
   const filteredRatePlans = useMemo(() => {
     return ratePlans.filter(plan => {
@@ -165,50 +160,73 @@ export default function AllRatePlansPage() {
   };
 
   const handleSaveRatePlan = async (formData: Omit<RatePlan, 'id' | 'propertyId' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
-    if (!propertyId || !user?.id || !canManage) {
+    if (!property?.id || !user?.id || !canManage) {
+      console.error('Validation failed:', { propertyId: property?.id, userId: user?.id, canManage });
       toast({ title: "Error", description: "Permission denied or property/user not identified.", variant: "destructive" });
       return;
     }
 
-    const dataToSave = {
-      ...formData,
-      propertyId,
-    };
-
     setIsLoading(true);
     try {
-      const batch = writeBatch(db);
-
-      if (dataToSave.default) {
-        const plansForRoomTypeQuery = query(
-          collection(db, "ratePlans"),
-          where("propertyId", "==", propertyId),
-          where("roomTypeId", "==", dataToSave.roomTypeId),
-          where("default", "==", true)
-        );
-        const querySnapshot = await getDocs(plansForRoomTypeQuery);
-        querySnapshot.forEach(docSnap => {
-          if (docSnap.id !== editingRatePlan?.id) { 
-            batch.update(doc(db, "ratePlans", docSnap.id), { default: false });
-          }
-        });
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
       }
 
+      // Generate a UUID for new rate plans
+      const planId = editingRatePlan?.id || crypto.randomUUID();
 
-      if (editingRatePlan) {
-        const docRef = doc(db, "ratePlans", editingRatePlan.id);
-        batch.update(docRef, { ...dataToSave, updatedAt: serverTimestamp() });
-        toast({ title: t('toasts.success_update_title'), description: t('toasts.success_update_description') });
-      } else {
-        const newPlanRef = doc(collection(db, "ratePlans"));
-        batch.set(newPlanRef, { ...dataToSave, createdBy: user.id, createdAt: serverTimestamp() });
-        toast({ title: t('toasts.success_create_title'), description: t('toasts.success_create_description') });
+      console.log('Sending rate plan to API:', { propertyId: property.id, userId: user.id, action: editingRatePlan ? 'update' : 'create' });
+
+      const response = await fetch('/api/rate-plans/crud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: editingRatePlan ? 'update' : 'create',
+          propertyId: property.id,
+          ratePlanId: editingRatePlan?.id,
+          ratePlan: {
+            id: planId,
+            ...formData,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save rate plan');
       }
-      await batch.commit();
+
+      toast({
+        title: editingRatePlan ? t('toasts.success_update_title') : t('toasts.success_create_title'),
+        description: editingRatePlan ? t('toasts.success_update_description') : t('toasts.success_create_description'),
+      });
+
       handleCloseModal();
+
+      // Reload rate plans
+      const listResponse = await fetch(`/api/rate-plans/list?propertyId=${property.id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setRatePlans(data.ratePlans || []);
+      }
     } catch (error) {
       console.error("Error saving rate plan:", error);
-      toast({ title: t('toasts.error_save_title'), description: t('toasts.error_save_description'), variant: "destructive" });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save rate plan';
+      toast({
+        title: t('toasts.error_save_title'),
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -221,22 +239,57 @@ export default function AllRatePlansPage() {
   };
 
   const confirmDeleteRatePlan = async () => {
-    if (!ratePlanToDelete) return;
-    setIsLoading(true); 
+    if (!ratePlanToDelete || !property?.id) return;
+    setIsLoading(true);
     try {
-      await deleteDoc(doc(db, "ratePlans", ratePlanToDelete.id));
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
+      }
+
+      const response = await fetch('/api/rate-plans/crud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'delete',
+          propertyId: property.id,
+          ratePlanId: ratePlanToDelete.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete rate plan');
+      }
+
       toast({ title: t('toasts.success_delete_title'), description: t('toasts.success_delete_description') });
+
+      // Reload rate plans
+      const listResponse = await fetch(`/api/rate-plans/list?propertyId=${property.id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setRatePlans(data.ratePlans || []);
+      }
     } catch (error) {
-      console.error("Error deleting rate plan from Firestore (ID:", ratePlanToDelete.id, "):", error);
+      console.error("Error deleting rate plan:", error);
       toast({ title: t('toasts.error_delete_title'), description: t('toasts.error_delete_description'), variant: "destructive" });
     } finally {
-      setIsLoading(false); 
+      setIsLoading(false);
       setRatePlanToDelete(null);
       setIsDeleteDialogOpen(false);
     }
   };
   
-  if (isLoadingAuth || (isLoading && !propertyId)) {
+  if (isLoadingAuth || (isLoading && !property?.id)) {
     return <div className="flex h-full items-center justify-center"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
   }
   
@@ -270,7 +323,7 @@ export default function AllRatePlansPage() {
         </div>
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpenModal()} disabled={!propertyId || roomTypes.length === 0 || !canManage}>
+            <Button onClick={() => handleOpenModal()} disabled={!property?.id || roomTypes.length === 0 || !canManage}>
               <PlusCircle className="mr-2 h-4 w-4" /> {t('add_button')}
             </Button>
           </DialogTrigger>
@@ -283,13 +336,13 @@ export default function AllRatePlansPage() {
                   {roomTypes.length === 0 && <p className="text-destructive text-sm mt-2">{t('no_room_types_warning')}</p>}
                 </DialogDescription>
               </DialogHeader>
-              {propertyId && roomTypes.length > 0 && (
+              {property?.id && roomTypes.length > 0 && (
                 <RatePlanForm
                   initialData={editingRatePlan}
                   availableRoomTypes={roomTypes}
                   onSave={handleSaveRatePlan}
                   onClose={handleCloseModal}
-                  propertyId={propertyId}
+                  propertyId={property.id}
                 />
               )}
             </Suspense>

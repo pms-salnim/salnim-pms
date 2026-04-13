@@ -3,6 +3,14 @@
 import { useState, useEffect } from 'react';
 import { PropertySettingsSubtabs } from '@/components/property-settings/property-settings-subtabs';
 import { PreferencesForm } from '@/components/property-settings/preferences/preferences-form';
+import { useAuth } from '@/contexts/auth-context';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 const systemSubtabs = [
   { id: 'preferences', label: 'Preferences', href: '/property-settings/system/preferences' },
@@ -12,28 +20,75 @@ const systemSubtabs = [
 export default function SystemPreferencesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [preferences, setPreferences] = useState(null);
+  const { property } = useAuth();
 
   useEffect(() => {
-    // TODO: Load preferences from Firestore
-    // const loadPreferences = async () => {
-    //   try {
-    //     const prefs = await callFunction('loadPreferences', { propertyId });
-    //     setPreferences(prefs);
-    //   } catch (error) {
-    //     console.error('Failed to load preferences:', error);
-    //   } finally {
-    //     setIsLoading(false);
-    //   }
-    // };
-    // loadPreferences();
-    
-    setIsLoading(false);
-  }, []);
+    const loadPreferences = async () => {
+      if (!property?.id) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          console.error('Not authenticated');
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await fetch(
+          `/api/properties/system/preferences/update?propertyId=${property.id}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setPreferences(data.settings);
+        }
+      } catch (error) {
+        console.error('Failed to load preferences:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPreferences();
+  }, [property?.id]);
 
   const handleSavePreferences = async (data: any) => {
-    // TODO: Save preferences to Firestore via Cloud Function
-    // return callFunction('savePreferences', { propertyId, preferences: data });
-    console.log('Saving preferences:', data);
+    if (!property?.id) {
+      throw new Error('Property not found');
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch('/api/properties/system/preferences/update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionData.session.access_token}`,
+      },
+      body: JSON.stringify({
+        propertyId: property.id,
+        settings: data,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+
+    return response.json();
   };
 
   return (

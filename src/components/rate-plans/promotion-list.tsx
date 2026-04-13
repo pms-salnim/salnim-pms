@@ -39,9 +39,13 @@ export default function PromotionList({ promotions, ratePlans, onEdit, onDelete,
 
   const getDiscountDisplay = (promo: Promotion) => {
     if (promo.discountType === 'percentage') {
-      return <><Percent className="mr-1 h-3 w-3" /> {promo.discountValue}% off</>;
+      return <>{promo.discountValue}% off</>;
     }
-    return <><DollarSign className="mr-1 h-3 w-3" /> ${promo.discountValue.toFixed(2)} off</>;
+    return <>${promo.discountValue.toFixed(2)} off</>;
+  };
+
+  const getType = (promo: Promotion) => {
+    return promo.couponCode ? 'Coupon' : 'Automatic';
   };
 
   return (
@@ -49,46 +53,95 @@ export default function PromotionList({ promotions, ratePlans, onEdit, onDelete,
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>{t('list.headers.name')}</TableHead>
-            <TableHead>{t('list.headers.discount')}</TableHead>
-            <TableHead>{t('list.headers.type')}</TableHead>
-            <TableHead>{t('list.headers.usage')}</TableHead>
-            <TableHead>{t('list.headers.status')}</TableHead>
-            <TableHead className="text-right">{t('list.headers.actions')}</TableHead>
+            <TableHead>Discount Name</TableHead>
+            <TableHead>Discount</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Coupon Code</TableHead>
+            <TableHead>Usage</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {isLoading ? (
-            <TableRow><TableCell colSpan={6} className="h-24 text-center"><Icons.Spinner className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+            <TableRow>
+              <TableCell colSpan={7} className="h-24 text-center">
+                <Icons.Spinner className="mx-auto h-6 w-6 animate-spin" />
+              </TableCell>
+            </TableRow>
           ) : promotions.length > 0 ? (
             promotions.map((promo) => (
               <TableRow key={promo.id}>
                 <TableCell className="font-medium">
-                    {promo.name}
-                    <p className="text-xs text-muted-foreground max-w-xs truncate" title={promo.description}>{promo.description}</p>
-                </TableCell>
-                <TableCell><span className="flex items-center text-sm">{getDiscountDisplay(promo)}</span></TableCell>
-                <TableCell>
-                  {promo.couponCode ? (
-                    <Badge variant="outline" className="flex items-center gap-1 w-fit">
-                      <Tag className="h-3 w-3"/>
-                      {promo.couponCode}
-                    </Badge>
-                  ) : (<Badge variant="secondary" className="flex items-center gap-1 w-fit"><Globe className="h-3 w-3"/>{t('list.types.automatic')}</Badge>)}
+                  <div>
+                    <p className="text-sm font-semibold">{promo.name}</p>
+                    <p className="text-xs text-muted-foreground max-w-xs truncate" title={promo.description}>
+                      {promo.description}
+                    </p>
+                  </div>
                 </TableCell>
                 <TableCell className="text-sm">
-                  {(promo.timesUsed || 0)}{promo.usageLimit ? ` / ${promo.usageLimit}` : ''}
+                  <span className="flex items-center font-medium">
+                    {promo.discountType === 'percentage' ? (
+                      <>
+                        <Percent className="mr-1 h-4 w-4" /> {promo.discountValue}%
+                      </>
+                    ) : (
+                      <>
+                        <DollarSign className="mr-1 h-4 w-4" /> {promo.discountValue.toFixed(2)}
+                      </>
+                    )}
+                  </span>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={promo.active ? 'default' : 'outline'} className={promo.active ? 'bg-green-100 text-green-700 border-green-300' : ''}>
-                    {promo.active ? t('list.status.active') : t('list.status.inactive')}
+                  <Badge 
+                    variant={promo.promotionType === 'coupon' ? 'outline' : 'secondary'}
+                    className={promo.promotionType === 'coupon' ? '' : 'bg-blue-100 text-blue-700 border-blue-300'}
+                  >
+                    <span className="flex items-center gap-1">
+                      {promo.promotionType === 'coupon' ? (
+                        <>
+                          <Tag className="h-3 w-3" />
+                          Coupon
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="h-3 w-3" />
+                          Automatic
+                        </>
+                      )}
+                    </span>
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm font-mono">
+                  {promo.promotionType === 'coupon' && promo.couponCode ? (
+                    <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+                      {promo.couponCode}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-sm">
+                  <span>
+                    {(promo.timesUsed || 0)}{promo.usageLimit ? ` / ${promo.usageLimit}` : ' / Unlimited'}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <Badge 
+                    variant={promo.active ? 'default' : 'outline'} 
+                    className={promo.active ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}
+                  >
+                    {promo.active ? 'Active' : 'Inactive'}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
                   {canManage && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => onEdit(promo)}>
@@ -104,7 +157,11 @@ export default function PromotionList({ promotions, ratePlans, onEdit, onDelete,
               </TableRow>
             ))
           ) : (
-            <TableRow><TableCell colSpan={6} className="h-24 text-center">{t('list.no_promotions')}</TableCell></TableRow>
+            <TableRow>
+              <TableCell colSpan={7} className="h-24 text-center">
+                {t('list.no_promotions')}
+              </TableCell>
+            </TableRow>
           )}
         </TableBody>
       </Table>

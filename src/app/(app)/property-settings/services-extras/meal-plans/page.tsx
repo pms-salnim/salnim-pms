@@ -3,14 +3,16 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/contexts/auth-context';
+import { Icons } from '@/components/icons';
+// Firebase imports for menus (temporary - TODO: migrate menus to Supabase)
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { Icons } from '@/components/icons';
 import AddMealPlanForm from '@/components/extras/add-meal-plan-form';
 import MealPlanDetailsModal from '@/components/extras/meal-plan-details-modal';
 import AddMenuModal from '@/components/extras/add-menu-modal';
 import MenusListing from '@/components/extras/menus-listing';
 import MenuDetailsModal from '@/components/extras/menu-details-modal';
+import DebugPanel from '@/components/extras/debug-panel';
 import { PropertySettingsSubtabs } from '@/components/property-settings/property-settings-subtabs';
 import type { Menu } from '@/types/menu';
 
@@ -132,23 +134,72 @@ export default function MealPlansPage() {
   const [newCategoryParent, setNewCategoryParent] = useState<string | null>(null);
   const [newSubcategories, setNewSubcategories] = useState<string[]>([]);
 
+  // Debug Panel
+  const [debugLogs, setDebugLogs] = useState<any[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+
+  const addDebugLog = (type: 'request' | 'response' | 'error', method: string, endpoint: string, data: any = {}) => {
+    const log = {
+      timestamp: new Date().toLocaleTimeString(),
+      type,
+      method,
+      endpoint,
+      ...data,
+    };
+    setDebugLogs(prev => [...prev, log]);
+    console.log('DEBUG:', log);
+  };
+
+  // Fetch meal plans from API
+  const fetchMealPlans = async () => {
+    if (!propertyId) return;
+    try {
+      const response = await fetch(`/api/meal-plans/list?property_id=${propertyId}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch meal plans');
+      }
+      const data = await response.json();
+      setMealPlans(data);
+    } catch (err) {
+      console.error('Error fetching meal plans:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch meal plans';
+      // Only show toast for migration errors
+      if (errorMessage.includes('migration') || errorMessage.includes('schema')) {
+        alert(`Setup Required: ${errorMessage}\n\nYou need to run the migration SQL on Supabase first.`);
+      }
+    }
+  };
+
+  // Fetch categories from API
+  const fetchCategories = async () => {
+    if (!propertyId) return;
+    try {
+      const response = await fetch(`/api/meal-plan-categories/list?property_id=${propertyId}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch categories');
+      }
+      const data = await response.json();
+      setCategories(data);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch categories';
+      // Only show toast for migration errors
+      if (errorMessage.includes('migration') || errorMessage.includes('schema')) {
+        alert(`Setup Required: ${errorMessage}\n\nYou need to run the migration SQL on Supabase first.`);
+      }
+    }
+  };
+
+  // Initial load and refresh
   useEffect(() => {
     if (!propertyId) return;
 
-    const catCol = collection(db, 'mealPlanCategories');
-    const catQ = query(catCol, where('propertyId', '==', propertyId));
-    const unsubCats = onSnapshot(catQ, (snap) => {
-      const items: Category[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      setCategories(items);
-    });
+    fetchMealPlans();
+    fetchCategories();
 
-    const mealCol = collection(db, 'mealPlans');
-    const mealQ = query(mealCol, where('propertyId', '==', propertyId));
-    const unsubMeals = onSnapshot(mealQ, (snap) => {
-      const items: MealPlan[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      setMealPlans(items);
-    });
-
+    // For menus, we'll keep using Firebase for now (not in scope for Supabase migration)
     const menuCol = collection(db, 'menus');
     const menuQ = query(menuCol, where('propertyId', '==', propertyId));
     const unsubMenus = onSnapshot(menuQ, (snap) => {
@@ -157,8 +208,6 @@ export default function MealPlansPage() {
     });
 
     return () => {
-      unsubCats();
-      unsubMeals();
       unsubMenus();
     };
   }, [propertyId]);
@@ -249,32 +298,63 @@ export default function MealPlansPage() {
 
     try {
       const { id, createdAt, updatedAt, ...rest } = mealPlanToDuplicate;
-      await addDoc(collection(db, 'mealPlans'), {
-        ...rest,
-        name: `${rest.name} (Copy)`,
-        propertyId,
-        status: 'Draft',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const response = await fetch('/api/meal-plans/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          ...rest,
+          propertyId,
+          name: `${rest.name} (Copy)`,
+          status: 'Draft',
+        }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to duplicate meal plan');
+      }
+      
       setShowDuplicateConfirm(false);
       setMealPlanToDuplicate(null);
+      
+      // Refetch meal plans to show the new duplicate
+      await fetchMealPlans();
     } catch (err) {
       console.error('Duplicate error:', err);
-      alert('Failed to duplicate meal plan');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to duplicate meal plan';
+      alert(errorMessage);
     }
   };
 
   const confirmDelete = async () => {
-    if (!mealPlanToDelete) return;
+    if (!mealPlanToDelete || !propertyId) return;
 
     try {
-      await deleteDoc(doc(db, 'mealPlans', mealPlanToDelete.id));
+      const response = await fetch('/api/meal-plans/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          propertyId,
+          id: mealPlanToDelete.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete meal plan');
+      }
+      
       setShowDeleteConfirm(false);
       setMealPlanToDelete(null);
+      
+      // Refetch meal plans
+      await fetchMealPlans();
     } catch (err) {
       console.error('Delete error:', err);
-      alert('Failed to delete meal plan');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete meal plan';
+      alert(errorMessage);
     }
   };
 
@@ -282,54 +362,126 @@ export default function MealPlansPage() {
     if (!newCategoryName.trim() || !propertyId) return;
 
     try {
-      const catData: any = {
-        name: newCategoryName.trim(),
-        icon: newCategoryIcon.trim() || '',
-        description: newCategoryDescription.trim() || '',
+      // Add parent category
+      const requestBody = {
+        action: 'create',
         propertyId,
+        name: newCategoryName.trim(),
+        description: newCategoryDescription.trim() || null,
         parentId: newCategoryParent || null,
         displayOrder: 0,
-        visibleOnBooking: true,
-        createdAt: serverTimestamp(),
+        isActive: true,
       };
 
-      const catRef = await addDoc(collection(db, 'mealPlanCategories'), catData);
+      addDebugLog('request', 'POST', '/api/meal-plan-categories/crud', { requestBody });
 
-      // Add subcategories if parent
+      const parentResponse = await fetch('/api/meal-plan-categories/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      const responseData = await parentResponse.json().catch(() => ({}));
+
+      addDebugLog('response', 'POST', '/api/meal-plan-categories/crud', {
+        status: parentResponse.status,
+        responseBody: responseData,
+      });
+
+      if (!parentResponse.ok) {
+        const errorMessage = responseData.error || `HTTP ${parentResponse.status}`;
+        addDebugLog('error', 'POST', '/api/meal-plan-categories/crud', {
+          error: errorMessage,
+          status: parentResponse.status,
+          responseBody: responseData,
+        });
+        throw new Error(errorMessage);
+      }
+
+      const parentCategory = responseData;
+
+      // Add subcategories if this is a parent
       if (!newCategoryParent && newSubcategories.length > 0) {
         for (const subName of newSubcategories) {
           if (subName.trim()) {
-            await addDoc(collection(db, 'mealPlanCategories'), {
-              name: subName.trim(),
+            const subRequestBody = {
+              action: 'create',
               propertyId,
-              parentId: catRef.id,
+              name: subName.trim(),
+              parentId: parentCategory.id,
               displayOrder: 0,
-              createdAt: serverTimestamp(),
+              isActive: true,
+            };
+
+            addDebugLog('request', 'POST', '/api/meal-plan-categories/crud', { requestBody: subRequestBody });
+
+            const subResponse = await fetch('/api/meal-plan-categories/crud', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(subRequestBody),
             });
+
+            const subData = await subResponse.json().catch(() => ({}));
+
+            addDebugLog('response', 'POST', '/api/meal-plan-categories/crud', {
+              status: subResponse.status,
+              responseBody: subData,
+            });
+
+            if (!subResponse.ok) {
+              addDebugLog('error', 'POST', '/api/meal-plan-categories/crud', {
+                error: subData.error || `HTTP ${subResponse.status}`,
+                status: subResponse.status,
+                responseBody: subData,
+              });
+            }
           }
         }
       }
 
-      // Reset
+      // Reset form
       setNewCategoryName('');
-      setNewCategoryIcon('');
       setNewCategoryDescription('');
       setNewCategoryParent(null);
       setNewSubcategories([]);
       setShowNewCategoryModal(false);
+
+      // Refetch categories
+      await fetchCategories();
     } catch (err) {
       console.error('Error adding category:', err);
-      alert('Failed to add category');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add category';
+      addDebugLog('error', 'POST', '/api/meal-plan-categories/crud', {
+        error: errorMessage,
+      });
+      alert(errorMessage);
     }
   };
 
   const handleDeleteCategory = async (catId: string) => {
-    if (!window.confirm('Delete this category? Associated meal plans will lose their category.')) return;
+    if (!window.confirm('Delete this category? Associated meal plans will lose their category.') || !propertyId) return;
     try {
-      await deleteDoc(doc(db, 'mealPlanCategories', catId));
+      const response = await fetch('/api/meal-plan-categories/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          propertyId,
+          id: catId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete category');
+      }
+      
+      // Refetch categories
+      await fetchCategories();
     } catch (err) {
       console.error('Delete category error:', err);
-      alert('Failed to delete category');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete category';
+      alert(errorMessage);
     }
   };
 
@@ -482,13 +634,27 @@ export default function MealPlansPage() {
   }
 
   return (
-    <div className="space-y-6 overflow-x-hidden">
+    <div className="space-y-6 overflow-x-hidden pb-96">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Meal Plans</h1>
         </div>
-        <PropertySettingsSubtabs subtabs={tabs} />
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowDebugPanel(!showDebugPanel)}
+            className={`p-2 rounded-lg transition-colors flex items-center gap-2 text-sm ${
+              showDebugPanel
+                ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+            title="Toggle debug panel"
+          >
+            <Icons.Bug className="w-4 h-4" />
+            Debug {debugLogs.length > 0 && `(${debugLogs.length})`}
+          </button>
+          <PropertySettingsSubtabs subtabs={tabs} />
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1308,6 +1474,7 @@ export default function MealPlansPage() {
           propertyId={propertyId}
           categories={categories}
           mealPlanToEdit={mealPlanToEdit}
+          onSuccess={fetchMealPlans}
         />
       )}
 
@@ -1350,6 +1517,14 @@ export default function MealPlansPage() {
           mealPlans={mealPlans.map(mp => ({ id: mp.id, name: mp.name }))}
         />
       )}
+
+      {/* Debug Panel */}
+      <DebugPanel
+        isOpen={showDebugPanel}
+        onClose={() => setShowDebugPanel(false)}
+        logs={debugLogs}
+        onClear={() => setDebugLogs([])}
+      />
     </div>
   );
 }

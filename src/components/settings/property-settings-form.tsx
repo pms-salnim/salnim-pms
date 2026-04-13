@@ -12,8 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
-import { db, app } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp, type FieldValue, Timestamp, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 import type { Property, LegalInformation, LoyaltyTierSetting } from '@/types/property';
 import { timeZoneOptions, currencyOptions } from '@/types/property';
 import { Icons } from '../icons';
@@ -25,13 +24,18 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '../ui/separator';
 import { useTranslation } from 'react-i18next';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import Image from "next/image";
 import { X, UploadCloud } from 'lucide-react';
 import { Slider } from '../ui/slider';
 import { uploadFile, deleteFile } from '@/lib/uploadHelper';
 import type { Promotion } from '@/types/promotion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 export default function PropertySettingsForm() {
   const { user, property, refreshUserProfile } = useAuth();
@@ -113,7 +117,11 @@ export default function PropertySettingsForm() {
 
   const handleSaveChanges = async (event: React.FormEvent) => {
     event.preventDefault();
+    
+    console.log('Property object:', property);
+    
     if (!property?.id) {
+      console.error('Property not found:', { property, hasProperty: !!property, hasId: !!property?.id });
       toast({ title: "Error", description: t('toasts.error_property_not_found'), variant: "destructive" });
       return;
     }
@@ -144,16 +152,32 @@ export default function PropertySettingsForm() {
     };
 
     try {
-      const functions = getFunctions(app);
-      const updatePropertyFunction = httpsCallable(functions, 'updateProperty');
+      // Get session to get access token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No session token available');
+      }
 
-      const result = await updatePropertyFunction({
-        propertyId: property.id,
-        updates: dataToUpdate
+      // Call Supabase API endpoint
+      const response = await fetch('/api/properties/update', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          propertyId: property.id,
+          updates: dataToUpdate
+        }),
       });
 
-      const response = result.data as { success: boolean; updates?: any };
-      if (response.success) {
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Update failed');
+      }
+
+      const result = await response.json();
+      if (result.success) {
         toast({ title: "Success", description: "Property settings have been updated." });
         await refreshUserProfile();
       } else {

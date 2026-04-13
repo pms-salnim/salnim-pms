@@ -4,6 +4,15 @@ import React, { useState, useRef } from 'react';
 import { Icons } from '@/components/icons';
 import type { Menu } from '@/types/menu';
 
+const MEAL_TYPE_LABELS: Record<string, string> = {
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+  ftour: 'Ftour',
+  snacks: 'Snacks',
+  custom: 'Custom',
+};
+
 interface MenusListingProps {
   menus: Menu[];
   mealPlans: { id: string; name: string }[];

@@ -84,6 +84,22 @@ export const defaultPermissions: Permissions = {
   teamWorkspace: false,
 };
 
+// Full permissions for account owners
+export const fullPermissions: Permissions = {
+  rooms: true,
+  reservations: true,
+  ratePlans: true,
+  guests: true,
+  finance: true,
+  availability: true,
+  reports: true,
+  settings: true,
+  staffManagement: true,
+  housekeeping: true,
+  extras: true,
+  teamWorkspace: true,
+};
+
 export const staffDepartments = {
     'direction_administration': {
         labelKey: 'departments.direction_administration',

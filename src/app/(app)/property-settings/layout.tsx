@@ -1,6 +1,7 @@
 'use client';
 
 import { PropertySettingsSidebar } from '@/components/property-settings/property-settings-sidebar';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
 export default function PropertySettingsLayout({
   children,
@@ -8,13 +9,15 @@ export default function PropertySettingsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full ">
-      <PropertySettingsSidebar />
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-2 md:p-2">
-          {children}
-        </div>
-      </main>
-    </div>
+    <SidebarProvider>
+      <div className="flex w-full h-full">
+        <PropertySettingsSidebar />
+        <main className="flex-1 overflow-hidden">
+          <div className="w-full h-full">
+            {children}
+          </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

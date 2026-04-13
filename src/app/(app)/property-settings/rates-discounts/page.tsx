@@ -7,7 +7,7 @@ export default function RatesDiscountsPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.push('/property-settings/rates-discounts/rates');
+    router.push('/property-settings/rates-discounts/availability');
   }, [router]);
 
   return null;

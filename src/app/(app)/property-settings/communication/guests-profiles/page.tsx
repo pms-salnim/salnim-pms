@@ -32,9 +32,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
+import type { GuestProfileSettings as GuestProfileSettingsType } from '@/types/guest-profile';
 
 const communicationSubtabs = [
   { id: 'guests-profiles', label: 'Guests Profiles', href: '/property-settings/communication/guests-profiles' },
@@ -319,49 +318,71 @@ export default function GuestsProfilesPage() {
   const [deletingFieldIdx, setDeletingFieldIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    if (currentUser?.propertyId) {
+    // Only load settings after auth is fully loaded
+    if (!isLoadingAuth && currentUser?.propertyId) {
       setCurrentPropertyId(currentUser.propertyId);
-      loadSettings(currentUser.propertyId);
+      loadSettings();
+    } else if (!isLoadingAuth && !currentUser) {
+      // User is not authenticated
+      setSettings(defaultSettings);
+      setIsLoading(false);
     }
-  }, [currentUser?.propertyId]);
+  }, [isLoadingAuth, currentUser?.propertyId]);
 
-  const loadSettings = async (propertyId: string) => {
+  const loadSettings = async () => {
     try {
-      const propertyDocRef = doc(db, 'properties', propertyId);
-      const propertyDoc = await getDoc(propertyDocRef);
-      
-      if (propertyDoc.exists() && propertyDoc.data()?.guestProfileSettings) {
-        const loadedSettings = propertyDoc.data().guestProfileSettings;
-        const mergedSettings = {
-          ...defaultSettings,
-          ...loadedSettings,
-          // Ensure nested arrays/objects are preserved from defaults if missing
-          coreFieldsConfig: loadedSettings.coreFieldsConfig || defaultSettings.coreFieldsConfig,
-          loyaltyTiers: loadedSettings.loyaltyTiers || defaultSettings.loyaltyTiers,
-          duplicateDetectionFields: loadedSettings.duplicateDetectionFields || defaultSettings.duplicateDetectionFields,
-          duplicateDetectionCustomFields: loadedSettings.duplicateDetectionCustomFields || defaultSettings.duplicateDetectionCustomFields,
-          enableIdTypes: loadedSettings.enableIdTypes || defaultSettings.enableIdTypes,
-          requiredFields: loadedSettings.requiredFields || defaultSettings.requiredFields,
-          customFields: loadedSettings.customFields || defaultSettings.customFields,
-          noteCategories: loadedSettings.noteCategories || defaultSettings.noteCategories,
-          enableStatus: loadedSettings.enableStatus !== undefined ? loadedSettings.enableStatus : defaultSettings.enableStatus,
-          predefinedFlags: loadedSettings.predefinedFlags || defaultSettings.status,
-        };
-        setSettings(mergedSettings);
-      } else {
+      if (!currentUser?.propertyId) {
         setSettings(defaultSettings);
+        setIsLoading(false);
+        return;
       }
+
+      const url = new URL('/api/property-settings/guest-profiles', window.location.origin);
+      url.searchParams.set('propertyId', currentUser.propertyId);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        console.warn('Error loading settings:', response.statusText);
+        setSettings(defaultSettings);
+        setIsLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      const loadedSettings = data.settings || {};
+
+      const mergedSettings = {
+        ...defaultSettings,
+        ...loadedSettings,
+        // Ensure nested arrays/objects are preserved from defaults if missing
+        coreFieldsConfig: loadedSettings.coreFieldsConfig || defaultSettings.coreFieldsConfig,
+        loyaltyTiers: loadedSettings.loyaltyTiers || defaultSettings.loyaltyTiers,
+        duplicateDetectionFields: loadedSettings.duplicateDetectionFields || defaultSettings.duplicateDetectionFields,
+        duplicateDetectionCustomFields: loadedSettings.duplicateDetectionCustomFields || defaultSettings.duplicateDetectionCustomFields,
+        enableIdTypes: loadedSettings.enableIdTypes || defaultSettings.enableIdTypes,
+        requiredFields: loadedSettings.requiredFields || defaultSettings.requiredFields,
+        customFields: loadedSettings.customFields || defaultSettings.customFields,
+        noteCategories: loadedSettings.noteCategories || defaultSettings.noteCategories,
+        enableStatus: loadedSettings.enableStatus !== undefined ? loadedSettings.enableStatus : defaultSettings.enableStatus,
+        status: loadedSettings.status || defaultSettings.status,
+      };
+      setSettings(mergedSettings);
       setIsLoading(false);
     } catch (error) {
       console.error('Error loading settings:', error);
-      toast({ title: 'Error', description: 'Could not load settings', variant: 'destructive' });
+      setSettings(defaultSettings);
       setIsLoading(false);
     }
   };
 
   const handleSave = async () => {
-    if (!currentPropertyId) return;
-
     // Validate loyalty tiers
     const errors: string[] = [];
     if (settings.loyaltyTiers && settings.loyaltyTiers.length > 0) {
@@ -386,17 +407,33 @@ export default function GuestsProfilesPage() {
     setValidationErrors([]);
     setIsSaving(true);
     try {
-      const propertyDocRef = doc(db, 'properties', currentPropertyId);
-      
-      // Remove undefined values from settings for Firebase compatibility
+      if (!currentUser?.propertyId) {
+        throw new Error('Property ID not found');
+      }
+
+      // Remove undefined values from settings for API compatibility
       const cleanedSettings = Object.fromEntries(
         Object.entries(settings).filter(([_, v]) => v !== undefined)
       );
       
-      await updateDoc(propertyDocRef, {
-        guestProfileSettings: cleanedSettings,
-        updatedAt: serverTimestamp(),
+      const response = await fetch('/api/property-settings/guest-profiles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          settings: cleanedSettings,
+          propertyId: currentUser.propertyId,
+        }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error Response:', errorData);
+        throw new Error(errorData.details || errorData.error || 'Failed to save settings');
+      }
+
       toast({ title: 'Success', description: 'Guest profile settings saved successfully' });
     } catch (error: any) {
       console.error('Error saving settings:', error);
@@ -415,21 +452,34 @@ export default function GuestsProfilesPage() {
   };
 
   const handleResetToDefaults = async () => {
-    if (!currentPropertyId) return;
-
     setIsSaving(true);
     try {
-      const propertyDocRef = doc(db, 'properties', currentPropertyId);
-      
-      // Remove undefined values from settings for Firebase compatibility
+      if (!currentUser?.propertyId) {
+        throw new Error('Property ID not found');
+      }
+
+      // Remove undefined values from settings for API compatibility
       const cleanedSettings = Object.fromEntries(
         Object.entries(defaultSettings).filter(([_, v]) => v !== undefined)
       );
       
-      await updateDoc(propertyDocRef, {
-        guestProfileSettings: cleanedSettings,
-        updatedAt: serverTimestamp(),
+      const response = await fetch('/api/property-settings/guest-profiles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          settings: cleanedSettings,
+          propertyId: currentUser.propertyId,
+        }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to reset settings');
+      }
+
       setSettings(defaultSettings);
       setShowResetDialog(false);
       toast({ title: 'Success', description: 'Settings have been reset to defaults and saved' });

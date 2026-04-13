@@ -25,9 +25,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from '@/contexts/auth-context';
-import { db, app } from '@/lib/firebase';
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import type { FirestoreUser } from '@/types/firestoreUser';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -80,6 +77,52 @@ export default function UsersPage() {
     }
   }, [currentUser?.propertyId]);
 
+  const fetchTeamMembers = async (propId?: string) => {
+    const propertyId = propId || currentUserPropertyId;
+    if (!propertyId) {
+      setStaffMembers([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(
+        `/api/team-members/list?property_id=${propertyId}`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch team members');
+      }
+      
+      const data = await response.json();
+      const transformedMembers = (data.teamMembers || []).map((member: any) => ({
+        id: member.id,
+        fullName: member.fullName,
+        email: member.email,
+        phone: member.phone,
+        role: member.role,
+        status: member.status,
+        lastLogin: member.lastLogin ? new Date(member.lastLogin).toLocaleString() : undefined,
+        propertyId: member.propertyId,
+        permissions: member.permissions,
+        createdBy: member.createdBy,
+        createdAt: member.createdAt,
+        updatedAt: member.updatedAt,
+      }));
+      setStaffMembers(transformedMembers);
+    } catch (error) {
+      console.error("Error fetching team members:", error);
+      toast({ 
+        title: "Error", 
+        description: "Could not fetch team members.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!currentUserPropertyId) {
       setStaffMembers([]);
@@ -87,44 +130,7 @@ export default function UsersPage() {
       return;
     }
 
-    setIsLoading(true);
-    const staffColRef = collection(db, "staff");
-    // This query might need adjustment if we truly separate User and Staff collections
-    const q = query(staffColRef, where("propertyId", "==", currentUserPropertyId));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedStaff = snapshot.docs
-        .map(docSnap => {
-          const data = docSnap.data();
-          // Filter for records that are actual users with login capabilities
-          if (!data.email || !data.permissions) return null;
-
-          return {
-            id: docSnap.id,
-            fullName: data.fullName || (data.firstName || '') + ' ' + (data.lastName || '').trim(),
-            email: data.email,
-            phone: data.phone,
-            role: data.role,
-            status: data.status || 'Active',
-            lastLogin: data.lastLogin?.toDate ? data.lastLogin.toDate().toLocaleString() : data.lastLogin,
-            propertyId: data.propertyId,
-            permissions: data.permissions as Permissions,
-            createdBy: data.createdBy,
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-          } as AuthStaffMember;
-        })
-        .filter((item): item is AuthStaffMember => item !== null);
-
-      setStaffMembers(fetchedStaff);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching staff:", error);
-      toast({ title: "Error", description: "Could not fetch staff members.", variant: "destructive" });
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchTeamMembers(currentUserPropertyId);
   }, [currentUserPropertyId]);
 
 
@@ -150,71 +156,140 @@ export default function UsersPage() {
 
   const handleFormSave = async (staffData: any) => {
     if (!currentUserPropertyId || !currentUser?.id) {
-      toast({ title: "Error", description: "Cannot save staff member. User or property not identified.", variant: "destructive" });
+      toast({ 
+        title: "Error", 
+        description: "Cannot save team member. User or property not identified.", 
+        variant: "destructive" 
+      });
       return;
     }
 
     setIsLoading(true);
 
     const { id: staffIdFromForm, password, ...formData } = staffData;
-    const fullName = (formData.firstName || '') + ' ' + (formData.lastName || '').trim();
+    const fullName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
 
     try {
       if (editingStaff && staffIdFromForm) {
-        // --- UPDATE EXISTING USER ---
-        const staffDocRef = doc(db, "staff", staffIdFromForm);
-        const dataToUpdate = {
-          ...formData,
-          fullName,
-          updatedAt: serverTimestamp()
-        };
-        await updateDoc(staffDocRef, dataToUpdate);
-        toast({ title: t('toasts.update_success.title'), description: t('toasts.update_success.description', { name: fullName }) });
+        // --- UPDATE EXISTING TEAM MEMBER ---
+        const response = await fetch('/api/team-members/crud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            propertyId: currentUserPropertyId,
+            data: {
+              id: staffIdFromForm,
+              fullName,
+              email: formData.email,
+              phone: formData.phone,
+              role: formData.role,
+              permissions: formData.permissions,
+              status: formData.status,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to update team member');
+        }
+
+        toast({ 
+          title: t('toasts.update_success.title'), 
+          description: t('toasts.update_success.description', { name: fullName }) 
+        });
+        
+        handleFormClose();
+        // Refetch team members to show the updated user
+        await fetchTeamMembers(currentUserPropertyId);
       } else {
-        // --- CREATE NEW USER ---
+        // --- CREATE NEW TEAM MEMBER ---
         if (!password) {
           throw new Error(t('toasts.new_password_required'));
         }
-        
-        const functions = getFunctions(app, 'europe-west1');
-        const createStaffUser = httpsCallable(functions, 'createStaffUser');
 
-        const requestData = {
-          email: formData.email,
-          password: password,
-          fullName: fullName,
-          role: formData.role,
-          permissions: formData.permissions,
-          propertyId: currentUserPropertyId,
-          phone: formData.phone || ""
-        };
+        const response = await fetch('/api/team-members/crud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create',
+            propertyId: currentUserPropertyId,
+            data: {
+              fullName,
+              email: formData.email,
+              phone: formData.phone || '',
+              role: formData.role,
+              permissions: formData.permissions,
+              status: formData.status || 'Active',
+              createdBy: currentUser.id,
+              password: password,
+            },
+          }),
+        });
 
-        const result: any = await createStaffUser(requestData);
-
-        if (result.data.success) {
-          toast({ title: t('toasts.create_success.title'), description: t('toasts.create_success.description', { name: fullName }) });
-        } else {
-          throw new Error(result.data.error || t('toasts.create_error'));
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create team member');
         }
+
+        toast({ 
+          title: t('toasts.create_success.title'), 
+          description: t('toasts.create_success.description', { name: fullName }) 
+        });
+        
+        handleFormClose();
+        // Refetch team members to show the newly created user
+        await fetchTeamMembers(currentUserPropertyId);
       }
-      handleFormClose();
     } catch (error: any) {
-      console.error("Error saving staff:", error);
-      toast({ title: "Error", description: error.message || t('toasts.save_error'), variant: "destructive" });
+      console.error("Error saving team member:", error);
+      toast({ 
+        title: "Error", 
+        description: error.message || t('toasts.save_error'), 
+        variant: "destructive" 
+      });
     } finally {
       setIsLoading(false);
     }
   };
   
   const handleToggleStatusStaff = async (staffId: string, currentStatus: StaffStatus) => {
-     try {
-        const staffDocRef = doc(db, "staff", staffId);
-        const newStatus: StaffStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
-        await updateDoc(staffDocRef, { status: newStatus, updatedAt: serverTimestamp() });
-        toast({ title: "Success", description: 'Staff member status updated to ' + newStatus + '.' });
-     } catch (error) {
-        toast({ title: "Error", description: "Could not update staff status.", variant: "destructive" });
-     }
+    try {
+      const newStatus: StaffStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+      
+      const response = await fetch('/api/team-members/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          propertyId: currentUserPropertyId,
+          data: {
+            id: staffId,
+            status: newStatus,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update status');
+      }
+
+      toast({ 
+        title: "Success", 
+        description: `Team member status updated to ${newStatus}.` 
+      });
+      
+      // Refetch team members to show updated status
+      await fetchTeamMembers(currentUserPropertyId);
+    } catch (error: any) {
+      console.error("Error updating status:", error);
+      toast({ 
+        title: "Error", 
+        description: "Could not update team member status.", 
+        variant: "destructive" 
+      });
+    }
   };
 
   const handleResetPassword = (staffId: string) => {
@@ -234,30 +309,65 @@ export default function UsersPage() {
     if (!staffToDelete || !canManageStaff) return;
 
     if (staffToDelete.id === currentUser?.id) {
-        toast({ title: "Error", description: "You cannot delete your own account.", variant: "destructive" });
-        setIsDeleteDialogOpen(false);
-        setStaffToDelete(null);
-        return;
+      toast({ 
+        title: "Error", 
+        description: "You cannot delete your own account.", 
+        variant: "destructive" 
+      });
+      setIsDeleteDialogOpen(false);
+      setStaffToDelete(null);
+      return;
+    }
+
+    if (!currentUserPropertyId) {
+      toast({ 
+        title: "Error", 
+        description: "Property ID not found. Please refresh and try again.", 
+        variant: "destructive" 
+      });
+      return;
     }
 
     setIsLoading(true);
     try {
-        const functions = getFunctions(app, 'europe-west1');
-        const deleteStaffUser = httpsCallable(functions, 'deleteStaffUser');
-        const result: any = await deleteStaffUser({ uid: staffToDelete.id });
+      const response = await fetch('/api/team-members/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          propertyId: currentUserPropertyId,
+          data: {
+            id: staffToDelete.id,
+          },
+        }),
+      });
 
-        if (result.data.success) {
-            toast({ title: "Success", description: result.data.message || t('toasts.delete_success') });
-        } else {
-            throw new Error(result.data.error || "An unknown error occurred on the server.");
-        }
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = responseData?.details || responseData?.error || 'Failed to delete team member';
+        throw new Error(errorMessage);
+      }
+
+      toast({ 
+        title: "Success", 
+        description: t('toasts.delete_success') 
+      });
+      
+      // Refetch team members to remove the deleted user
+      await fetchTeamMembers(currentUserPropertyId);
     } catch (error: any) {
-        console.error("Error deleting staff user:", error);
-        toast({ title: "Deletion Failed", description: error.message || t('toasts.delete_error'), variant: "destructive" });
+      console.error("Error deleting team member:", error);
+      const errorMessage = error?.message || "Could not delete team member";
+      toast({ 
+        title: "Deletion Failed", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
     } finally {
-        setIsLoading(false);
-        setIsDeleteDialogOpen(false);
-        setStaffToDelete(null);
+      setIsLoading(false);
+      setIsDeleteDialogOpen(false);
+      setStaffToDelete(null);
     }
   };
 

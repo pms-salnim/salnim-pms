@@ -9,6 +9,7 @@ import {
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import type { Property } from "../types/property";
 import type { Reservation, ReservationRoom } from '../types/reservation';
+import { checkMultipleRoomsAvailability } from "../lib/checkSupabaseAvailability";
 
 /**
  * [PUBLIC] Creates a reservation from the public booking page.
@@ -45,6 +46,25 @@ export const createBookingFromPage = onRequest({
       
       const requestedFrom = startOfDay(parseISO(dateRange.from));
       const requestedTo = parseISO(dateRange.to);
+
+      // Pre-check Supabase availability to catch race conditions early
+      const roomIds = selections.map((s: any) => s.roomId);
+      const supabaseAvailability = await checkMultipleRoomsAvailability(
+          roomIds,
+          propertyId,
+          requestedFrom,
+          requestedTo
+      );
+
+      // Verify all selected rooms are available in Supabase
+      for (const selection of selections) {
+          if (supabaseAvailability[selection.roomId] !== true) {
+              response.status(409).send({ 
+                  error: `Room ${selection.roomName} is no longer available for the selected dates. Please check availability and try again.` 
+              });
+              return;
+          }
+      }
 
       try {
           const allGuestsSnapshot = await db.collection("guests")

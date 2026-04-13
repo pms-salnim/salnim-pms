@@ -14,6 +14,7 @@ export default function AppLayout({
   const pathname = usePathname();
   const isTeamWorkspace = pathname.startsWith('/team-workspace');
   const isFullscreenCalendar = pathname === '/calendar-availability/calendar';
+  const isPropertySettings = pathname.startsWith('/property-settings');
   
   // A page is considered "fullscreen" if it's one of the special cases.
   const isFullscreenPage = isTeamWorkspace || isFullscreenCalendar;
@@ -22,7 +23,7 @@ export default function AppLayout({
     <AuthWrapper>
       <SidebarProvider>
         <div className="flex min-h-screen w-full bg-background font-body text-foreground">
-          <AppSidebar />
+          {!isPropertySettings && <AppSidebar />}
 
           <div className="flex flex-1 flex-col transition-all duration-300 ease-in-out">
             <AppHeader />

@@ -4,10 +4,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 import type { Room, RoomStatus } from '@/types/room';
 import { Pie, PieChart, ResponsiveContainer, Cell, Legend, Tooltip } from 'recharts';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 interface RoomsOverviewProps {
   propertyId: string;
@@ -23,33 +27,48 @@ export default function RoomsOverview({ propertyId }: RoomsOverviewProps) {
       setIsLoading(false);
       return;
     }
-    setIsLoading(true);
 
-    // Fetch Rooms for stats and chart
-    const roomsColRef = collection(db, "rooms");
-    const roomsQuery = query(roomsColRef, where("propertyId", "==", propertyId));
-    const unsubRooms = onSnapshot(roomsQuery, (snapshot) => {
-      const currentRooms = snapshot.docs.map(doc => doc.data() as Room);
-      setRooms(currentRooms);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching rooms for overview:", error);
-      setIsLoading(false);
-    });
+    const fetchRoomData = async () => {
+      try {
+        setIsLoading(true);
 
-    // Fetch Room Types count
-    const roomTypesColRef = collection(db, "roomTypes");
-    const roomTypesQuery = query(roomTypesColRef, where("propertyId", "==", propertyId));
-    const unsubRoomTypes = onSnapshot(roomTypesQuery, (snapshot) => {
-      setRoomTypesCount(snapshot.size);
-    }, (error) => {
-      console.error("Error fetching room types count:", error);
-    });
-    
-    return () => {
-      unsubRooms();
-      unsubRoomTypes();
+        // Get session and token
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          console.error('No active session');
+          setIsLoading(false);
+          return;
+        }
+
+        const token = sessionData.session.access_token;
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+        };
+
+        // Fetch rooms and room types in parallel
+        const [roomsResponse, roomTypesResponse] = await Promise.all([
+          fetch(`/api/rooms/list?propertyId=${propertyId}`, { method: 'GET', headers }),
+          fetch(`/api/rooms/room-types/list?propertyId=${propertyId}`, { method: 'GET', headers }),
+        ]);
+
+        if (roomsResponse.ok) {
+          const roomsData = await roomsResponse.json();
+          setRooms(roomsData.rooms || []);
+        }
+
+        if (roomTypesResponse.ok) {
+          const roomTypesData = await roomTypesResponse.json();
+          setRoomTypesCount(roomTypesData.roomTypes?.length || 0);
+        }
+
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error fetching rooms for overview:", error);
+        setIsLoading(false);
+      }
     };
+
+    fetchRoomData();
   }, [propertyId]);
 
   const summaryStats = useMemo(() => {

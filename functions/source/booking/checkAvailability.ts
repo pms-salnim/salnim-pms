@@ -12,6 +12,7 @@ import {
 } from "date-fns";
 import type { Timestamp } from "firebase-admin/firestore";
 import type { Room, RoomType, RatePlan, AvailabilitySetting, ReservationRoom } from "../types/index";
+import { checkMultipleRoomsAvailability } from "../lib/checkSupabaseAvailability";
 
 /**
  * [PUBLIC] Checks room type availability for a given date range.
@@ -146,6 +147,21 @@ export const checkAvailability = onRequest({
 
 
             if (availablePhysicalRooms.length > 0) {
+                // 4. Check against Supabase availability calendar as additional validation layer
+                const supabaseAvailableRooms = await checkMultipleRoomsAvailability(
+                    availablePhysicalRooms.map((r: Room) => r.id),
+                    propertyId,
+                    requestedFrom,
+                    requestedTo
+                );
+
+                // Filter to only rooms available in both Firestore and Supabase
+                const finalAvailableRooms = availablePhysicalRooms.filter((r: Room) => 
+                    supabaseAvailableRooms[r.id] === true
+                );
+
+                if (finalAvailableRooms.length === 0) continue;
+
                 const ratePlansForType = allRatePlans.filter((rp: RatePlan) => {
                     if (rp.roomTypeId !== rt.id) return false;
                     if (!rp.startDate || !rp.endDate) return true; // Always valid if no dates
@@ -174,8 +190,8 @@ export const checkAvailability = onRequest({
 
                 results.push({
                     ...rt,
-                    availableUnits: availablePhysicalRooms.length,
-                    availableRooms: availablePhysicalRooms.map((r: Room) => ({
+                    availableUnits: finalAvailableRooms.length,
+                    availableRooms: finalAvailableRooms.map((r: Room) => ({
                       id: r.id, name: r.name,
                     })),
                     cheapestRate: cheapestRate === Infinity ? (rt.baseRate ?? 0) : cheapestRate,

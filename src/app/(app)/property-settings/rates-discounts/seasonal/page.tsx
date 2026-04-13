@@ -24,8 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";import { PropertySettingsSubtabs } from '@/components/property-settings/property-settings-subtabs';import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch, getDocs, Timestamp } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
 import type { SeasonalRate } from '@/types/seasonalRate';
 import type { RatePlan } from '@/types/ratePlan';
@@ -33,6 +32,11 @@ import type { RoomType } from '@/types/roomType';
 import { Icons } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTranslation } from 'react-i18next';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 const SeasonalRateForm = dynamic(() => import('@/components/rate-plans/seasonal-rate-form'), {
   loading: () => <div className="h-48 flex items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
@@ -43,10 +47,11 @@ const ratesDiscountsSubtabs = [
   { id: 'rates', label: 'Rate Plans', href: '/property-settings/rates-discounts/rates' },
   { id: 'seasonal', label: 'Seasonal Pricing', href: '/property-settings/rates-discounts/seasonal' },
   { id: 'discounts', label: 'Discounts', href: '/property-settings/rates-discounts/discounts' },
+  { id: 'availability', label: 'Availability', href: '/property-settings/rates-discounts/availability' },
 ];
 
 export default function SeasonalPricingPage() {
-  const { user, isLoadingAuth } = useAuth();
+  const { user, isLoadingAuth, property } = useAuth();
   const { t } = useTranslation('pages/rate-plans/seasonal/content');
   const [seasonalRates, setSeasonalRates] = useState<SeasonalRate[]>([]);
   const [ratePlans, setRatePlans] = useState<RatePlan[]>([]);
@@ -59,43 +64,73 @@ export default function SeasonalPricingPage() {
   const [rateToDelete, setRateToDelete] = useState<SeasonalRate | null>(null);
 
   const canManage = user?.permissions?.ratePlans;
-  const propertyId = user?.propertyId;
 
+  // Fetch seasonal rates, rate plans, and room types when property loads
   useEffect(() => {
-    if (!propertyId) {
+    if (!property?.id || !user?.id) {
+      setSeasonalRates([]);
+      setRatePlans([]);
+      setRoomTypes([]);
       setIsLoading(false);
       return;
     }
-    setIsLoading(true);
 
-    const srQuery = query(collection(db, "seasonalRates"), where("propertyId", "==", propertyId));
-    const rpQuery = query(collection(db, "ratePlans"), where("propertyId", "==", propertyId));
-    const rtQuery = query(collection(db, "roomTypes"), where("propertyId", "==", propertyId));
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('No active session');
+        }
 
-    const unsubSR = onSnapshot(srQuery, (snapshot) => {
-      setSeasonalRates(snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-        startDate: (docSnap.data().startDate as Timestamp).toDate(),
-        endDate: (docSnap.data().endDate as Timestamp).toDate(),
-      } as SeasonalRate)));
-    });
+        // Fetch room types
+        const roomTypesResponse = await fetch(`/api/rooms/room-types/list?propertyId=${property.id}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        });
 
-    const unsubRP = onSnapshot(rpQuery, (snapshot) => {
-      setRatePlans(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as RatePlan)));
-    });
+        if (roomTypesResponse.ok) {
+          const roomTypesData = await roomTypesResponse.json();
+          setRoomTypes(roomTypesData.roomTypes || []);
+        }
 
-    const unsubRT = onSnapshot(rtQuery, (snapshot) => {
-      setRoomTypes(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as RoomType)));
-      setIsLoading(false); // Consider loading finished when all data is in
-    });
+        // Fetch rate plans
+        const ratePlansResponse = await fetch(`/api/rate-plans/list?propertyId=${property.id}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        });
 
-    return () => {
-      unsubSR();
-      unsubRP();
-      unsubRT();
+        if (ratePlansResponse.ok) {
+          const ratePlansData = await ratePlansResponse.json();
+          setRatePlans(ratePlansData.ratePlans || []);
+        }
+
+        // Fetch seasonal rates
+        const seasonalRatesResponse = await fetch(`/api/seasonal-rates/list?propertyId=${property.id}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        });
+
+        if (seasonalRatesResponse.ok) {
+          const seasonalRatesData = await seasonalRatesResponse.json();
+          setSeasonalRates(seasonalRatesData.seasonalRates || []);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast({ title: 'Error', description: 'Could not fetch seasonal rates or rate plans.', variant: 'destructive' });
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, [propertyId]);
+
+    fetchData();
+  }, [property?.id, user?.id]);
 
   const handleOpenModal = (rate: SeasonalRate | null = null) => {
     if (!canManage) return;
@@ -109,25 +144,69 @@ export default function SeasonalPricingPage() {
   };
 
   const handleSaveRate = async (formData: Omit<SeasonalRate, 'id' | 'propertyId' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
-    if (!propertyId || !user?.id || !canManage) {
+    if (!property?.id || !user?.id || !canManage) {
       toast({ title: "Error", description: "Permission denied or property/user not identified.", variant: "destructive" });
       return;
     }
     setIsLoading(true);
 
     try {
-      if (editingRate) {
-        const docRef = doc(db, "seasonalRates", editingRate.id);
-        await updateDoc(docRef, { ...formData, updatedAt: serverTimestamp() });
-        toast({ title: t('toasts.success_update_title'), description: t('toasts.success_update_description') });
-      } else {
-        await addDoc(collection(db, "seasonalRates"), { ...formData, propertyId, createdAt: serverTimestamp() });
-        toast({ title: t('toasts.success_create_title'), description: t('toasts.success_create_description') });
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
       }
+
+      // Generate a UUID for new seasonal rates
+      const rateId = editingRate?.id || crypto.randomUUID();
+
+      const response = await fetch('/api/seasonal-rates/crud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: editingRate ? 'update' : 'create',
+          propertyId: property.id,
+          seasonalRateId: editingRate?.id,
+          seasonalRate: {
+            id: rateId,
+            ...formData,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save seasonal rate');
+      }
+
+      toast({
+        title: editingRate ? t('toasts.success_update_title') : t('toasts.success_create_title'),
+        description: editingRate ? t('toasts.success_update_description') : t('toasts.success_create_description'),
+      });
+
       handleCloseModal();
+
+      // Reload seasonal rates
+      const listResponse = await fetch(`/api/seasonal-rates/list?propertyId=${property.id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setSeasonalRates(data.seasonalRates || []);
+      }
     } catch (error) {
       console.error("Error saving seasonal rate:", error);
-      toast({ title: t('toasts.error_save_title'), description: t('toasts.error_save_description'), variant: "destructive" });
+      toast({
+        title: t('toasts.error_save_title'),
+        description: t('toasts.error_save_description'),
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -140,11 +219,46 @@ export default function SeasonalPricingPage() {
   };
 
   const confirmDeleteRate = async () => {
-    if (!rateToDelete) return;
+    if (!rateToDelete || !property?.id) return;
     setIsLoading(true);
     try {
-      await deleteDoc(doc(db, "seasonalRates", rateToDelete.id));
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
+      }
+
+      const response = await fetch('/api/seasonal-rates/crud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'delete',
+          propertyId: property.id,
+          seasonalRateId: rateToDelete.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete seasonal rate');
+      }
+
       toast({ title: t('toasts.success_delete_title'), description: t('toasts.success_delete_description') });
+
+      // Reload seasonal rates
+      const listResponse = await fetch(`/api/seasonal-rates/list?propertyId=${property.id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setSeasonalRates(data.seasonalRates || []);
+      }
     } catch (error) {
       console.error("Error deleting seasonal rate:", error);
       toast({ title: t('toasts.error_delete_title'), description: t('toasts.error_delete_description'), variant: "destructive" });

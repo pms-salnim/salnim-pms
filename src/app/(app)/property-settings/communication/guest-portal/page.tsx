@@ -32,8 +32,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { uploadFile, deleteFile } from '@/lib/uploadHelper';
 
@@ -309,19 +307,41 @@ export default function GuestPortalPage() {
       }
 
       try {
-        const portalsPath = collection(db, 'properties', property.id, 'guestPortals');
-        const portalsSnapshot = await getDocs(portalsPath);
-        
-        let loadedPortals = portalsSnapshot.docs.map(doc => ({
-          ...(doc.data() as GuestPortalSettings),
-          id: doc.id,
-        }));
+        const url = new URL('/api/property-settings/guest-portal', window.location.origin);
+        url.searchParams.set('propertyId', property.id);
 
-        // Auto-create default portal if none exist (with guard to prevent duplicates)
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          console.warn('Error loading portals:', response.statusText);
+          const defaultPortalId = `portal-${Date.now()}`;
+          const defaultPortal = {
+            ...defaultSettings,
+            id: defaultPortalId,
+            general: {
+              ...defaultSettings.general,
+              portalName: 'Guest Portal',
+              defaultPortal: true,
+            },
+          };
+          setPortals([defaultPortal]);
+          setSelectedPortalId(defaultPortalId);
+          setIsLoading(false);
+          return;
+        }
+
+        const data = await response.json();
+        let loadedPortals = data.portals || [];
+
+        // Auto-create default portal if none exist
         if (loadedPortals.length === 0 && !autoCreatingRef.current) {
           const defaultPortalId = `portal-${Date.now()}`;
-          autoCreatingRef.current = true; // Mark as in-progress
-          
+          autoCreatingRef.current = true;
+
           const defaultPortal: GuestPortalSettings = {
             ...defaultSettings,
             general: {
@@ -332,46 +352,54 @@ export default function GuestPortalPage() {
           };
 
           try {
-            // Create in Firestore (timestamps will be set by server)
-            await setDoc(
-              doc(db, 'properties', property.id, 'guestPortals', defaultPortalId),
-              {
-                ...defaultPortal,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              }
-            );
+            const createUrl = new URL('/api/property-settings/guest-portal', window.location.origin);
+            const createResponse = await fetch(createUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                propertyId: property.id,
+                portal: { ...defaultPortal, id: defaultPortalId },
+              }),
+            });
 
-            // Load the created portal back from Firestore to get actual timestamps
-            const createdDocSnap = await getDoc(
-              doc(db, 'properties', property.id, 'guestPortals', defaultPortalId)
-            );
-            
-            if (createdDocSnap.exists()) {
-              loadedPortals = [{ ...(createdDocSnap.data() as GuestPortalSettings), id: defaultPortalId }];
+            if (createResponse.ok) {
+              // Reload portals after creation
+              const reloadUrl = new URL('/api/property-settings/guest-portal', window.location.origin);
+              reloadUrl.searchParams.set('propertyId', property.id);
+              const reloadResponse = await fetch(reloadUrl, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+              });
+              if (reloadResponse.ok) {
+                const reloadData = await reloadResponse.json();
+                loadedPortals = reloadData.portals || [{ ...defaultPortal, id: defaultPortalId }];
+              } else {
+                loadedPortals = [{ ...defaultPortal, id: defaultPortalId }];
+              }
             } else {
-              // Fallback if document doesn't exist yet
               loadedPortals = [{ ...defaultPortal, id: defaultPortalId }];
             }
           } finally {
-            autoCreatingRef.current = false; // Mark as complete
+            autoCreatingRef.current = false;
           }
         }
+
         setPortals(loadedPortals);
-        
-        // Automatically select the default portal or the first one
+
         if (loadedPortals.length > 0) {
-          const defaultPortal = loadedPortals.find(p => p.general.defaultPortal);
+          const defaultPortal = loadedPortals.find(p => p.general?.defaultPortal);
           const selectedId = defaultPortal?.id || loadedPortals[0].id;
           setSelectedPortalId(selectedId);
         } else {
           setSelectedPortalId(null);
         }
-        
+
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching portals:', error);
-        autoCreatingRef.current = false; // Reset flag on error
+        autoCreatingRef.current = false;
         toast({
           title: 'Error',
           description: 'Failed to load guest portals',
@@ -398,22 +426,29 @@ export default function GuestPortalPage() {
       const portalId = `portal-${Date.now()}`;
       const newPortal: GuestPortalSettings = {
         ...defaultSettings,
+        id: portalId,
         general: {
           ...defaultSettings.general,
           portalName: newPortalName,
-          defaultPortal: portals.length === 0, // First portal is default
+          defaultPortal: portals.length === 0,
         },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       };
 
-      await setDoc(
-        doc(db, 'properties', property.id, 'guestPortals', portalId),
-        newPortal
-      );
+      const response = await fetch('/api/property-settings/guest-portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          propertyId: property.id,
+          portal: newPortal,
+        }),
+      });
 
-      const portalWithId = { ...newPortal, id: portalId };
-      setPortals([...portals, portalWithId]);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      setPortals([...portals, newPortal]);
       setSelectedPortalId(portalId);
       setNewPortalName('');
       setShowCreatePortal(false);
@@ -444,25 +479,18 @@ export default function GuestPortalPage() {
 
     setIsSaving(true);
     try {
-      const { id, ...dataToSave } = selectedPortal;
-      const docRef = doc(db, 'properties', property.id, 'guestPortals', selectedPortal.id);
-      
-      // Check if document exists
-      const docSnapshot = await getDoc(docRef);
-      
-      if (docSnapshot.exists()) {
-        // Document exists, use updateDoc
-        await updateDoc(docRef, {
-          ...dataToSave,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        // Document doesn't exist, use setDoc
-        await setDoc(docRef, {
-          ...dataToSave,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+      const response = await fetch('/api/property-settings/guest-portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          propertyId: property.id,
+          portal: selectedPortal,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
       }
 
       toast({
@@ -486,9 +514,18 @@ export default function GuestPortalPage() {
 
     setIsSaving(true);
     try {
-      await deleteDoc(
-        doc(db, 'properties', property.id, 'guestPortals', selectedPortal.id)
+      const response = await fetch(
+        `/api/property-settings/guest-portal?propertyId=${property.id}&portalId=${selectedPortal.id}`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        }
       );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
 
       const updatedPortals = portals.filter(p => p.id !== selectedPortal.id);
       setPortals(updatedPortals);

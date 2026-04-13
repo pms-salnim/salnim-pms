@@ -327,7 +327,7 @@ export function RevenueAnalytics({ chartPeriod, setChartPeriod, propertySettings
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-6 flex flex-col w-full">
         {/* Check Availability Widget - Full Width */}
         {checkAvailabilityWidget && (
           <div>
@@ -335,68 +335,54 @@ export function RevenueAnalytics({ chartPeriod, setChartPeriod, propertySettings
           </div>
         )}
 
-        {/* Sidebar: Housekeeping, Pending Payments, Performance */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Sidebar: Housekeeping, Pending Payments, Performance - Vertically Stacked */}
+        <div className="flex flex-col gap-6 w-full">
         {/* Housekeeping Widget */}
         {housekeepingWidget && housekeepingWidget}
 
-        <div className="bg-gradient-to-br from-amber-50 to-white rounded-xl p-6 shadow-sm border border-amber-200 flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <AlertCircle size={18} style={{ color: '#f59e0b' }} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-slate-800">Pending Payments</h2>
-                <p className="text-[9px] text-slate-400 font-medium">Outstanding balance</p>
-              </div>
-            </div>
+        <div className="bg-white rounded-xl shadow-sm border border-amber-200 overflow-hidden hover:shadow-md transition-shadow">
+          {/* Compact Header */}
+          <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 flex items-center justify-between">
+            <h2 className="text-xs font-bold text-white">Pending Payments</h2>
+            <AlertCircle size={14} className="text-amber-100" />
           </div>
-          <div className="space-y-3">
-            <div>
-              <span className="text-4xl font-black tracking-tighter text-amber-600">
-                {propertySettings?.currency || '$'}{pendingPayments.totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-amber-100">
-              <p className="text-[10px] text-slate-500 font-medium">
-                {pendingPayments.count} {pendingPayments.count === 1 ? 'reservation' : 'reservations'}
-              </p>
-              <div className="px-2.5 py-1 bg-amber-100 rounded text-[10px] font-bold text-amber-700">
-                Action needed
-              </div>
-            </div>
+
+          {/* Compact Content */}
+          <div className="px-4 py-3">
+            <span className="text-2xl font-black text-amber-600">
+              {propertySettings?.currency || '$'}{pendingPayments.totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <p className="text-[9px] text-slate-500 font-medium mt-1.5">{pendingPayments.count} {pendingPayments.count === 1 ? 'reservation' : 'reservations'} • Action needed</p>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <LucideTrendingUp size={18} style={{ color: '#003166' }} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-slate-800">Performance</h2>
-                <p className="text-[9px] text-slate-400 font-medium">Based on stayed nights</p>
-              </div>
-            </div>
+        <div className="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden hover:shadow-md transition-shadow">
+          {/* Compact Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2 flex items-center justify-between">
+            <h2 className="text-xs font-bold text-white">Performance</h2>
+            <LucideTrendingUp size={14} className="text-blue-100" />
           </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+
+          {/* Compact Metrics */}
+          <div className="px-4 py-3 space-y-2">
+            {/* ADR */}
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ADR</p>
-                <span className="text-2xl font-black text-slate-800">{propertySettings?.currency || '$'}{yieldData.adr.toFixed(2)}</span>
+                <p className="text-[8px] font-bold text-slate-500 uppercase">ADR</p>
+                <span className="text-lg font-black text-emerald-700">{propertySettings?.currency || '$'}{yieldData.adr.toFixed(2)}</span>
               </div>
-              <p className={`text-[10px] font-bold px-2 py-1 rounded ${yieldData.adrChange >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+              <p className={`text-xs font-bold ${yieldData.adrChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {yieldData.adrChange >= 0 ? '↑' : '↓'} {Math.abs(yieldData.adrChange).toFixed(2)}
               </p>
             </div>
-            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
+
+            {/* RevPAR */}
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">RevPAR</p>
-                <span className="text-2xl font-black text-slate-800">{propertySettings?.currency || '$'}{yieldData.revpar.toFixed(2)}</span>
+                <p className="text-[8px] font-bold text-slate-500 uppercase">RevPAR</p>
+                <span className="text-lg font-black text-blue-700">{propertySettings?.currency || '$'}{yieldData.revpar.toFixed(2)}</span>
               </div>
-              <p className={`text-[10px] font-bold px-2 py-1 rounded ${yieldData.revparChange >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+              <p className={`text-xs font-bold ${yieldData.revparChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 {yieldData.revparChange >= 0 ? '↑' : '↓'} {Math.abs(yieldData.revparChange).toFixed(1)}%
               </p>
             </div>

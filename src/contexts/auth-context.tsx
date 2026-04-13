@@ -5,21 +5,19 @@ import type { User } from '@/types/user';
 import type { FirestoreUser, PropertyType as SignupPropertyType } from '@/types/firestoreUser';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db, app } from '@/lib/firebase';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged as firebaseOnAuthStateChanged
-} from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc, type Timestamp, collection, writeBatch, updateDoc, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { createClient } from '@supabase/supabase-js';
+import type { AuthSession } from '@supabase/supabase-js';
 import type { StaffRole, Permissions, AppModuleKey } from '@/types/staff';
-import { appModules, defaultPermissions } from '@/types/staff';
+import { appModules, defaultPermissions, fullPermissions } from '@/types/staff';
 import type { Property } from '@/types/property';
-import type { Conversation } from '@/types/conversation';
 import { toast } from '@/hooks/use-toast';
 import i18n from '@/lib/i18n';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 // This type is used across the app, so it's defined here for broader access.
 export interface Email {
@@ -217,107 +215,192 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [user, property, lastEmailSyncAt, isSyncingEmails]);
 
 
-  const fetchAndSetUser = async (firebaseUser: import('firebase/auth').User) => {
-    const staffDocRef = doc(db, "staff", firebaseUser.uid);
+  const fetchAndSetUser = async (userId: string, accessToken?: string, retries = 3, delayMs = 500) => {
     try {
-      const staffDocSnap = await getDoc(staffDocRef);
-      let appUser: User;
+      // Fetch user profile from API endpoint (uses cookie-based auth or Bearer token)
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // If access token provided, use it (for immediate post-login calls)
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+      
+      const response = await fetch('/api/auth/me', {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
 
-      if (staffDocSnap.exists()) {
-        const firestoreData = staffDocSnap.data() as FirestoreUser;
-        
-        await updateDoc(staffDocRef, {
-            status: 'online',
-            last_active: serverTimestamp()
-        });
-
-        let finalPermissions = { ...defaultPermissions, ...(firestoreData.permissions || {}) };
-
-        if (firestoreData.role === 'admin') {
-            const adminPerms: Partial<Permissions> = {};
-            appModules.forEach(mod => adminPerms[mod.key] = true);
-            finalPermissions = { ...finalPermissions, ...adminPerms };
+      if (!response.ok) {
+        // If we get a 401 and have retries left, wait and try again
+        // This handles the race condition where middleware hasn't set cookies yet
+        if (response.status === 401 && retries > 0 && !accessToken) {
+          console.log(`Session not ready, retrying in ${delayMs}ms (${retries} retries left)`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          return fetchAndSetUser(userId, undefined, retries - 1, delayMs * 1.5);
         }
+        throw new Error(await response.text());
+      }
 
-        appUser = {
-          id: firebaseUser.uid,
-          email: firebaseUser.email!,
-          name: firestoreData.fullName || firebaseUser.displayName || "User",
-          role: firestoreData.role,
-          propertyId: firestoreData.propertyId,
-          country: firestoreData.country,
-          city: firestoreData.city,
-          address: firestoreData.address,
-          phone: firestoreData.phone,
-          permissions: finalPermissions,
-          preferredLanguage: firestoreData.preferredLanguage || 'en',
-        };
+      const { user: userData, property: propertyData } = await response.json();
 
-        if (firestoreData.preferredLanguage) {
-            setPreferredLanguage(firestoreData.preferredLanguage);
-        }
-
-        if (firestoreData.propertyId) {
-          const propDocRef = doc(db, "properties", firestoreData.propertyId);
-          const propDocSnap = await getDoc(propDocRef);
-          if (propDocSnap.exists()) {
-            const propData = { id: propDocSnap.id, ...propDocSnap.data() } as Property;
-            setProperty(propData);
-          } else {
-            console.warn(`Property document not found for propertyId: ${firestoreData.propertyId}`);
-            setProperty(null);
-          }
-        } else {
-          setProperty(null);
-        }
-
-      } else {
-        console.warn("User exists in Auth but not in Firestore staff collection:", firebaseUser.uid);
+      if (!userData) {
+        console.warn('User profile not found');
         setUser(null);
         setProperty(null);
         setIsAuthenticated(false);
-        setIsLoadingAuth(false);
         localStorage.removeItem('propease_user_profile');
+        setIsLoadingAuth(false);
         return;
       }
-      setUser(appUser);
-      setIsAuthenticated(true);
-      localStorage.setItem('propease_user_profile', JSON.stringify({ name: appUser.name }));
-    } catch (error) {
-      console.error("Error fetching Firestore staff document:", error);
-      setUser({
-        id: firebaseUser.uid,
-        email: firebaseUser.email!,
-        name: firebaseUser.displayName || "User (Profile Sync Error)",
-        propertyId: "",
-        permissions: defaultPermissions, 
-        preferredLanguage: 'en',
+
+      // CHECK USER STATUS - Block inactive users from logging in
+      console.log('Checking user status:', { email: userData.email, status: userData.status });
+      if (userData.status === 'Inactive') {
+        console.warn('User account is disabled:', userData.email);
+        // Sign out the user
+        await supabase.auth.signOut();
+        setUser(null);
+        setProperty(null);
+        setIsAuthenticated(false);
+        localStorage.removeItem('propease_user_profile');
+        setIsLoadingAuth(false);
+        
+        // Throw error with gentle message
+        const disabledError = new Error('Your account has been disabled. Please contact your administrator.');
+        console.error('Throwing disabled account error:', disabledError.message);
+        throw disabledError;
+      }
+
+      console.log('API response:', { 
+        userId: userData.id, 
+        propertyId: userData.property_id,
+        hasPropertyData: !!propertyData 
       });
-      setProperty(null);
+
+      // Build user object with permissions
+      let finalPermissions = { ...defaultPermissions, ...(userData.permissions || {}) };
+
+      // Grant full permissions to admin and owner roles
+      if (userData.role === 'admin' || userData.role === 'owner') {
+        finalPermissions = { ...fullPermissions };
+      }
+
+      const appUser: User = {
+        id: userData.id,
+        email: userData.email,
+        name: userData.name || 'User',
+        role: userData.role,
+        propertyId: userData.property_id || '',
+        country: userData.country,
+        city: userData.city,
+        address: userData.address,
+        phone: userData.phone,
+        permissions: finalPermissions,
+        preferredLanguage: userData.preferred_language || 'en',
+      };
+
+      setUser(appUser);
+      setProperty(propertyData || null);
       setIsAuthenticated(true);
+      setPreferredLanguage(userData.preferred_language || 'en');
+      localStorage.setItem('propease_user_profile', JSON.stringify({ name: appUser.name }));
+    } catch (error: any) {
+      console.error('Error fetching user profile:', error);
+      setUser(null);
+      setProperty(null);
+      setIsAuthenticated(false);
+      localStorage.removeItem('propease_user_profile');
+      // ✅ Re-throw the error so it propagates to login() and then to the form
+      throw error;
+    } finally {
+      setIsLoadingAuth(false);
     }
-    setIsLoadingAuth(false);
   };
 
+  // Listen for auth state changes
   useEffect(() => {
-    const unsubscribe = firebaseOnAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        await fetchAndSetUser(firebaseUser);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await fetchAndSetUser(session.user.id, session.access_token);
       } else {
         setUser(null);
         setProperty(null);
         setIsAuthenticated(false);
         setIsLoadingAuth(false);
-        setInitialEmailFetchDone(false); // Reset on logout
+        localStorage.removeItem('propease_user_profile');
         setEmails([]);
         setUnreadMessageCount(0);
-        localStorage.removeItem('propease_user_profile');
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
+
+  // Monitor user status for logged-in users - logout if account is disabled
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+
+    const statusCheckInterval = setInterval(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+
+        // Fetch current user profile to check status
+        const response = await fetch('/api/auth/me', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) return;
+
+        const { user: userData } = await response.json();
+
+        // If user status is now Inactive, sign out and notify
+        if (userData?.status === 'Inactive') {
+          console.warn('User account has been disabled, logging out:', userData.email);
+          
+          // ✅ Store the logout reason so login page can display it
+          localStorage.setItem('disabledAccountLogout', 'true');
+          
+          // Sign out
+          await supabase.auth.signOut();
+          setUser(null);
+          setProperty(null);
+          setIsAuthenticated(false);
+          localStorage.removeItem('propease_user_profile');
+          setEmails([]);
+          setUnreadMessageCount(0);
+
+          // Show notification
+          toast({
+            title: 'Account Disabled',
+            description: 'Your account has been disabled by an administrator. You have been logged out.',
+            variant: 'destructive',
+          });
+
+          // Redirect to login (will show persisted error message)
+          router.push('/login');
+        }
+      } catch (error) {
+        // Silently fail - don't interrupt user experience on network errors
+        console.debug('Status check failed (expected on network issues):', error);
+      }
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(statusCheckInterval);
+  }, [isAuthenticated, user?.id, router]);
   
+  // TODO: Implement email functionality with Supabase if needed
   // Property listener for last sync and cache readiness
+  /*
   useEffect(() => {
     if (!user?.propertyId) return;
     const propRef = doc(db, 'properties', user.propertyId);
@@ -396,23 +479,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => unsubscribe();
     }
   }, [user?.id]);
+  */
 
 
   const refreshUserProfile = async () => {
-    const firebaseUser = auth.currentUser;
-    if (firebaseUser) {
-      setIsLoadingAuth(true);
-      await fetchAndSetUser(firebaseUser);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await fetchAndSetUser(session.user.id);
     }
   };
 
-  const login = async (email: string, pass: string) => {
-    // We no longer manage isLoadingAuth here. The component will handle its own loading state.
+  const login = async (email: string, password: string) => {
+    console.log('Login attempt initiated for:', email);
+    
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
-      // onAuthStateChanged will handle the rest upon successful sign-in.
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('Auth sign in error:', error.message);
+        throw error;
+      }
+
+      console.log('Auth sign in successful, checking account status...');
+      
+      // ✅ Immediately fetch user profile and check if account is disabled
+      // This is done BEFORE the useEffect, so the form catches the error directly
+      if (data.session?.user) {
+        await fetchAndSetUser(data.session.user.id, data.session.access_token);
+        console.log('User profile fetched and verified - login complete');
+      }
     } catch (error: any) {
-      // Re-throw the error so the login form can catch it and display a message.
+      console.error('Login error:', error.message);
       throw error;
     }
   };
@@ -420,48 +520,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signup = async (password: string, data: SignupData) => {
     setIsLoadingAuth(true);
     try {
-        const functions = getFunctions(app, 'europe-west1');
-        const signupAndCreateProperty = httpsCallable(functions, 'signupAndCreateProperty');
+      // Call the API endpoint to create user and property
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: data.email,
+          password: password,
+          fullName: data.fullName,
+          country: data.country,
+          city: data.city,
+          address: data.address,
+          propertyName: data.propertyName,
+          propertyAddress: data.propertyAddress,
+          propertyType: data.propertyType,
+        }),
+      });
 
-        const requestData = {
-            email: data.email,
-            password: password,
-            fullName: data.fullName,
-            country: data.country,
-            city: data.city,
-            address: data.address,
-            propertyName: data.propertyName,
-            propertyAddress: data.propertyAddress,
-            propertyType: data.propertyType,
-        };
-        
-        const result: any = await signupAndCreateProperty(requestData);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Signup failed');
+      }
 
-        if (!result.data.success) {
-            throw new Error(result.data.error || "Signup failed during cloud function execution.");
-        }
-        // After successful creation, sign in the user to trigger onAuthStateChanged
-        await signInWithEmailAndPassword(auth, data.email, password);
+      const result = await response.json();
+
+      // Sign in user after successful signup
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: password,
+      });
+
+      if (signInError) throw signInError;
+
+      if (authData.session?.user) {
+        await fetchAndSetUser(authData.session.user.id, authData.session.access_token);
+      }
     } catch (error: any) {
-        setIsLoadingAuth(false);
-        throw error;
+      setIsLoadingAuth(false);
+      throw error;
     }
   };
 
   const logout = async () => {
     setIsLoadingAuth(true);
-    if(user?.id) {
-        const staffDocRef = doc(db, "staff", user.id);
-        await updateDoc(staffDocRef, {
-            status: 'offline',
-            last_active: serverTimestamp()
-        });
-    }
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
+      setUser(null);
+      setProperty(null);
+      setIsAuthenticated(false);
+      setEmails([]);
+      localStorage.removeItem('propease_user_profile');
     } catch (error) {
-      console.error("Error signing out: ", error);
-      setIsLoadingAuth(false); 
+      console.error('Error signing out:', error);
+    } finally {
+      setIsLoadingAuth(false);
     }
   };
 

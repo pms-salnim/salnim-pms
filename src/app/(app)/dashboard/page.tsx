@@ -692,48 +692,57 @@ export default function DashboardPage() {
           channelOta={channelMixMetrics.ota}
           channelWalkIn={channelMixMetrics.walkIn}
         />
-        <RevenueAnalytics 
-          chartPeriod={chartPeriod} 
-          setChartPeriod={setChartPeriod} 
-          propertySettings={propertySettings}
-          propertyId={propertyId}
-          dateRange={dateRange}
-          housekeepingWidget={
-            <DashboardSidebar 
-              propertyId={propertyId}
-              propertySettings={propertySettings}
-              vips={vips}
-              guestRequests={guestRequests}
-              recentReservations={recentReservations}
-            />
-          }
-        />
-        <section className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-4">
-            <History size={18} style={{ color: '#003166' }} />
-            <h2 className="text-sm font-bold text-slate-800">{t('recent_reservations.title')}</h2>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {recentReservations.slice(0, 6).map((res, i) => (
-              <div key={res.id || i} className="flex justify-between items-center pb-3 border-b border-slate-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-[#003166]"><UserPlus size={14} /></div>
-                  <div>
-                    <p className="text-xs font-bold">{res.guestName}</p>
-                    <p className="text-[10px] text-slate-400">{Array.isArray(res.rooms) ? `${(toDate(res.endDate) && toDate(res.startDate)) ? differenceInDays(toDate(res.endDate) as Date, toDate(res.startDate) as Date) : 0} nights • ${res.rooms.map(r => r.roomTypeName).join(', ')}` : ''}</p>
+        {/* Recent Reservations (3/4) + Three Components (1/4) */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left: Recent Reservations - 3/4 width */}
+          <section className="lg:col-span-3 bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+            <div className="flex items-center gap-2 mb-4">
+              <History size={18} style={{ color: '#003166' }} />
+              <h2 className="text-sm font-bold text-slate-800">{t('recent_reservations.title')}</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {recentReservations.slice(0, 6).map((res, i) => (
+                <div key={res.id || i} className="flex justify-between items-center pb-3 border-b border-slate-50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-[#003166]"><UserPlus size={14} /></div>
+                    <div>
+                      <p className="text-xs font-bold">{res.guestName}</p>
+                      <p className="text-[10px] text-slate-400">{Array.isArray(res.rooms) ? `${(toDate(res.endDate) && toDate(res.startDate)) ? differenceInDays(toDate(res.endDate) as Date, toDate(res.startDate) as Date) : 0} nights • ${res.rooms.map(r => r.roomTypeName).join(', ')}` : ''}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-emerald-600">{propertySettings?.currency || '$'}{Number(res.totalPrice || 0).toFixed(2)}</p>
+                    <div className="flex items-center justify-end text-[9px] text-slate-400"><Clock size={8} className="mr-0.5" /> {formatDistanceToNow(toDate(res.createdAt) || new Date(), { addSuffix: true })}</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold text-emerald-600">{propertySettings?.currency || '$'}{Number(res.totalPrice || 0).toFixed(2)}</p>
-                  <div className="flex items-center justify-end text-[9px] text-slate-400"><Clock size={8} className="mr-0.5" /> {formatDistanceToNow(toDate(res.createdAt) || new Date(), { addSuffix: true })}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <button className="w-full mt-4 py-2.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 uppercase tracking-tighter">{t('recent_reservations.view_all_button')} <ChevronRight size={12} /></button>
-        </section>
+            <button className="w-full mt-4 py-2.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 uppercase tracking-tighter">{t('recent_reservations.view_all_button')} <ChevronRight size={12} /></button>
+          </section>
+
+          {/* Right: Three Components - 1/4 width, stacked vertically */}
+          <div className="lg:col-span-1 flex flex-col gap-6">
+            <RevenueAnalytics 
+              chartPeriod={chartPeriod} 
+              setChartPeriod={setChartPeriod} 
+              propertySettings={propertySettings}
+              propertyId={propertyId}
+              dateRange={dateRange}
+              housekeepingWidget={
+                <DashboardSidebar 
+                  propertyId={propertyId}
+                  propertySettings={propertySettings}
+                  vips={vips}
+                  guestRequests={guestRequests}
+                  recentReservations={recentReservations}
+                />
+              }
+            />
+          </div>
+        </div>
       </main>
       {/* Modals and dialogs preserved */}
       <Dialog open={isReservationFormModalOpen} onOpenChange={(isOpen) => { setIsReservationFormModalOpen(isOpen); if(!isOpen) setEditingReservation(null); }}>

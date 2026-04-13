@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils";
 import { format, startOfDay } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { toast } from '@/hooks/use-toast';
-import { Timestamp } from 'firebase/firestore';
 
 import type { Promotion, DiscountType } from '@/types/promotion';
 import type { RatePlan } from '@/types/ratePlan';
@@ -51,8 +50,18 @@ export default function PromotionForm({ initialData, ratePlans, onSave, onClose 
       setSelectedRatePlanIds(initialData.ratePlanIds || []);
       setDiscountType(initialData.discountType);
       setDiscountValue(String(initialData.discountValue));
-      setDateRange({ from: initialData.startDate.toDate(), to: initialData.endDate.toDate() });
-      setIsCoupon(!!initialData.couponCode);
+      
+      // Convert dates - handle both Date objects and strings
+      const startDate = initialData.startDate ? 
+        (initialData.startDate instanceof Date ? initialData.startDate : new Date(initialData.startDate)) 
+        : undefined;
+      const endDate = initialData.endDate ? 
+        (initialData.endDate instanceof Date ? initialData.endDate : new Date(initialData.endDate)) 
+        : undefined;
+      
+      setDateRange({ from: startDate, to: endDate });
+      // Use promotionType field to determine if it's a coupon
+      setIsCoupon(initialData.promotionType === 'coupon');
       setCouponCode(initialData.couponCode || '');
       setUsageLimit(initialData.usageLimit !== null && initialData.usageLimit !== undefined ? String(initialData.usageLimit) : '');
       setActive(initialData.active);
@@ -78,9 +87,29 @@ export default function PromotionForm({ initialData, ratePlans, onSave, onClose 
     );
   };
 
+  const handleSelectAllRatePlans = () => {
+    if (selectedRatePlanIds.length === ratePlans.length) {
+      setSelectedRatePlanIds([]);
+    } else {
+      setSelectedRatePlanIds(ratePlans.map(plan => plan.id));
+    }
+  };
+
+  // Group rate plans by room type
+  const groupedRatePlans = ratePlans.reduce((acc: Record<string, any[]>, plan: any) => {
+    const roomTypeName = plan.room_types?.name || 'Uncategorized';
+    if (!acc[roomTypeName]) {
+      acc[roomTypeName] = [];
+    }
+    acc[roomTypeName].push(plan);
+    return acc;
+  }, {});
+
+  const sortedRoomTypes = Object.keys(groupedRatePlans).sort();
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!name || selectedRatePlanIds.length === 0 || !discountValue || !dateRange?.from || !dateRange.to) {
+    if (!name || !discountValue || !dateRange?.from || !dateRange.to) {
       toast({ title: t('toasts.validation_error_title'), description: t('form.validation.required_fields'), variant: "destructive" });
       return;
     }
@@ -93,10 +122,11 @@ export default function PromotionForm({ initialData, ratePlans, onSave, onClose 
       name,
       description,
       ratePlanIds: selectedRatePlanIds,
+      promotionType: isCoupon ? 'coupon' : 'automatic',
       discountType,
       discountValue: Number(discountValue),
-      startDate: Timestamp.fromDate(startOfDay(dateRange.from)),
-      endDate: Timestamp.fromDate(startOfDay(dateRange.to)),
+      startDate: startOfDay(dateRange.from),
+      endDate: startOfDay(dateRange.to),
       couponCode: isCoupon ? couponCode.trim().toUpperCase() : null,
       usageLimit: isCoupon && usageLimit ? Number(usageLimit) : null,
       timesUsed: initialData?.timesUsed || 0,
@@ -142,19 +172,45 @@ export default function PromotionForm({ initialData, ratePlans, onSave, onClose 
         </div>
       )}
 
-      <div className="space-y-1">
-        <Label>{t('form.rate_plans_label')} <span className="text-destructive">*</span></Label>
-        <ScrollArea className="h-32 rounded-md border p-2">
-          {ratePlans.map(plan => (
-            <div key={plan.id} className="flex items-center space-x-2 py-1">
-              <Checkbox
-                id={`rp-${plan.id}`}
-                checked={selectedRatePlanIds.includes(plan.id)}
-                onCheckedChange={() => handleRatePlanSelect(plan.id)}
-              />
-              <Label htmlFor={`rp-${plan.id}`} className="font-normal cursor-pointer">{plan.planName}</Label>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>{t('form.rate_plans_label')}</Label>
+          <button
+            type="button"
+            onClick={handleSelectAllRatePlans}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {selectedRatePlanIds.length === ratePlans.length ? 'Deselect All' : 'Select All'}
+          </button>
+        </div>
+        <ScrollArea className="h-64 rounded-md border p-3">
+          {ratePlans.length > 0 ? (
+            <div className="space-y-4">
+              {sortedRoomTypes.map(roomTypeName => (
+                <div key={roomTypeName} className="space-y-2">
+                  <h4 className="font-medium text-sm text-foreground sticky top-0 bg-background py-1 px-1">
+                    {roomTypeName}
+                  </h4>
+                  <div className="space-y-2 pl-2 border-l-2 border-muted">
+                    {groupedRatePlans[roomTypeName].map(plan => (
+                      <div key={plan.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`rp-${plan.id}`}
+                          checked={selectedRatePlanIds.includes(plan.id)}
+                          onCheckedChange={() => handleRatePlanSelect(plan.id)}
+                        />
+                        <Label htmlFor={`rp-${plan.id}`} className="font-normal cursor-pointer text-sm">
+                          {plan.planName}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          ) : (
+            <p className="text-sm text-muted-foreground">No rate plans available</p>
+          )}
         </ScrollArea>
       </div>
 

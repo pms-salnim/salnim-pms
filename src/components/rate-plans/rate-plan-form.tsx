@@ -26,7 +26,6 @@ import { cn } from '@/lib/utils';
 import { format, startOfDay } from 'date-fns';
 import { Calendar } from '../ui/calendar';
 import { type DateRange } from 'react-day-picker';
-import { Timestamp } from 'firebase/firestore';
 
 interface RatePlanFormProps {
   initialData: RatePlan | null;
@@ -74,9 +73,18 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
       setPricingPerGuest(initialPricingStrings);
       setCancellationPolicy(initialData.cancellationPolicy || '');
       setIsDefaultPlan(initialData.default);
+      
+      // Convert dates - handle both Date objects and strings
+      const startDate = initialData.startDate ? 
+        (initialData.startDate instanceof Date ? initialData.startDate : new Date(initialData.startDate)) 
+        : undefined;
+      const endDate = initialData.endDate ? 
+        (initialData.endDate instanceof Date ? initialData.endDate : new Date(initialData.endDate)) 
+        : undefined;
+      
       setDateRange({
-        from: initialData.startDate?.toDate(),
-        to: initialData.endDate?.toDate(),
+        from: startDate,
+        to: endDate,
       });
       setIsOpenEnded(!initialData.endDate);
     } else {
@@ -99,6 +107,13 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
     }
   }, [isOpenEnded]);
 
+  useEffect(() => {
+    // Reset pricing when room type changes to ensure consistency with new max guest count
+    if (selectedRoomTypeId) {
+      setPricingPerGuest({});
+    }
+  }, [selectedRoomTypeId]);
+
   const handlePricingChange = (guestCountKey: string, value: string) => {
     setPricingPerGuest(prev => ({
       ...prev,
@@ -108,6 +123,16 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
+    
+    // Validate room type has valid max occupancy
+    if (!selectedRoomTypeId || maxGuestsForType === 0) {
+      toast({ 
+        title: t('toasts.validation_error_title'), 
+        description: 'Please select a room type with valid occupancy (more than 0 guests)', 
+        variant: "destructive" 
+      });
+      return;
+    }
     
     let hasPrice = false;
     const numericPricingPerGuest: Record<string, number> = {};
@@ -129,7 +154,7 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
     }
 
 
-    if (!planName || !selectedRoomTypeId || !hasPrice || !dateRange?.from) {
+    if (!planName || !hasPrice || !dateRange?.from) {
         toast({ title: t('toasts.validation_error_title'), description: t('toasts.validation_error_description'), variant: "destructive" });
         return;
     }
@@ -141,8 +166,8 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
       pricingMethod,
       cancellationPolicy,
       default: isDefaultPlan,
-      startDate: Timestamp.fromDate(startOfDay(dateRange.from)),
-      endDate: dateRange.to && !isOpenEnded ? Timestamp.fromDate(startOfDay(dateRange.to)) : null,
+      startDate: startOfDay(dateRange.from),
+      endDate: dateRange.to && !isOpenEnded ? startOfDay(dateRange.to) : null,
       ...(pricingMethod === 'per_night' && { basePrice: parseFloat(basePrice) }),
       ...(pricingMethod === 'per_guest' && { pricingPerGuest: numericPricingPerGuest }),
     };
@@ -174,10 +199,13 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
             </SelectTrigger>
             <SelectContent>
                 {availableRoomTypes.length > 0 ? availableRoomTypes.map(rt => (
-                <SelectItem key={rt.id} value={rt.id}>{rt.name}</SelectItem>
+                <SelectItem key={rt.id} value={rt.id}>{rt.name} {rt.maxGuests > 0 ? `(${rt.maxGuests} guests)` : '(Invalid: 0 guests)'}</SelectItem>
                 )) : <SelectItem value="none" disabled>{t('form.no_room_types')}</SelectItem>}
             </SelectContent>
           </Select>
+          {selectedRoomTypeId && maxGuestsForType === 0 && (
+            <p className="text-xs text-destructive pt-1">⚠️ This room type has invalid max occupancy (0 guests). Please select a different room type or update the room type settings.</p>
+          )}
         </div>
       </section>
 
@@ -197,27 +225,33 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
       
       {selectedRoomTypeId && pricingMethod === 'per_guest' && (
         <section className="space-y-3 animate-in fade-in-50">
-          <Label>{t('form.pricing_per_guest_label')} <span className="text-destructive">*</span></Label>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2 pt-1">
-            {guestCountKeys.map(numGuestsKey => (
-              <div key={numGuestsKey} className="space-y-1">
-                <Label htmlFor={`priceFor${numGuestsKey}Guests`}>{Number(numGuestsKey) > 1 ? t('form.guests_label', {count: numGuestsKey}) : t('form.guest_label', {count: numGuestsKey}) } ($)</Label>
-                <Input
-                  id={`priceFor${numGuestsKey}Guests`}
-                  type="number"
-                  value={pricingPerGuest[numGuestsKey] || ''}
-                  onChange={(e) => handlePricingChange(numGuestsKey, e.target.value)}
-                  placeholder={t('form.pricing_per_guest_placeholder')}
-                  min="0"
-                  step="0.01"
-                />
+          {maxGuestsForType > 0 ? (
+            <>
+              <Label>{t('form.pricing_per_guest_label')} <span className="text-destructive">*</span></Label>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2 pt-1">
+                {guestCountKeys.map(numGuestsKey => (
+                  <div key={numGuestsKey} className="space-y-1">
+                    <Label htmlFor={`priceFor${numGuestsKey}Guests`}>{Number(numGuestsKey) > 1 ? t('form.guests_label', {count: numGuestsKey}) : t('form.guest_label', {count: numGuestsKey}) } ($)</Label>
+                    <Input
+                      id={`priceFor${numGuestsKey}Guests`}
+                      type="number"
+                      value={pricingPerGuest[numGuestsKey] || ''}
+                      onChange={(e) => handlePricingChange(numGuestsKey, e.target.value)}
+                      placeholder={t('form.pricing_per_guest_placeholder')}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {guestCountKeys.length === 0 && (
-            <p className="text-xs text-muted-foreground pt-1">{t('form.no_occupancy_note')}</p>
+              <p className="text-xs text-muted-foreground pt-1">{t('form.pricing_per_guest_description')}</p>
+            </>
+          ) : (
+            <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-md">
+              <p className="text-sm text-destructive font-medium">⚠️ Invalid room type selected</p>
+              <p className="text-xs text-destructive/80 pt-1">The selected room type has invalid max occupancy (0 guests). Please select a different room type or update the room type settings.</p>
+            </div>
           )}
-          <p className="text-xs text-muted-foreground pt-1">{t('form.pricing_per_guest_description')}</p>
         </section>
       )}
       
@@ -284,7 +318,7 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
         <DialogClose asChild><Button type="button" variant="outline" onClick={onClose}>
             {t('buttons.cancel')}
           </Button></DialogClose>
-        <Button type="submit" disabled={availableRoomTypes.length === 0}>{t('buttons.save')}</Button>
+        <Button type="submit" disabled={availableRoomTypes.length === 0 || !selectedRoomTypeId || maxGuestsForType === 0}>{t('buttons.save')}</Button>
       </DialogFooter>
     </form>
   );

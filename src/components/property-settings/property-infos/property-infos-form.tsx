@@ -471,7 +471,7 @@ export function PropertyInfosForm({
               Property Type
             </label>
             <select
-              value={formData.propertyType}
+              value={formData.propertyType || 'Hotel'}
               onChange={(e) => handleChange('propertyType', e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
@@ -489,7 +489,7 @@ export function PropertyInfosForm({
               Star Rating
             </label>
             <select
-              value={formData.starRating}
+              value={formData.starRating ?? 3}
               onChange={(e) =>
                 handleChange('starRating', parseInt(e.target.value))
               }
@@ -696,7 +696,7 @@ export function PropertyInfosForm({
               Property Style
             </label>
             <select
-              value={formData.propertyStyle}
+              value={formData.propertyStyle || 'Modern'}
               onChange={(e) => handleChange('propertyStyle', e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
@@ -738,7 +738,7 @@ export function PropertyInfosForm({
               Jurisdiction / Country of Creation
             </label>
             <select
-              value={formData.jurisdiction}
+              value={formData.jurisdiction || 'europe'}
               onChange={(e) =>
                 handleChange(
                   'jurisdiction',
@@ -1037,7 +1037,7 @@ export function PropertyInfosForm({
               // For United States: show dropdown with custom option
               !isCustomCityMode ? (
                 <select
-                  value={formData.city}
+                  value={formData.city || ''}
                   onChange={(e) => {
                     if (e.target.value === '__custom__') {
                       setIsCustomCityMode(true);
@@ -1104,7 +1104,7 @@ export function PropertyInfosForm({
                 State / Province
               </label>
               <select
-                value={formData.stateProvince}
+                value={formData.stateProvince || ''}
                 onChange={(e) => handleChange('stateProvince', e.target.value)}
                 disabled={!formData.country || loadingStates}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
@@ -1141,7 +1141,7 @@ export function PropertyInfosForm({
               Country
             </label>
             <select
-              value={formData.country}
+              value={formData.country || ''}
               onChange={(e) => handleChange('country', e.target.value)}
               disabled={loadingCountries}
               className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"

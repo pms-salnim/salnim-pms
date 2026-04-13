@@ -5,9 +5,14 @@ import { PropertySettingsSubtabs } from '@/components/property-settings/property
 import { PropertyInfosForm } from '@/components/property-settings/property-infos/property-infos-form';
 import { useAuth } from '@/contexts/auth-context';
 import { Icons } from '@/components/icons';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '@/lib/firebase';
+import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 const propertySubtabs = [
   { id: 'infos', label: 'Property Infos', href: '/property-settings/property/infos' },
@@ -120,8 +125,8 @@ export default function PropertyInfosPage() {
 
       // Prepare updates - map form field names to property document field names
       const updates = {
-        name: data.propertyName,
-        type: data.propertyType,
+        propertyName: data.propertyName,
+        propertyType: data.propertyType,
         starRating: data.starRating,
         description: data.description,
         tagline: data.tagline,
@@ -130,7 +135,7 @@ export default function PropertyInfosPage() {
 
         // Legal & Business Details
         jurisdiction: data.jurisdiction,
-        legalName: data.legalBusinessName,
+        legalBusinessName: data.legalBusinessName,
         europeanCompanyRegNumber: data.europeanCompanyRegNumber,
         europeanVATNumber: data.europeanVATNumber,
         europeanTradeRegEntry: data.europeanTradeRegEntry,
@@ -156,7 +161,7 @@ export default function PropertyInfosPage() {
         propertyStyle: data.propertyStyle,
 
         // Property Location
-        address: data.streetAddress,
+        streetAddress: data.streetAddress,
         city: data.city,
         stateProvince: data.stateProvince,
         postalCode: data.postalCode,
@@ -164,15 +169,31 @@ export default function PropertyInfosPage() {
         googleMapsLink: data.googleMapsLink || '',
       };
 
-      // Call cloud function to update property
-      const functions = getFunctions(app);
-      const updatePropertyFunction = httpsCallable(functions, 'updateProperty');
+      // Get current session for auth token
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Not authenticated');
+      }
 
-      const result = await updatePropertyFunction({
-        propertyId: property.id,
-        updates,
+      // Call Supabase API endpoint
+      const response = await fetch('/api/properties/infos/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          propertyId: property.id,
+          updates,
+        }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
       console.log('Property infos saved successfully', result);
       setDebugInfo(prev => ({
         ...prev,

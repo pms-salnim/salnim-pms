@@ -3,12 +3,17 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 import { Icons } from '@/components/icons';
 import AddServiceForm from '@/components/extras/add-service-form';
 import ServiceDetailsModal from '@/components/extras/service-details-modal';
 import { PropertySettingsSubtabs } from '@/components/property-settings/property-settings-subtabs';
+import { toast } from '@/hooks/use-toast';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 type Category = { 
   id: string; 
@@ -21,16 +26,14 @@ type Service = {
   name: string; 
   description?: string; 
   price?: number; 
-  currency?: string; 
-  categoryId?: string | null; 
+  category?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
   subcategoryId?: string | null;
+  subcategoryName?: string | null;
+  perNight?: boolean;
+  isActive?: boolean;
   status?: 'Active' | 'Draft' | 'Archived';
-  bookingEngine?: boolean;
-  guestPortal?: boolean;
-  staffOnly?: boolean;
-  featuredImage?: string;
-  images?: string[];
-  tags?: string[];
 };
 
 const tabs = [
@@ -65,6 +68,8 @@ export default function ServicesPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [groupFilter, setGroupFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [visibilityFilter, setVisibilityFilter] = useState<string>('all');
+  const [sortFilter, setSortFilter] = useState<string>('newest');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Filter & Search - Category Structure Tab
@@ -92,28 +97,92 @@ export default function ServicesPage() {
   const [newCategoryParent, setNewCategoryParent] = useState<string | null>(null);
   const [newSubcategories, setNewSubcategories] = useState<string[]>([]);
 
+  // Function to fetch services
+  const fetchServices = async () => {
+    if (!propertyId || !user?.id) {
+      return;
+    }
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
+      }
+
+      const response = await fetch(`/api/services/list?propertyId=${propertyId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setServices(data.services || []);
+      } else {
+        console.error('Failed to fetch services:', response.status);
+        toast({ 
+          title: 'Error', 
+          description: 'Could not fetch services.', 
+          variant: 'destructive' 
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      toast({ 
+        title: 'Error', 
+        description: 'Could not fetch services.', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
   useEffect(() => {
-    if (!propertyId) return;
+    if (!propertyId || !user?.id) {
+      setServices([]);
+      setCategories([]);
+      return;
+    }
 
-    const catCol = collection(db, 'serviceCategories');
-    const catQ = query(catCol, where('propertyId', '==', propertyId));
-    const unsubCats = onSnapshot(catQ, (snap) => {
-      const items: Category[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      setCategories(items);
-    });
+    fetchServices();
+  }, [propertyId, user?.id]);
 
-    const svcCol = collection(db, 'services');
-    const svcQ = query(svcCol, where('propertyId', '==', propertyId));
-    const unsubSvcs = onSnapshot(svcQ, (snap) => {
-      const items: Service[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      setServices(items);
-    });
+  // Fetch service categories
+  useEffect(() => {
+    if (!propertyId || !user?.id) {
+      setServices([]);
+      setCategories([]);
+      return;
+    }
 
-    return () => {
-      unsubCats();
-      unsubSvcs();
+    const fetchCategories = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('No active session');
+        }
+
+        // Fetch service categories
+        const response = await fetch(`/api/service-categories/list?propertyId=${propertyId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCategories(data.categories || []);
+        } else {
+          console.error('Failed to fetch categories:', response.status);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
     };
-  }, [propertyId]);
+
+    fetchCategories();
+  }, [propertyId, user?.id]);
 
   // Update dropdown position on scroll/resize
   useEffect(() => {
@@ -141,63 +210,189 @@ export default function ServicesPage() {
   }, [openDropdown]);
 
   const createCategory = async () => {
-    if (!propertyId || !canManage || !newCategoryName.trim()) return;
+    if (!propertyId || !canManage || !newCategoryName.trim()) {
+      toast({ 
+        title: 'Error', 
+        description: 'Please enter a category name.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     try {
-      const parentRef = await addDoc(collection(db, 'serviceCategories'), {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
+      }
+
+      const parentCategory = {
         name: newCategoryName.trim(),
         parentId: newCategoryParent || null,
-        propertyId,
-        createdAt: serverTimestamp()
+        sortOrder: 0,
+        isActive: true,
+      };
+
+      // Create parent category
+      const parentResponse = await fetch('/api/service-categories/crud', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'create',
+          propertyId,
+          category: parentCategory,
+        }),
       });
 
+      if (!parentResponse.ok) {
+        const errorData = await parentResponse.json();
+        throw new Error(errorData.error || 'Failed to create category');
+      }
+
+      const parentResult = await parentResponse.json();
+      const parentCategoryId = parentResult.data?.[0]?.id;
+
+      // Create subcategories
       for (const subName of newSubcategories.map(s => s.trim()).filter(Boolean)) {
-        await addDoc(collection(db, 'serviceCategories'), {
-          name: subName,
-          parentId: parentRef.id,
-          propertyId,
-          createdAt: serverTimestamp()
+        await fetch('/api/service-categories/crud', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'create',
+            propertyId,
+            category: {
+              name: subName,
+              parentId: parentCategoryId,
+              sortOrder: 0,
+              isActive: true,
+            },
+          }),
         });
+      }
+
+      // Refresh categories
+      const categoriesResponse = await fetch(`/api/service-categories/list?propertyId=${propertyId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (categoriesResponse.ok) {
+        const categoriesData = await categoriesResponse.json();
+        setCategories(categoriesData.categories || []);
       }
 
       setNewCategoryName('');
       setNewCategoryParent(null);
       setNewSubcategories([]);
       setShowNewCategoryModal(false);
-    } catch (e) {
-      console.error('Failed to create category', e);
+      
+      toast({ 
+        title: 'Success', 
+        description: 'Category created successfully.' 
+      });
+    } catch (error) {
+      console.error('Failed to create category', error);
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to create category. Please try again.', 
+        variant: 'destructive' 
+      });
     }
   };
 
   const handleDeleteService = async () => {
-    if (!serviceToDelete) return;
+    if (!serviceToDelete || !propertyId) return;
     try {
-      await deleteDoc(doc(db, 'services', serviceToDelete.id));
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
+      }
+
+      const response = await fetch('/api/services/crud', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'delete',
+          propertyId,
+          serviceId: serviceToDelete.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete service');
+      }
+
+      // Remove from local state
+      setServices(services.filter(s => s.id !== serviceToDelete.id));
       setShowDeleteConfirm(false);
       setServiceToDelete(null);
       setOpenDropdown(null);
-    } catch (e) {
-      console.error('Failed to delete service', e);
-      alert('Failed to delete service. Please try again.');
+      toast({ title: 'Success', description: 'Service deleted successfully.' });
+    } catch (error) {
+      console.error('Failed to delete service', error);
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to delete service. Please try again.', 
+        variant: 'destructive' 
+      });
     }
   };
 
   const handleDuplicateService = async () => {
     if (!serviceToDuplicate || !propertyId) return;
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
+      }
+
       const { id, ...serviceData } = serviceToDuplicate;
-      await addDoc(collection(db, 'services'), {
-        ...serviceData,
-        name: `${serviceData.name} (Copy)`,
-        status: 'Draft',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const response = await fetch('/api/services/crud', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'create',
+          propertyId,
+          service: {
+            ...serviceData,
+            name: `${serviceData.name} (Copy)`,
+          },
+        }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to duplicate service');
+      }
+
+      // Refetch services to ensure category names are properly populated
+      fetchServices();
+      
       setShowDuplicateConfirm(false);
       setServiceToDuplicate(null);
       setOpenDropdown(null);
-    } catch (e) {
-      console.error('Failed to duplicate service', e);
-      alert('Failed to duplicate service. Please try again.');
+      toast({ title: 'Success', description: 'Service duplicated successfully.' });
+    } catch (error) {
+      console.error('Failed to duplicate service', error);
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to duplicate service. Please try again.', 
+        variant: 'destructive' 
+      });
     }
   };
 
@@ -251,21 +446,55 @@ export default function ServicesPage() {
 
   // Filtered services
   const filteredServices = useMemo(() => {
-    return services.filter(service => {
+    let filtered = services.filter(service => {
       const matchesSearch = !searchTerm || 
         service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         service.description?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesCategory = categoryFilter === 'all' || 
-        service.categoryId === categoryFilter ||
-        service.subcategoryId === categoryFilter;
+        service.categoryId === categoryFilter;
+      
+      const matchesGroup = groupFilter === 'all' || 
+        service.subcategoryId === groupFilter;
       
       const matchesStatus = statusFilter === 'all' || 
         service.status === statusFilter;
       
-      return matchesSearch && matchesCategory && matchesStatus;
+      let matchesVisibility = true;
+      if (visibilityFilter !== 'all') {
+        if (visibilityFilter === 'booking-engine') {
+          matchesVisibility = service.bookingEngine === true;
+        } else if (visibilityFilter === 'guest-portal') {
+          matchesVisibility = service.guestPortal === true;
+        } else if (visibilityFilter === 'staff-only') {
+          matchesVisibility = service.staffOnly === true;
+        }
+      }
+      
+      return matchesSearch && matchesCategory && matchesGroup && matchesStatus && matchesVisibility;
     });
-  }, [services, searchTerm, categoryFilter, statusFilter]);
+
+    // Apply sorting
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortFilter) {
+        case 'alphabetical-az':
+          return a.name.localeCompare(b.name);
+        case 'alphabetical-za':
+          return b.name.localeCompare(a.name);
+        case 'price-low-high':
+          return (a.price || 0) - (b.price || 0);
+        case 'price-high-low':
+          return (b.price || 0) - (a.price || 0);
+        case 'oldest':
+          return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+        case 'newest':
+        default:
+          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      }
+    });
+
+    return filtered;
+  }, [services, searchTerm, categoryFilter, groupFilter, statusFilter, visibilityFilter, sortFilter]);
 
   // Calculate active filters count
   const activeFiltersCount = [
@@ -276,7 +505,10 @@ export default function ServicesPage() {
   const handleClearAllFilters = () => {
     setSearchTerm('');
     setCategoryFilter('all');
+    setGroupFilter('all');
     setStatusFilter('all');
+    setVisibilityFilter('all');
+    setSortFilter('newest');
     setShowAdvancedFilters(false);
   };
 
@@ -365,7 +597,9 @@ export default function ServicesPage() {
                 <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search by name, description, tags..."
+                  placeholder="Search by name, description..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
                 />
               </div>
@@ -408,44 +642,53 @@ export default function ServicesPage() {
               {/* 4. Status Filter */}
               <div className="relative">
                 <Icons.Activity className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <select className="appearance-none pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-600 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-                  <option>Status</option>
-                  <option>Active</option>
-                  <option>Inactive</option>
-                  <option>Draft</option>
-                  <option>Archived</option>
+                <select 
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="appearance-none pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-600 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="all">Status</option>
+                  <option value="Active">Active</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Archived">Archived</option>
                 </select>
               </div>
 
               {/* 5. Visibility Filter */}
               <div className="relative">
                 <Icons.Eye className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <select className="appearance-none pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-600 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-                  <option>Visibility</option>
-                  <option>Booking Page</option>
-                  <option>Guest Portal</option>
-                  <option>In-App Only</option>
+                <select 
+                  value={visibilityFilter}
+                  onChange={(e) => setVisibilityFilter(e.target.value)}
+                  className="appearance-none pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-600 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="all">Visibility</option>
+                  <option value="booking-engine">Booking Page</option>
+                  <option value="guest-portal">Guest Portal</option>
+                  <option value="staff-only">Staff Only</option>
                 </select>
               </div>
 
               {/* 6. Sort Options */}
               <div className="relative">
                 <Icons.ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <select className="appearance-none pl-10 pr-8 py-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-600 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-                  <option>Sort by</option>
-                  <option>Newest</option>
-                  <option>Oldest</option>
-                  <option>Top Seller</option>
-                  <option>Alphabetical (A → Z)</option>
-                  <option>Alphabetical (Z → A)</option>
-                  <option>Price (Low → High)</option>
-                  <option>Price (High → Low)</option>
+                <select 
+                  value={sortFilter}
+                  onChange={(e) => setSortFilter(e.target.value)}
+                  className="appearance-none pl-10 pr-8 py-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-600 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="alphabetical-az">Alphabetical (A → Z)</option>
+                  <option value="alphabetical-za">Alphabetical (Z → A)</option>
+                  <option value="price-low-high">Price (Low → High)</option>
+                  <option value="price-high-low">Price (High → Low)</option>
                 </select>
                 <Icons.DropdownArrow className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
               </div>
 
               {/* 7. Clear All Button - Only show if filters are set */}
-              {(searchTerm || categoryFilter !== 'all' || statusFilter !== 'all') && (
+              {(searchTerm || categoryFilter !== 'all' || groupFilter !== 'all' || statusFilter !== 'all' || visibilityFilter !== 'all') && (
                 <button 
                   onClick={handleClearAllFilters}
                   className="flex items-center gap-1 px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50 rounded-md transition-colors">
@@ -456,7 +699,7 @@ export default function ServicesPage() {
             </div>
             
             {/* Active Filter Chips (Visual Feedback) - Only show if filters are set */}
-            {(searchTerm || categoryFilter !== 'all' || statusFilter !== 'all') && (
+            {(searchTerm || categoryFilter !== 'all' || groupFilter !== 'all' || statusFilter !== 'all' || visibilityFilter !== 'all' || sortFilter !== 'newest') && (
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider py-1">Active Filters:</span>
                 {searchTerm && (
@@ -469,9 +712,24 @@ export default function ServicesPage() {
                     Category: {getCategoryName(categoryFilter)}
                   </span>
                 )}
+                {groupFilter !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                    Group: {getCategoryName(groupFilter)}
+                  </span>
+                )}
                 {statusFilter !== 'all' && (
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                     Status: {statusFilter}
+                  </span>
+                )}
+                {visibilityFilter !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                    Visibility: {visibilityFilter === 'booking-engine' ? 'Booking Page' : visibilityFilter === 'guest-portal' ? 'Guest Portal' : 'Staff Only'}
+                  </span>
+                )}
+                {sortFilter !== 'newest' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-600">
+                    Sort: {sortFilter === 'oldest' ? 'Oldest' : sortFilter === 'alphabetical-az' ? 'A → Z' : sortFilter === 'alphabetical-za' ? 'Z → A' : sortFilter === 'price-low-high' ? 'Price Low → High' : 'Price High → Low'}
                   </span>
                 )}
               </div>
@@ -506,14 +764,14 @@ export default function ServicesPage() {
                       {/* Category */}
                       <td className="py-3 px-4 border-r border-slate-50">
                         <div className="text-sm text-slate-700 font-medium">
-                          {getCategoryName(service.categoryId)}
+                          {service.categoryName || (service.category ? getCategoryName(service.categoryId) : '—')}
                         </div>
                       </td>
 
                       {/* Sub-Category */}
                       <td className="py-3 px-4 border-r border-slate-50">
                         <div className="text-sm text-slate-600">
-                          {getCategoryName(service.subcategoryId)}
+                          {service.subcategoryName || (service.subcategoryId ? getCategoryName(service.subcategoryId) : '—')}
                         </div>
                       </td>
 
@@ -928,6 +1186,7 @@ export default function ServicesPage() {
           }}
           onSuccess={() => {
             setServiceToEdit(null);
+            fetchServices();
           }}
           serviceToEdit={serviceToEdit || undefined}
         />

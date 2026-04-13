@@ -42,9 +42,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
+import { appModules, type Permissions } from '@/types/staff';
+import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 
 const teamSubtabs = [
@@ -57,10 +58,11 @@ interface Role {
   id: string;
   name: string;
   description: string;
+  permissions: Permissions;
   status: 'active' | 'inactive';
   propertyId: string;
-  createdAt?: any;
-  updatedAt?: any;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export default function RolesPage() {
@@ -72,7 +74,11 @@ export default function RolesPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    description: '',
+    permissions: {} as Permissions,
+  });
 
   const canManageRoles = currentUser?.permissions?.staffManagement;
 
@@ -82,6 +88,32 @@ export default function RolesPage() {
     }
   }, [currentUser?.propertyId]);
 
+  // Extracted fetch function for reusability
+  const fetchRoles = async (propertyId: string) => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(
+        `/api/roles/list?property_id=${encodeURIComponent(propertyId)}`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch roles');
+      }
+
+      const { roles: fetchedRoles } = await response.json();
+      setRoles(fetchedRoles || []);
+    } catch (error: any) {
+      console.error('Error fetching roles:', error);
+      toast({
+        title: 'Error',
+        description: 'Could not fetch roles.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!currentUserPropertyId) {
       setRoles([]);
@@ -89,100 +121,160 @@ export default function RolesPage() {
       return;
     }
 
-    setIsLoading(true);
-    const rolesColRef = collection(db, 'roles');
-    const q = query(rolesColRef, where('propertyId', '==', currentUserPropertyId));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedRoles = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        } as Role));
-
-        setRoles(fetchedRoles);
-        setIsLoading(false);
-      },
-      (error) => {
-        console.error('Error fetching roles:', error);
-        toast({ title: 'Error', description: 'Could not fetch roles.', variant: 'destructive' });
-        setIsLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
+    fetchRoles(currentUserPropertyId);
   }, [currentUserPropertyId]);
 
   const handleAddRoleClick = () => {
     setEditingRole(null);
-    setFormData({ name: '', description: '' });
+    // Initialize with empty permissions
+    const emptyPermissions: Permissions = {};
+    appModules.forEach(module => {
+      emptyPermissions[module.key] = false;
+    });
+    setFormData({ name: '', description: '', permissions: emptyPermissions });
     setIsAddRoleDialogOpen(true);
   };
 
   const handleEditRole = (role: Role) => {
     setEditingRole(role);
-    setFormData({ name: role.name, description: role.description });
+    setFormData({ 
+      name: role.name, 
+      description: role.description,
+      permissions: role.permissions || {},
+    });
     setIsAddRoleDialogOpen(true);
   };
 
   const handleSaveRole = async () => {
     if (!formData.name.trim()) {
-      toast({ title: 'Error', description: 'Role name is required.', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Role name is required.',
+        variant: 'destructive',
+      });
       return;
     }
 
     if (!currentUserPropertyId) {
-      toast({ title: 'Error', description: 'Property not identified.', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Property not identified.',
+        variant: 'destructive',
+      });
       return;
     }
 
     setIsLoading(true);
     try {
+      let response;
+
       if (editingRole) {
         // Update existing role
-        const roleDocRef = doc(db, 'roles', editingRole.id);
-        await updateDoc(roleDocRef, {
-          name: formData.name,
-          description: formData.description,
-          updatedAt: serverTimestamp(),
+        response = await fetch('/api/roles/crud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            data: {
+              id: editingRole.id,
+              propertyId: currentUserPropertyId,
+              name: formData.name,
+              description: formData.description,
+              permissions: formData.permissions,
+              status: editingRole.status,
+            },
+          }),
         });
-        toast({ title: 'Success', description: 'Role updated successfully.' });
       } else {
         // Create new role
-        await addDoc(collection(db, 'roles'), {
-          name: formData.name,
-          description: formData.description,
-          status: 'active',
-          propertyId: currentUserPropertyId,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+        response = await fetch('/api/roles/crud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create',
+            data: {
+              propertyId: currentUserPropertyId,
+              name: formData.name,
+              description: formData.description,
+              permissions: formData.permissions,
+              status: 'active',
+            },
+          }),
         });
-        toast({ title: 'Success', description: 'Role created successfully.' });
       }
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save role');
+      }
+
+      const successMessage = editingRole
+        ? 'Role updated successfully.'
+        : 'Role created successfully.';
+      toast({ title: 'Success', description: successMessage });
+      
       setIsAddRoleDialogOpen(false);
-      setFormData({ name: '', description: '' });
+      const emptyPermissions: Permissions = {};
+      appModules.forEach(module => {
+        emptyPermissions[module.key] = false;
+      });
+      setFormData({ name: '', description: '', permissions: emptyPermissions });
       setEditingRole(null);
+      
+      // ✅ Refetch roles after saving
+      await fetchRoles(currentUserPropertyId);
     } catch (error: any) {
       console.error('Error saving role:', error);
-      toast({ title: 'Error', description: error.message || 'Could not save role.', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error.message || 'Could not save role.',
+        variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleToggleStatus = async (role: Role) => {
+    if (!currentUserPropertyId) return;
+
     try {
-      const roleDocRef = doc(db, 'roles', role.id);
       const newStatus = role.status === 'active' ? 'inactive' : 'active';
-      await updateDoc(roleDocRef, {
-        status: newStatus,
-        updatedAt: serverTimestamp(),
+      
+      const response = await fetch('/api/roles/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          data: {
+            id: role.id,
+            propertyId: currentUserPropertyId,
+            name: role.name,
+            description: role.description,
+            permissions: role.permissions,
+            status: newStatus,
+          },
+        }),
       });
-      toast({ title: 'Success', description: `Role status changed to ${newStatus}.` });
+
+      if (!response.ok) {
+        throw new Error('Failed to update role status');
+      }
+
+      toast({
+        title: 'Success',
+        description: `Role status changed to ${newStatus}.`,
+      });
+      
+      // ✅ Refetch roles after status change
+      await fetchRoles(currentUserPropertyId);
     } catch (error: any) {
       console.error('Error updating role status:', error);
-      toast({ title: 'Error', description: 'Could not update role status.', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Could not update role status.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -192,17 +284,39 @@ export default function RolesPage() {
   };
 
   const confirmDeleteRole = async () => {
-    if (!roleToDelete) return;
+    if (!roleToDelete || !currentUserPropertyId) return;
 
     setIsLoading(true);
     try {
-      await deleteDoc(doc(db, 'roles', roleToDelete.id));
+      const response = await fetch('/api/roles/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          data: {
+            id: roleToDelete.id,
+            propertyId: currentUserPropertyId,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete role');
+      }
+
       toast({ title: 'Success', description: 'Role deleted successfully.' });
       setIsDeleteDialogOpen(false);
       setRoleToDelete(null);
+      
+      // ✅ Refetch roles after deletion
+      await fetchRoles(currentUserPropertyId);
     } catch (error: any) {
       console.error('Error deleting role:', error);
-      toast({ title: 'Error', description: error.message || 'Could not delete role.', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error.message || 'Could not delete role.',
+        variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -258,6 +372,9 @@ export default function RolesPage() {
                   <TableHead className="border-r border-slate-50 h-12 px-4 text-left align-middle font-medium text-muted-foreground">
                     Description
                   </TableHead>
+                  <TableHead className="border-r border-slate-50 h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+                    Permissions
+                  </TableHead>
                   <TableHead className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
                     Actions
                   </TableHead>
@@ -278,6 +395,11 @@ export default function RolesPage() {
                     </TableCell>
                     <TableCell className="border-r border-slate-50 px-4 py-3">
                       <span className="text-sm text-muted-foreground">{role.description || '-'}</span>
+                    </TableCell>
+                    <TableCell className="border-r border-slate-50 px-4 py-3">
+                      <span className="text-sm">
+                        {Object.values(role.permissions || {}).filter(Boolean).length} of {appModules.length}
+                      </span>
                     </TableCell>
                     <TableCell className="px-4 py-3">
                       <DropdownMenu>
@@ -340,6 +462,37 @@ export default function RolesPage() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={4}
               />
+            </div>
+            
+            {/* Permissions Section */}
+            <div className="border-t pt-4">
+              <Label className="text-base font-semibold mb-3 block">Permissions</Label>
+              <p className="text-sm text-muted-foreground mb-3">Select which modules this role can access</p>
+              <div className="grid grid-cols-2 gap-3">
+                {appModules.map((module) => (
+                  <div key={module.key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`permission-${module.key}`}
+                      checked={formData.permissions[module.key] || false}
+                      onCheckedChange={(checked) => {
+                        setFormData({
+                          ...formData,
+                          permissions: {
+                            ...formData.permissions,
+                            [module.key]: checked,
+                          },
+                        });
+                      }}
+                    />
+                    <Label 
+                      htmlFor={`permission-${module.key}`}
+                      className="font-normal cursor-pointer text-sm"
+                    >
+                      {module.labelKey}
+                    </Label>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>

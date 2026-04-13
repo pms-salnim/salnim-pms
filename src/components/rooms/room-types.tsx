@@ -29,8 +29,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Icons } from "@/components/icons";
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, type FieldValue, getDocs, writeBatch } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
 import type { RoomType, Amenity, BedConfiguration, BedType, AmenityCategory } from '@/types/roomType';
 import { defaultAmenities, bedTypes, amenityCategories } from '@/types/roomType';
@@ -44,6 +43,12 @@ import { useTranslation } from "react-i18next";
 interface RoomTypesComponentProps {
   propertyId: string;
 }
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 export default function RoomTypesComponent({ propertyId }: RoomTypesComponentProps) {
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
@@ -146,32 +151,41 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
     }
     setIsLoading(true);
 
-    const propDocRef = doc(db, "properties", propertyId);
-    const unsubProp = onSnapshot(propDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setPropertySettings(docSnap.data() as Property);
+    const loadRoomTypes = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          console.error('Not authenticated');
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await fetch(
+          `/api/rooms/room-types/list?propertyId=${propertyId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const transformed = transformRoomTypesResponse(data.roomTypes);
+        setRoomTypes(transformed);
+      } catch (error) {
+        console.error("Error fetching room types:", error);
+        toast({ title: "Error", description: "Could not fetch room types.", variant: "destructive" });
+      } finally {
+        setIsLoading(false);
       }
-    });
-
-    const roomTypesColRef = collection(db, "roomTypes");
-    const q = query(roomTypesColRef, where("propertyId", "==", propertyId));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedRoomTypes = snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      } as RoomType));
-      setRoomTypes(fetchedRoomTypes);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching room types:", error);
-      toast({ title: "Error", description: "Could not fetch room types.", variant: "destructive" });
-      setIsLoading(false);
-    });
-    return () => {
-        unsubscribe();
-        unsubProp();
     };
+
+    loadRoomTypes();
   }, [propertyId]);
 
   // Predefined room type templates
@@ -200,6 +214,48 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
       beds: [{ type: "Twin" as BedType, count: 1 }],
       selectedAmenities: ["wifi", "fan"].filter(id => defaultAmenities.some(a => a.id === id)),
     },
+  };
+
+  // Helper function to transform API response to RoomType format
+  // Handles both old format (data nested in amenities JSONB) and new format (flat columns)
+  const transformRoomTypesResponse = (roomTypesData: any[]): RoomType[] => {
+    return (roomTypesData || []).map((rt: any) => {
+      let amenitiesData: any = {};
+      
+      if (rt.amenities && typeof rt.amenities === 'object' && !Array.isArray(rt.amenities)) {
+        amenitiesData = rt.amenities;
+      } else if (typeof rt.amenities === 'string') {
+        try {
+          amenitiesData = JSON.parse(rt.amenities);
+        } catch {
+          amenitiesData = {};
+        }
+      } else {
+        amenitiesData = {
+          selectedAmenities: rt.selected_amenities || [],
+          beds: rt.beds || [],
+          numberOfRoomsAvailable: rt.number_of_rooms_available || null,
+          assignedRoomNumbers: rt.assigned_room_numbers || [],
+          thumbnailImageUrl: rt.thumbnail_image_url || '',
+          galleryImageUrls: rt.gallery_image_urls || [],
+        };
+      }
+
+      return {
+        id: rt.id,
+        name: rt.name,
+        maxGuests: rt.max_guests,
+        description: rt.description,
+        propertyId: rt.property_id,
+        numberOfRoomsAvailable: amenitiesData.numberOfRoomsAvailable || null,
+        assignedRoomNumbers: amenitiesData.assignedRoomNumbers || [],
+        selectedAmenities: amenitiesData.selectedAmenities || [],
+        beds: amenitiesData.beds || [],
+        thumbnailImageUrl: amenitiesData.thumbnailImageUrl || '',
+        galleryImageUrls: amenitiesData.galleryImageUrls || [],
+        createdAt: new Date(rt.created_at),
+      };
+    });
   };
 
   // Load template
@@ -830,29 +886,48 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         const finalGalleryUrls = [...existingUrls, ...uploadedUrls];
       
         const parsedAssignedRoomNumbers = parsedRoomNumbers.length > 0 ? parsedRoomNumbers : [];
-        const dataPayload: Partial<Omit<RoomType, 'id'>> & { updatedAt?: FieldValue, createdAt?: FieldValue } = {
-            name,
-            maxGuests: Number(maxGuests),
-            description: description || "",
+        
+        // Get session for auth
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('Not authenticated');
+        }
+
+        const payload = {
+          action: editingRoomType ? 'update' : 'create',
+          propertyId,
+          roomTypeId: editingRoomType?.id,
+          name,
+          description: description || "",
+          maxGuests: Number(maxGuests),
+          amenities: JSON.stringify({
             selectedAmenities,
             beds,
-            propertyId,
             numberOfRoomsAvailable: numberOfRoomsAvailable === "" ? null : Number(numberOfRoomsAvailable),
             assignedRoomNumbers: parsedAssignedRoomNumbers,
             thumbnailImageUrl: finalThumbnailUrl || '',
             galleryImageUrls: finalGalleryUrls,
+          }),
         };
 
-        if (editingRoomType) {
-            const docRef = doc(db, "roomTypes", editingRoomType.id);
-            dataPayload.updatedAt = serverTimestamp();
-            await updateDoc(docRef, dataPayload);
-            toast({ title: t('toasts.success_update.title'), description: t('toasts.success_update.description') });
-        } else {
-            dataPayload.createdAt = serverTimestamp();
-            await addDoc(collection(db, "roomTypes"), dataPayload);
-            toast({ title: t('toasts.success_create.title'), description: t('toasts.success_create.description') });
+        const response = await fetch('/api/rooms/room-types/crud', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP ${response.status}`);
         }
+
+        toast({ 
+          title: editingRoomType ? t('toasts.success_update.title') : t('toasts.success_create.title'), 
+          description: editingRoomType ? t('toasts.success_update.description') : t('toasts.success_create.description')
+        });
         
         // Clear draft on successful save
         const draftKey = `roomTypeDraft_${propertyId}_${editingRoomType?.id || 'new'}`;
@@ -862,6 +937,22 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         
         setIsModalOpen(false);
         resetForm();
+
+        // Reload room types
+        const listResponse = await fetch(
+          `/api/rooms/room-types/list?propertyId=${propertyId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+        if (listResponse.ok) {
+          const data = await listResponse.json();
+          const transformed = transformRoomTypesResponse(data.roomTypes);
+          setRoomTypes(transformed);
+        }
 
     } catch (error: any) { 
         console.error("Error saving room type:", error);
@@ -877,24 +968,56 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
     }
     setIsLoading(true);
     try {
-        const batch = writeBatch(db);
-        const roomsQuery = query(collection(db, "rooms"), where("roomTypeId", "==", roomTypeId));
-        const roomsSnapshot = await getDocs(roomsQuery);
-        roomsSnapshot.forEach(doc => batch.delete(doc.ref));
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('Not authenticated');
+        }
 
-        const ratePlansQuery = query(collection(db, "ratePlans"), where("roomTypeId", "==", roomTypeId));
-        const ratePlansSnapshot = await getDocs(ratePlansQuery);
-        ratePlansSnapshot.forEach(doc => batch.delete(doc.ref));
+        const response = await fetch('/api/rooms/room-types/crud', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+          body: JSON.stringify({
+            action: 'delete',
+            propertyId,
+            roomTypeId,
+          }),
+        });
 
-        const roomTypeRef = doc(db, "roomTypes", roomTypeId);
-        batch.delete(roomTypeRef);
-
-        await batch.commit();
+        if (!response.ok) {
+          const errorData = await response.json();
+          
+          // Check if this is a dependency error (rooms still assigned)
+          if (response.status === 400 && errorData.dependentRoomCount !== undefined) {
+            throw new Error(errorData.error || `Cannot delete: ${errorData.dependentRoomCount} room(s) are still assigned to this type`);
+          }
+          
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
 
         toast({ title: t('toasts.success_delete.title'), description: t('toasts.success_delete.description') });
+
+        // Reload room types
+        const listResponse = await fetch(
+          `/api/rooms/room-types/list?propertyId=${propertyId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+        if (listResponse.ok) {
+          const data = await listResponse.json();
+          const transformed = transformRoomTypesResponse(data.roomTypes);
+          setRoomTypes(transformed);
+        }
     } catch (error) {
         console.error("Error deleting room type:", error);
-        toast({ title: t('toasts.error_delete.title'), description: t('toasts.error_delete.description'), variant: "destructive" });
+        const errorMessage = error instanceof Error ? error.message : t('toasts.error_delete.description');
+        toast({ title: t('toasts.error_delete.title'), description: errorMessage, variant: "destructive" });
     } finally {
         setIsLoading(false);
     }
@@ -991,36 +1114,97 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
 
   const handleBulkDelete = async () => {
     if (selectedRoomTypeIds.size === 0) return;
-    if (!confirm(`Delete ${selectedRoomTypeIds.size} room type(s)? This will also delete all related rooms and rate plans.`)) {
+    if (!confirm(`Delete ${selectedRoomTypeIds.size} room type(s)?`)) {
       return;
     }
 
     setIsLoading(true);
     try {
-      const batch = writeBatch(db);
-      
-      for (const roomTypeId of selectedRoomTypeIds) {
-        // Delete related rooms
-        const roomsQuery = query(collection(db, "rooms"), where("roomTypeId", "==", roomTypeId));
-        const roomsSnapshot = await getDocs(roomsQuery);
-        roomsSnapshot.forEach(doc => batch.delete(doc.ref));
-
-        // Delete related rate plans
-        const ratePlansQuery = query(collection(db, "ratePlans"), where("roomTypeId", "==", roomTypeId));
-        const ratePlansSnapshot = await getDocs(ratePlansQuery);
-        ratePlansSnapshot.forEach(doc => batch.delete(doc.ref));
-
-        // Delete room type
-        const roomTypeRef = doc(db, "roomTypes", roomTypeId);
-        batch.delete(roomTypeRef);
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Not authenticated');
       }
 
-      await batch.commit();
-      toast({ title: "Success", description: `Deleted ${selectedRoomTypeIds.size} room type(s)` });
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      for (const roomTypeId of selectedRoomTypeIds) {
+        try {
+          const response = await fetch('/api/rooms/room-types/crud', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+            body: JSON.stringify({
+              action: 'delete',
+              propertyId,
+              roomTypeId,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            
+            // Handle dependency errors
+            if (response.status === 400 && errorData.dependentRoomCount !== undefined) {
+              errors.push(`${roomTypes.find(rt => rt.id === roomTypeId)?.name || roomTypeId}: ${errorData.dependentRoomCount} room(s) assigned`);
+              errorCount++;
+            } else {
+              errors.push(`${roomTypes.find(rt => rt.id === roomTypeId)?.name || roomTypeId}: ${errorData.error || 'Failed to delete'}`);
+              errorCount++;
+            }
+          } else {
+            successCount++;
+          }
+        } catch (itemError) {
+          console.error(`Error deleting room type ${roomTypeId}:`, itemError);
+          errors.push(`${roomTypes.find(rt => rt.id === roomTypeId)?.name || roomTypeId}: ${itemError instanceof Error ? itemError.message : 'Unknown error'}`);
+          errorCount++;
+        }
+      }
+
+      // Reload room types
+      const listResponse = await fetch(
+        `/api/rooms/room-types/list?propertyId=${propertyId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        }
+      );
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        const transformed = transformRoomTypesResponse(data.roomTypes);
+        setRoomTypes(transformed);
+      }
+
       setSelectedRoomTypeIds(new Set());
+
+      // Show results
+      if (successCount > 0) {
+        toast({ 
+          title: "Success", 
+          description: `Deleted ${successCount} room type(s)` 
+        });
+      }
+      
+      if (errorCount > 0) {
+        toast({ 
+          title: "Partial Failure", 
+          description: `Failed to delete ${errorCount} room type(s). ${errors.join('; ')}`,
+          variant: "destructive" 
+        });
+      }
     } catch (error) {
       console.error("Error deleting room types:", error);
-      toast({ title: "Error", description: "Failed to delete room types", variant: "destructive" });
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : "Failed to delete room types", 
+        variant: "destructive" 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -1033,37 +1217,91 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
 
     setIsLoading(true);
     try {
-      const batch = writeBatch(db);
-
-      for (const roomTypeId of selectedRoomTypeIds) {
-        const roomType = roomTypes.find(rt => rt.id === roomTypeId);
-        if (!roomType) continue;
-
-        let updatedAmenities = [...(roomType.selectedAmenities || [])];
-        
-        // Add amenities
-        bulkAmenititesToAdd.forEach(amenity => {
-          if (!updatedAmenities.includes(amenity)) {
-            updatedAmenities.push(amenity);
-          }
-        });
-
-        // Remove amenities
-        updatedAmenities = updatedAmenities.filter(a => !bulkAmenititesToRemove.includes(a));
-
-        const roomTypeRef = doc(db, "roomTypes", roomTypeId);
-        batch.update(roomTypeRef, { 
-          selectedAmenities: updatedAmenities,
-          updatedAt: serverTimestamp()
-        });
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Not authenticated');
       }
 
-      await batch.commit();
-      toast({ title: "Success", description: `Updated amenities for ${selectedRoomTypeIds.size} room type(s)` });
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const roomTypeId of selectedRoomTypeIds) {
+        try {
+          const roomType = roomTypes.find(rt => rt.id === roomTypeId);
+          if (!roomType) continue;
+
+          let updatedAmenities = [...(roomType.selectedAmenities || [])];
+          
+          // Add amenities
+          bulkAmenititesToAdd.forEach(amenity => {
+            if (!updatedAmenities.includes(amenity)) {
+              updatedAmenities.push(amenity);
+            }
+          });
+
+          // Remove amenities
+          updatedAmenities = updatedAmenities.filter(a => !bulkAmenititesToRemove.includes(a));
+
+          const response = await fetch('/api/rooms/room-types/crud', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+            body: JSON.stringify({
+              action: 'update',
+              propertyId,
+              roomTypeId,
+              name: roomType.name,
+              description: roomType.description,
+              maxGuests: roomType.maxGuests,
+              amenities: {
+                selectedAmenities: updatedAmenities,
+                beds: roomType.beds,
+                numberOfRoomsAvailable: roomType.numberOfRoomsAvailable,
+                assignedRoomNumbers: roomType.assignedRoomNumbers,
+                thumbnailImageUrl: roomType.thumbnailImageUrl,
+                galleryImageUrls: roomType.galleryImageUrls,
+              },
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`Error updating amenities for room type ${roomTypeId}:`, error);
+          errorCount++;
+        }
+      }
+
+      // Reload room types
+      const listResponse = await fetch(
+        `/api/rooms/room-types/list?propertyId=${propertyId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        }
+      );
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        const transformed = transformRoomTypesResponse(data.roomTypes);
+        setRoomTypes(transformed);
+      }
+
+      toast({ title: "Success", description: `Updated amenities for ${successCount} room type(s)` });
       setIsBulkAmenitiesModalOpen(false);
       setBulkAmenititesToAdd([]);
       setBulkAmenititesToRemove([]);
       setSelectedRoomTypeIds(new Set());
+      
+      if (errorCount > 0) {
+        toast({ title: "Warning", description: `Failed to update amenities for ${errorCount} room type(s)`, variant: "destructive" });
+      }
     } catch (error) {
       console.error("Error updating amenities:", error);
       toast({ title: "Error", description: "Failed to update amenities", variant: "destructive" });
@@ -1079,41 +1317,95 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
 
     setIsLoading(true);
     try {
-      const batch = writeBatch(db);
-
-      for (const roomTypeId of selectedRoomTypeIds) {
-        const roomType = roomTypes.find(rt => rt.id === roomTypeId);
-        if (!roomType) continue;
-
-        let updatedBeds = [...(roomType.beds || [])];
-
-        // Add/update bed counts
-        bulkBedsToAdd.forEach(newBed => {
-          const existingIndex = updatedBeds.findIndex(b => b.type === newBed.type);
-          if (existingIndex >= 0) {
-            updatedBeds[existingIndex] = { ...updatedBeds[existingIndex], count: (updatedBeds[existingIndex].count || 0) + (newBed.count || 1) };
-          } else {
-            updatedBeds.push(newBed);
-          }
-        });
-
-        // Remove bed types
-        updatedBeds = updatedBeds.filter(b => !bulkBedsToRemove.includes(b.type));
-        updatedBeds = updatedBeds.filter(b => (b.count || 0) > 0);
-
-        const roomTypeRef = doc(db, "roomTypes", roomTypeId);
-        batch.update(roomTypeRef, { 
-          beds: updatedBeds,
-          updatedAt: serverTimestamp()
-        });
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Not authenticated');
       }
 
-      await batch.commit();
-      toast({ title: "Success", description: `Updated beds for ${selectedRoomTypeIds.size} room type(s)` });
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const roomTypeId of selectedRoomTypeIds) {
+        try {
+          const roomType = roomTypes.find(rt => rt.id === roomTypeId);
+          if (!roomType) continue;
+
+          let updatedBeds = [...(roomType.beds || [])];
+
+          // Add/update bed counts
+          bulkBedsToAdd.forEach(newBed => {
+            const existingIndex = updatedBeds.findIndex(b => b.type === newBed.type);
+            if (existingIndex >= 0) {
+              updatedBeds[existingIndex] = { ...updatedBeds[existingIndex], count: (updatedBeds[existingIndex].count || 0) + (newBed.count || 1) };
+            } else {
+              updatedBeds.push(newBed);
+            }
+          });
+
+          // Remove bed types
+          updatedBeds = updatedBeds.filter(b => !bulkBedsToRemove.includes(b.type));
+          updatedBeds = updatedBeds.filter(b => (b.count || 0) > 0);
+
+          const response = await fetch('/api/rooms/room-types/crud', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+            body: JSON.stringify({
+              action: 'update',
+              propertyId,
+              roomTypeId,
+              name: roomType.name,
+              description: roomType.description,
+              maxGuests: roomType.maxGuests,
+              amenities: {
+                selectedAmenities: roomType.selectedAmenities,
+                beds: updatedBeds,
+                numberOfRoomsAvailable: roomType.numberOfRoomsAvailable,
+                assignedRoomNumbers: roomType.assignedRoomNumbers,
+                thumbnailImageUrl: roomType.thumbnailImageUrl,
+                galleryImageUrls: roomType.galleryImageUrls,
+              },
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`Error updating beds for room type ${roomTypeId}:`, error);
+          errorCount++;
+        }
+      }
+
+      // Reload room types
+      const listResponse = await fetch(
+        `/api/rooms/room-types/list?propertyId=${propertyId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        }
+      );
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        const transformed = transformRoomTypesResponse(data.roomTypes);
+        setRoomTypes(transformed);
+      }
+
+      toast({ title: "Success", description: `Updated beds for ${successCount} room type(s)` });
       setIsBulkBedsModalOpen(false);
       setBulkBedsToAdd([]);
       setBulkBedsToRemove([]);
       setSelectedRoomTypeIds(new Set());
+      
+      if (errorCount > 0) {
+        toast({ title: "Warning", description: `Failed to update beds for ${errorCount} room type(s)`, variant: "destructive" });
+      }
     } catch (error) {
       console.error("Error updating beds:", error);
       toast({ title: "Error", description: "Failed to update beds", variant: "destructive" });
@@ -1199,7 +1491,11 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         }
 
         setIsLoading(true);
-        const batch = writeBatch(db);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('Not authenticated');
+        }
+
         let importedCount = 0;
         let errorCount = 0;
 
@@ -1262,30 +1558,40 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
               ? fields[roomNumbersIdx].split(";").map(r => r.trim()).filter(r => r)
               : [];
 
-            const newRoomType: Omit<RoomType, "id"> = {
-              name: roomTypeName,
-              maxGuests,
-              propertyId: propertyId || "",
-              description: descriptionIdx !== -1 ? fields[descriptionIdx] : "",
-              numberOfRoomsAvailable: roomCountIdx !== -1 ? parseInt(fields[roomCountIdx]) || null : null,
-              assignedRoomNumbers,
-              selectedAmenities,
-              beds,
-              thumbnailImageUrl: "",
-              galleryImageUrls: [],
-              createdAt: new Date(),
-            };
+            const response = await fetch('/api/rooms/room-types/crud', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionData.session.access_token}`,
+              },
+              body: JSON.stringify({
+                action: 'create',
+                propertyId,
+                name: roomTypeName,
+                description: descriptionIdx !== -1 ? fields[descriptionIdx] : "",
+                maxGuests,
+                amenities: {
+                  selectedAmenities,
+                  beds,
+                  numberOfRoomsAvailable: roomCountIdx !== -1 ? parseInt(fields[roomCountIdx]) || null : null,
+                  assignedRoomNumbers,
+                  thumbnailImageUrl: "",
+                  galleryImageUrls: [],
+                },
+              }),
+            });
 
-            const newRoomTypeRef = doc(collection(db, "roomTypes"));
-            batch.set(newRoomTypeRef, { ...newRoomType, createdAt: serverTimestamp() });
-            importedCount++;
+            if (response.ok) {
+              importedCount++;
+            } else {
+              errorCount++;
+            }
           } catch (err) {
             console.error(`Error processing row ${i + 1}:`, err);
             errorCount++;
           }
         }
 
-        await batch.commit();
         setIsImportModalOpen(false);
         toast({
           title: "Import Complete",
@@ -1293,6 +1599,22 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         });
         if (importInputRef.current) {
           importInputRef.current.value = "";
+        }
+
+        // Reload room types
+        const listResponse = await fetch(
+          `/api/rooms/room-types/list?propertyId=${propertyId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${sessionData.session.access_token}`,
+            },
+          }
+        );
+        if (listResponse.ok) {
+          const data = await listResponse.json();
+          const transformed = transformRoomTypesResponse(data.roomTypes);
+          setRoomTypes(transformed);
         }
       } catch (err) {
         console.error("Import error:", err);
@@ -1307,34 +1629,70 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
   const handleDuplicateRoomType = async (roomType: RoomType) => {
     try {
       setIsLoading(true);
-      const duplicateRoomType: Omit<RoomType, "id"> = {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Not authenticated');
+      }
+
+      const duplicateRoomType = {
         name: `${roomType.name} (Copy)`,
         maxGuests: roomType.maxGuests,
-        propertyId: propertyId || "",
         description: roomType.description,
-        numberOfRoomsAvailable: roomType.numberOfRoomsAvailable,
-        assignedRoomNumbers: [...(roomType.assignedRoomNumbers || [])],
-        selectedAmenities: [...(roomType.selectedAmenities || [])],
-        beds: [...(roomType.beds || [])],
-        thumbnailImageUrl: roomType.thumbnailImageUrl,
-        galleryImageUrls: [...(roomType.galleryImageUrls || [])],
-        createdAt: new Date(),
+        amenities: {
+          selectedAmenities: [...(roomType.selectedAmenities || [])],
+          beds: [...(roomType.beds || [])],
+          numberOfRoomsAvailable: roomType.numberOfRoomsAvailable,
+          assignedRoomNumbers: [...(roomType.assignedRoomNumbers || [])],
+          thumbnailImageUrl: roomType.thumbnailImageUrl,
+          galleryImageUrls: [...(roomType.galleryImageUrls || [])],
+        },
       };
 
-      const docRef = await addDoc(collection(db, "roomTypes"), {
-        ...duplicateRoomType,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const response = await fetch('/api/rooms/room-types/crud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'create',
+          propertyId,
+          ...duplicateRoomType,
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to duplicate room type');
+      }
+
+      const data = await response.json();
 
       toast({
         title: "Success",
         description: `Room type "${duplicateRoomType.name}" created successfully!`,
       });
 
-      // Open the new room type for editing
-      const newRoomType = { ...duplicateRoomType, id: docRef.id } as RoomType;
-      handleOpenModal(newRoomType);
+      // Reload room types
+      const listResponse = await fetch(
+        `/api/rooms/room-types/list?propertyId=${propertyId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        }
+      );
+      if (listResponse.ok) {
+        const listData = await listResponse.json();
+        const transformed = transformRoomTypesResponse(listData.roomTypes);
+        setRoomTypes(transformed);
+
+        // Open the new room type for editing
+        const newRoomType = transformed.find(rt => rt.name === duplicateRoomType.name);
+        if (newRoomType) {
+          handleOpenModal(newRoomType);
+        }
+      }
     } catch (err) {
       console.error("Error duplicating room type:", err);
       toast({

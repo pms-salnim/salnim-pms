@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Icons } from '@/components/icons';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 import type { Package, IncludedService, PackageCategory, PricingType, PricingLogic } from '@/types/package';
 
 interface AddPackageFormProps {
@@ -27,13 +26,15 @@ export default function AddPackageForm({
   onClose,
   package: existingPackage,
   propertyId,
-  roomTypes,
+  roomTypes: propsRoomTypes,
   services,
   mealPlans,
 }: AddPackageFormProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imageUploadIndex, setImageUploadIndex] = useState<number | null>(null);
+  const [roomTypesList, setRoomTypesList] = useState<{ id: string; name: string }[]>(propsRoomTypes);
+  const [loadingRoomTypes, setLoadingRoomTypes] = useState(false);
   
   const [formData, setFormData] = useState<FormData>({
     propertyId,
@@ -70,14 +71,73 @@ export default function AddPackageForm({
       setFormData({
         ...existingPackage,
         validFrom: existingPackage.validFrom
-          ? existingPackage.validFrom.toDate().toISOString().split('T')[0]
+          ? (typeof existingPackage.validFrom === 'string' 
+              ? existingPackage.validFrom.split('T')[0]
+              : new Date(existingPackage.validFrom).toISOString().split('T')[0])
           : '',
         validTo: existingPackage.validTo
-          ? existingPackage.validTo.toDate().toISOString().split('T')[0]
+          ? (typeof existingPackage.validTo === 'string' 
+              ? existingPackage.validTo.split('T')[0]
+              : new Date(existingPackage.validTo).toISOString().split('T')[0])
           : '',
       });
     }
   }, [existingPackage]);
+
+  // Fetch room types when form opens or on step 2
+  useEffect(() => {
+    if ((isOpen || currentStep === 2) && propertyId) {
+      const fetchRoomTypes = async () => {
+        try {
+          setLoadingRoomTypes(true);
+          
+          // Get Supabase session for auth token
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+          );
+          
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+          
+          const response = await fetch(`/api/rooms/room-types/list?propertyId=${propertyId}`, {
+            headers,
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            // Handle response format from API
+            const roomTypesArray = data?.roomTypes || data || [];
+            const transformed = roomTypesArray.map((rt: any) => ({
+              id: rt.id,
+              name: rt.name,
+            }));
+            setRoomTypesList(transformed);
+          } else {
+            console.error('Failed to fetch room types:', response.status);
+            // Fall back to props if API fails
+            setRoomTypesList(propsRoomTypes);
+          }
+        } catch (error) {
+          console.error('Error fetching room types:', error);
+          // Fall back to props if API fails
+          setRoomTypesList(propsRoomTypes);
+        } finally {
+          setLoadingRoomTypes(false);
+        }
+      };
+
+      fetchRoomTypes();
+    }
+  }, [isOpen, currentStep, propertyId, propsRoomTypes]);
 
   const handleInputChange = (field: keyof FormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -174,22 +234,50 @@ export default function AddPackageForm({
     try {
       const dataToSave: any = {
         ...formData,
-        validFrom: formData.validFrom ? new Date(formData.validFrom) : null,
-        validTo: formData.validTo ? new Date(formData.validTo) : null,
-        updatedAt: serverTimestamp(),
+        validFrom: formData.validFrom || null,
+        validTo: formData.validTo || null,
       };
 
       if (existingPackage) {
-        await updateDoc(doc(db, 'packages', existingPackage.id), dataToSave);
+        // UPDATE
+        const response = await fetch('/api/packages/crud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            propertyId,
+            id: existingPackage.id,
+            ...dataToSave,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to update package');
+        }
       } else {
-        dataToSave.createdAt = serverTimestamp();
-        await addDoc(collection(db, 'packages'), dataToSave);
+        // CREATE
+        const response = await fetch('/api/packages/crud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create',
+            propertyId,
+            ...dataToSave,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to create package');
+        }
       }
 
       onClose();
     } catch (error) {
       console.error('Error saving package:', error);
-      alert('Failed to save package. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save package. Please try again.';
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -371,31 +459,42 @@ export default function AddPackageForm({
                 <label className="block text-sm font-medium mb-2">
                   Applicable Room Types <span className="text-destructive">*</span>
                 </label>
-                <div className="space-y-2">
-                  {roomTypes.map((rt) => (
-                    <label key={rt.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.applicableRoomTypes.includes(rt.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            handleInputChange('applicableRoomTypes', [
-                              ...formData.applicableRoomTypes,
-                              rt.id,
-                            ]);
-                          } else {
-                            handleInputChange(
-                              'applicableRoomTypes',
-                              formData.applicableRoomTypes.filter((id) => id !== rt.id)
-                            );
-                          }
+                {loadingRoomTypes ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Icons.Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">Loading room types...</span>
+                  </div>
+                ) : roomTypesList.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">
+                    No room types available for this property. Please create room types first.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {roomTypesList.map((rt) => (
+                      <label key={rt.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={formData.applicableRoomTypes.includes(rt.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              handleInputChange('applicableRoomTypes', [
+                                ...formData.applicableRoomTypes,
+                                rt.id,
+                              ]);
+                            } else {
+                              handleInputChange(
+                                'applicableRoomTypes',
+                                formData.applicableRoomTypes.filter((id) => id !== rt.id)
+                              );
+                            }
                         }}
                         className="rounded border-input"
                       />
                       <span className="text-sm">{rt.name}</span>
                     </label>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

@@ -92,8 +92,9 @@ export default function RatePlanList({ ratePlans, roomTypes, onEditRatePlan, onD
   
   const getStatus = (plan: RatePlan): { text: string; className: string } => {
     const now = new Date();
-    const startDate = plan.startDate?.toDate();
-    const endDate = plan.endDate?.toDate();
+    // Convert to Date if it's a string, or use as-is if already a Date object
+    const startDate = typeof plan.startDate === 'string' ? new Date(plan.startDate) : plan.startDate;
+    const endDate = typeof plan.endDate === 'string' ? new Date(plan.endDate) : plan.endDate;
 
     if (!startDate) {
         return { text: t('list.status_inactive'), className: 'bg-gray-100 text-gray-700 border-gray-300' };
@@ -167,8 +168,8 @@ export default function RatePlanList({ ratePlans, roomTypes, onEditRatePlan, onD
                   <TableBody>
                     {plans.map((plan) => {
                       const status = getStatus(plan);
-                      const startDate = plan.startDate ? format(plan.startDate.toDate(), 'PP') : 'N/A';
-                      const endDate = plan.endDate ? format(plan.endDate.toDate(), 'PP') : 'Open';
+                      const startDate = plan.startDate ? format(plan.startDate instanceof Date ? plan.startDate : new Date(plan.startDate), 'PP') : 'N/A';
+                      const endDate = plan.endDate ? format(plan.endDate instanceof Date ? plan.endDate : new Date(plan.endDate), 'PP') : 'Open';
                       return (
                         <TableRow key={plan.id}>
                           <TableCell className="font-medium">{plan.planName}</TableCell>

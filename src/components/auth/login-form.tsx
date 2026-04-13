@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/auth-context";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
@@ -36,6 +36,17 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const { t } = useTranslation();
 
+  // ✅ Check if user was logged out due to account being disabled
+  useEffect(() => {
+    const wasDisabledWhileLoggedIn = localStorage.getItem('disabledAccountLogout');
+    if (wasDisabledWhileLoggedIn) {
+      console.log('Displaying disabled account logout message');
+      setError('Your account has been disabled by an administrator. You have been logged out.');
+      // Clean up the flag so it only shows once
+      localStorage.removeItem('disabledAccountLogout');
+    }
+  }, []);
+
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -47,29 +58,45 @@ export function LoginForm() {
   async function onSubmit(values: LoginFormValues) {
     setIsLoading(true);
     setError(null);
+    console.log('Login attempt for:', values.email);
+    
     try {
       await login(values.email, values.password);
+      console.log('Login successful');
       // Successful login will trigger redirection via AuthContext's onAuthStateChanged.
     } catch (err: any) {
+      console.error('Login error caught:', err);
+      let errorMessage = t('login_error_generic');
+
       if (err instanceof FirebaseError) {
+        console.log('FirebaseError:', err.code);
         switch (err.code) {
           case 'auth/invalid-credential':
-            setError(t('login_error_invalid_credentials'));
+            errorMessage = t('login_error_invalid_credentials');
             break;
           case 'auth/user-disabled':
-            setError(t('login_error_user_disabled'));
+            errorMessage = t('login_error_user_disabled');
             break;
           case 'auth/network-request-failed':
-             setError(t('login_error_network_failed'));
-             break;
+            errorMessage = t('login_error_network_failed');
+            break;
           default:
-            setError(t('login_error_generic'));
+            errorMessage = err.message || t('login_error_generic');
         }
+      } else if (err.message?.includes('disabled')) {
+        // Handle account disabled message from our custom auth
+        console.log('Account disabled detected');
+        errorMessage = 'Your account has been disabled. Please contact your administrator.';
+      } else if (err.message?.includes('Invalid') || err.message?.includes('invalid')) {
+        errorMessage = t('login_error_invalid_credentials');
       } else {
-        setError(err.message || "An unexpected error occurred during login.");
+        errorMessage = err.message || t('login_error_generic');
       }
+
+      console.log('Setting error message:', errorMessage);
+      setError(errorMessage);
+    } finally {
       setIsLoading(false);
-      return; // Explicitly stop execution here after setting an error.
     }
   }
 

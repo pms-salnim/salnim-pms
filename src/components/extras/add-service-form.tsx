@@ -2,9 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Icons } from '@/components/icons';
-import { db, storage } from '@/lib/firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
+);
 
 interface Category {
   id: string;
@@ -89,7 +92,6 @@ interface AddServiceFormProps {
   serviceToEdit?: Service;
 }
 
-const GLOBAL_CATEGORIES = ['Excursion', 'Wellness', 'Transfer', 'Amenity', 'F&B'];
 const TAG_OPTIONS = ['Popular', 'Luxury', 'Family Friendly', 'Romantic', 'Adventure', 'Relaxation'];
 
 export default function AddServiceForm({ propertyId, onClose, onSuccess, serviceToEdit }: AddServiceFormProps) {
@@ -125,23 +127,39 @@ export default function AddServiceForm({ propertyId, onClose, onSuccess, service
   
   const [imagePreviews, setImagePreviews] = useState<string[]>(serviceToEdit?.images || []);
 
-  // Fetch categories from Firestore
+  // Fetch categories from Supabase
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const catCol = collection(db, 'serviceCategories');
-        const catQ = query(catCol, where('propertyId', '==', propertyId));
-        const snapshot = await getDocs(catQ);
-        const items: Category[] = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-        
-        const topLevel = items.filter(c => !c.parentId);
-        setCategories(topLevel);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('No active session');
+        }
+
+        const response = await fetch(`/api/service-categories/list?propertyId=${propertyId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const categories = data.categories || [];
+          // Filter to get only top-level categories (no parent_id)
+          const topLevel = categories.filter((c: any) => !c.parentId);
+          setCategories(topLevel);
+        } else {
+          console.error('Failed to fetch categories:', response.status);
+        }
       } catch (error) {
         console.error('Error fetching categories:', error);
       }
     };
-    
-    if (propertyId) fetchCategories();
+
+    if (propertyId) {
+      fetchCategories();
+    }
   }, [propertyId]);
 
   // Update subcategories when primary category changes
@@ -151,18 +169,34 @@ export default function AddServiceForm({ propertyId, onClose, onSuccess, service
         setSubCategories([]);
         return;
       }
-      
+
       try {
-        const catCol = collection(db, 'serviceCategories');
-        const catQ = query(catCol, where('propertyId', '==', propertyId), where('parentId', '==', formData.primaryCategory));
-        const snapshot = await getDocs(catQ);
-        const items: Category[] = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-        setSubCategories(items);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('No active session');
+        }
+
+        const response = await fetch(`/api/service-categories/list?propertyId=${propertyId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const allCategories = data.categories || [];
+          // Filter to get subcategories under the selected parent
+          const subCats = allCategories.filter((c: any) => c.parentId === formData.primaryCategory);
+          setSubCategories(subCats);
+        } else {
+          console.error('Failed to fetch subcategories:', response.status);
+        }
       } catch (error) {
         console.error('Error fetching subcategories:', error);
       }
     };
-    
+
     fetchSubCategories();
   }, [formData.primaryCategory, propertyId]);
 
@@ -231,59 +265,48 @@ export default function AddServiceForm({ propertyId, onClose, onSuccess, service
     setLoading(true);
     
     try {
-      // Upload new images to Firebase Storage (only if there are new files)
-      const imageUrls: string[] = [...(serviceToEdit?.images || [])];
-      
-      if (formData.images.length > 0) {
-        for (let i = 0; i < formData.images.length; i++) {
-          const file = formData.images[i];
-          const storageRef = ref(storage, `services/${propertyId}/${Date.now()}_${file.name}`);
-          await uploadBytes(storageRef, file);
-          const url = await getDownloadURL(storageRef);
-          imageUrls.push(url);
-          setUploadProgress(((i + 1) / formData.images.length) * 100);
-        }
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No active session');
       }
 
-      // Create/Update service document
+      // For now, skip image uploads (will be handled separately)
+      // TODO: Implement Supabase Storage for images
+
+      // Create/Update service document via API
       const serviceData = {
-        propertyId,
         name: formData.displayName,
         description: formData.shortDescription,
-        longDescription: formData.longDescription,
         price: formData.pricingMode === 'base' ? formData.basePrice : (formData.variations[0]?.adultPrice || 0),
-        currency: 'USD',
-        pricingType: formData.pricingType,
         categoryId: formData.primaryCategory || null,
         subcategoryId: formData.subCategory || null,
-        primaryCategory: formData.primaryCategory,
-        subCategory: formData.subCategory,
+        perNight: formData.pricingType === 'per-night' || formData.pricingType === 'per-guest-per-night',
         bookingEngine: formData.bookingEngine,
         guestPortal: formData.guestPortal,
         staffOnly: formData.staffOnly,
-        circuitItinerary: formData.circuitItinerary,
-        tags: formData.tags,
-        variations: formData.pricingMode === 'variations' ? formData.variations : [],
-        unlimitedMode: formData.unlimitedMode,
-        maxPeople: formData.unlimitedMode ? null : formData.maxPeople,
-        cutoffTime: formData.cutoffTime,
         status: formData.status,
-        images: imageUrls,
-        featuredImage: imageUrls[formData.featuredImageIndex] || imageUrls[0] || null,
-        updatedAt: serverTimestamp(),
+        isActive: formData.status === 'Active',
       };
 
-      if (isEditMode && serviceToEdit) {
-        // Update existing service
-        await updateDoc(doc(db, 'services', serviceToEdit.id), serviceData);
-      } else {
-        // Create new service
-        await addDoc(collection(db, 'services'), {
-          ...serviceData,
-          createdAt: serverTimestamp(),
-        });
+      const response = await fetch('/api/services/crud', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: isEditMode ? 'update' : 'create',
+          propertyId,
+          service: serviceData,
+          serviceId: isEditMode ? serviceToEdit?.id : undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to ${isEditMode ? 'update' : 'create'} service`);
       }
-      
+
       onSuccess();
       onClose();
     } catch (error) {

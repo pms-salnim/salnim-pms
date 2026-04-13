@@ -174,6 +174,7 @@ import {
   Maximize2, // For reset zoom
   GripVertical, // For draggable items
   Save, // For save actions
+  Bug, // For debug panel
   type LucideIcon,
 } from 'lucide-react';
 
@@ -404,4 +405,5 @@ export const Icons = {
   Maximize2: Maximize2,
   GripVertical: GripVertical, // For draggable items
   Save: Save, // For save actions
+  Bug: Bug, // For debug panel
 };
