@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as ShadcnCalendar } from "@/components/ui/calendar";
@@ -11,16 +12,13 @@ import { Icons } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { addDays, differenceInDays, eachDayOfInterval, format, isEqual, isWithinInterval, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addWeeks, addMonths } from "date-fns";
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, doc, Timestamp, updateDoc, serverTimestamp, type FieldValue, writeBatch } from 'firebase/firestore';
+import { createClient } from '@/utils/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 import type { RoomType } from '@/types/roomType';
 import type { Room as FirestoreRoom } from '@/types/room';
 import type { Reservation as FirestoreReservation, ReservationRoom } from '@/components/calendar/types';
 import type { AvailabilitySetting } from '@/types/availabilityOverride';
-import type { FirestoreUser } from '@/types/firestoreUser';
-import type { Property } from '@/types/property';
 import type { RatePlan } from '@/types/ratePlan';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -28,7 +26,6 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
-import type { SeasonalRate } from '@/types/seasonalRate';
 import { useTranslation } from 'react-i18next';
 import { enUS, fr } from 'date-fns/locale';
 
@@ -68,6 +65,44 @@ interface UpdateDetails {
   };
 }
 
+interface BaseRateRecord {
+  id: string;
+  roomTypeId: string;
+  basePrice: number;
+  startDate: string;
+  endDate: string | null;
+  dayPrices?: Record<string, number>;
+  isActive: boolean;
+}
+
+interface RateOverrideRecord {
+  roomTypeId: string;
+  ratePlanIds: string[];
+  startDate: string;
+  endDate: string | null;
+  overrideType: 'percentage' | 'fixed' | null;
+  overrideValue: number | null;
+  appliedDays?: number[] | null;
+}
+
+interface CalendarReservationPrefillPayload {
+  source: 'calendar-drag';
+  checkIn: string;
+  checkOut: string;
+  roomTypeId: string;
+  roomTypeName: string;
+  roomId: string;
+  roomName: string;
+  ratePlanId: string;
+  ratePlanName: string;
+  adults: number;
+  children: number;
+}
+
+interface BookingLogicSettings {
+  allowSameDayTurnover: boolean;
+}
+
 const SelectionBar = ({ style }: { style: React.CSSProperties }) => (
     <div
       style={style}
@@ -77,13 +112,14 @@ const SelectionBar = ({ style }: { style: React.CSSProperties }) => (
 );
 
 
-const DraggableReservationBar = ({ reservation, style, onClick, onReservationResize, dayWidthPx, onDragStart }: {
+const DraggableReservationBar = ({ reservation, style, onClick, onReservationResize, dayWidthPx, onDragStart, isSplitSegment }: {
     reservation: FirestoreReservation & { uniqueDisplayId: string };
     style: React.CSSProperties;
     onClick: () => void;
     onReservationResize: (reservation: FirestoreReservation, newEndDate: Date) => void;
     dayWidthPx: number;
     onDragStart: (reservation: FirestoreReservation) => void;
+    isSplitSegment?: boolean;
 }) => {
     const { t } = useTranslation('pages/calendar/calendar');
     const [{ isDragging }, drag, preview] = useDrag(() => ({
@@ -143,9 +179,12 @@ const DraggableReservationBar = ({ reservation, style, onClick, onReservationRes
             }}
             className="absolute top-1 bottom-1 flex items-center p-2 rounded-md text-foreground font-medium cursor-pointer overflow-hidden shadow-lg transition-all hover:ring-2 hover:ring-primary/50 z-20"
             onClick={onClick}
-            title={`${reservation.guestName} - ${format(reservation.startDate, 'PP')} to ${format(reservation.endDate, 'PP')}`}
+            title={`${reservation.guestName} - ${format(reservation.startDate, 'PP')} to ${format(reservation.endDate, 'PP')}${isSplitSegment ? ' (Split)' : ''}`}
             data-ai-hint="reservation event"
         >
+            {isSplitSegment && (
+                <span className="mr-1 flex-shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/30 text-[9px] font-bold leading-none" title="Split reservation">S</span>
+            )}
             <span className="truncate text-xs font-semibold">{reservation.guestName || `Res ID: ${reservation.id?.substring(0, 6)}`}</span>
             <div 
                 ref={resizeDrag} 
@@ -289,25 +328,29 @@ const RoomRowDisplay: React.FC<RoomRowDisplayProps> = ({ room, datesToDisplay, r
           {datesToDisplay.map((date) => {
             const dayStart = startOfDay(date);
             
-            const isOccupiedDuringStay = reservations.some(res =>
-              res.rooms.some(r => r.roomId === room.id) &&
-              res.status !== 'Canceled' &&
-              res.status !== 'No-Show' &&
-              dayStart >= startOfDay(res.startDate) && dayStart < startOfDay(res.endDate)
-            );
+            const isOccupiedDuringStay = reservations.some(res => {
+              if (res.status === 'Canceled' || res.status === 'No-Show') return false;
+              const matchingRooms = res.rooms.filter((r: any) => r.roomId === room.id);
+              return matchingRooms.some((r: any) => {
+                const segStart = (r as any).segmentStartDate ? startOfDay(parseISO((r as any).segmentStartDate)) : startOfDay(res.startDate);
+                const segEnd = (r as any).segmentEndDate ? startOfDay(parseISO((r as any).segmentEndDate)) : startOfDay(res.endDate);
+                return dayStart >= segStart && dayStart < segEnd;
+              });
+            });
 
             if (isOccupiedDuringStay) {
               return <div key={date.toISOString()} className="h-12 border-r border-b border-border bg-card" />;
             }
             
-            const isPendingCheckoutDay = reservations.some(res => 
-              res.rooms.some(r => r.roomId === room.id) &&
-              res.status !== 'Canceled' &&
-              res.status !== 'No-Show' &&
-              isEqual(dayStart, startOfDay(res.endDate)) &&
-              !res.isCheckedOut &&
-              !allowSameDayTurnover
-            );
+            const isPendingCheckoutDay = reservations.some(res => {
+              if (res.status === 'Canceled' || res.status === 'No-Show') return false;
+              if (res.isCheckedOut || allowSameDayTurnover) return false;
+              const matchingRooms = res.rooms.filter((r: any) => r.roomId === room.id);
+              return matchingRooms.some((r: any) => {
+                const segEnd = (r as any).segmentEndDate ? startOfDay(parseISO((r as any).segmentEndDate)) : startOfDay(res.endDate);
+                return isEqual(dayStart, segEnd);
+              });
+            });
             
             const specificRoomSetting = availabilitySettings.find(setting =>
               setting.roomId === room.id &&
@@ -373,56 +416,84 @@ const RoomRowDisplay: React.FC<RoomRowDisplayProps> = ({ room, datesToDisplay, r
         )}
 
         {/* 3. Absolutely Positioned Reservation Bars */}
-        {reservations.filter(res => res.rooms.some(r => r.roomId === room.id) && res.status !== 'Canceled' && res.status !== 'No-Show').map(res => {
-          const resStart = startOfDay(res.startDate);
-          const resEnd = startOfDay(res.endDate);
-          const viewEnd = startOfDay(datesToDisplay[datesToDisplay.length - 1]);
+        {reservations
+          .filter(res => res.rooms.some((r: any) => r.roomId === room.id) && res.status !== 'Canceled' && res.status !== 'No-Show')
+          .flatMap(res => {
+            const viewEnd = startOfDay(datesToDisplay[datesToDisplay.length - 1]);
 
-          if (resEnd < viewStartDate || resStart > viewEnd) return null;
+            const statusColors: Record<FirestoreReservation['status'], string> = {
+              'Confirmed': '#16a34a',
+              'Checked-in': '#3b82f6',
+              'Completed': '#6b7280',
+              'Pending': '#f97316',
+              'Canceled': '#ef4444',
+              'No-Show': '#964B00',
+            };
+            const backgroundColor = statusColors[res.status] || '#003166';
 
-          const effectiveStartDate = resStart < viewStartDate ? viewStartDate : resStart;
-          
-          const startOffsetDays = differenceInDays(effectiveStartDate, viewStartDate);
-          if (startOffsetDays < 0) return null;
-          
-          const leftPositionPx = (startOffsetDays * dayWidthPx) + (dayWidthPx / 2);
-          
-          const visibleEndDateForCalc = resEnd > addDays(viewEnd, 1) ? addDays(viewEnd, 1) : resEnd;
-          const visibleNights = differenceInDays(visibleEndDateForCalc, effectiveStartDate);
+            // Segments that belong to this room row
+            const roomSegments = res.rooms.filter((r: any) => r.roomId === room.id);
+            // A reservation is "split" only when at least one segment covers different dates
+            // than the overall reservation (simple-view rooms get segmentStartDate == startDate)
+            const isSplit = roomSegments.length > 1 ||
+              roomSegments.some((r: any) => {
+                const segStart = (r as any).segmentStartDate;
+                const segEnd   = (r as any).segmentEndDate;
+                if (!segStart || !segEnd) return false;
+                return segStart !== format(res.startDate, 'yyyy-MM-dd') ||
+                       segEnd   !== format(res.endDate,   'yyyy-MM-dd');
+              });
 
-          let barWidthPx = visibleNights * dayWidthPx;
-          
-          const maxBarWidthPx = (datesToDisplay.length * dayWidthPx) - leftPositionPx;
-          barWidthPx = Math.min(barWidthPx, maxBarWidthPx);
-          
-          const statusColors: Record<FirestoreReservation['status'], string> = {
-            'Confirmed': '#16a34a',
-            'Checked-in': '#3b82f6',
-            'Completed': '#6b7280',
-            'Pending': '#f97316',
-            'Canceled': '#ef4444',
-            'No-Show': '#964B00',
-          };
-          const backgroundColor = statusColors[res.status] || '#003166';
-          
-          const barStyle = {
-              left: `${leftPositionPx}px`,
-              width: `${barWidthPx - 4}px`, // a little padding
-              backgroundColor: backgroundColor,
-          };
+            // For split: one bar per segment; for regular: one bar for the whole reservation
+            const barsToRender: Array<{ barStart: Date; barEnd: Date; key: string }> = isSplit
+              ? roomSegments.map((r: any, segIdx: number) => ({
+                  barStart: startOfDay(parseISO((r as any).segmentStartDate)),
+                  barEnd: startOfDay(parseISO((r as any).segmentEndDate)),
+                  key: `${res.uniqueDisplayId}-seg-${segIdx}`,
+                }))
+              : [{
+                  barStart: startOfDay(res.startDate),
+                  barEnd: startOfDay(res.endDate),
+                  key: res.uniqueDisplayId,
+                }];
 
-          return (
-             <DraggableReservationBar
-                key={res.uniqueDisplayId}
-                reservation={res}
-                style={barStyle}
-                onClick={() => onBookedCellClick(res)}
-                onReservationResize={onReservationResize}
-                dayWidthPx={dayWidthPx}
-                onDragStart={onReservationDragStart}
-             />
-          );
-        })}
+            return barsToRender.map(({ barStart, barEnd, key }) => {
+              if (barEnd <= viewStartDate || barStart > viewEnd) return null;
+
+              const effectiveStartDate = barStart < viewStartDate ? viewStartDate : barStart;
+              const startOffsetDays = differenceInDays(effectiveStartDate, viewStartDate);
+              if (startOffsetDays < 0) return null;
+
+              const leftPositionPx = (startOffsetDays * dayWidthPx) + (dayWidthPx / 2);
+
+              const visibleEndDateForCalc = barEnd > addDays(viewEnd, 1) ? addDays(viewEnd, 1) : barEnd;
+              const visibleNights = differenceInDays(visibleEndDateForCalc, effectiveStartDate);
+
+              let barWidthPx = visibleNights * dayWidthPx;
+              const maxBarWidthPx = (datesToDisplay.length * dayWidthPx) - leftPositionPx;
+              barWidthPx = Math.min(barWidthPx, maxBarWidthPx);
+
+              const barStyle = {
+                left: `${leftPositionPx}px`,
+                width: `${barWidthPx - 4}px`,
+                backgroundColor,
+              };
+
+              return (
+                <DraggableReservationBar
+                  key={key}
+                  reservation={res}
+                  style={barStyle}
+                  onClick={() => onBookedCellClick(res)}
+                  onReservationResize={onReservationResize}
+                  dayWidthPx={dayWidthPx}
+                  onDragStart={onReservationDragStart}
+                  isSplitSegment={isSplit}
+                />
+              );
+            });
+          })}
+
       </div>
     </>
   );
@@ -446,6 +517,8 @@ interface CalendarGridDisplayProps {
   onStartDateChange: (date: Date) => void;
   onReservationDragStart: (reservation: FirestoreReservation) => void;
   ratePlans: RatePlan[];
+  baseRates: BaseRateRecord[];
+  rateOverrides: RateOverrideRecord[];
   currency?: string;
 }
 const CalendarGridDisplay: React.FC<CalendarGridDisplayProps> = ({ 
@@ -462,6 +535,8 @@ const CalendarGridDisplay: React.FC<CalendarGridDisplayProps> = ({
     isLoadingGridData, 
     allowSameDayTurnover,
     ratePlans,
+    baseRates,
+    rateOverrides,
     currency,
     onStartDateChange,
     onReservationDragStart,
@@ -474,6 +549,75 @@ const CalendarGridDisplay: React.FC<CalendarGridDisplayProps> = ({
     start: viewStartDate,
     end: addDays(viewStartDate, viewModeInDays - 1)
   }), [viewStartDate, viewModeInDays]);
+
+  const DAY_CODE_MAP = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
+  const toDayIndexMonFirst = (date: Date) => {
+    const jsDay = date.getDay();
+    return jsDay === 0 ? 6 : jsDay - 1;
+  };
+
+  const getBaseRatePrice = (roomTypeId: string, date: Date): number | undefined => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const activeBaseRate = baseRates.find(br =>
+      br.roomTypeId === roomTypeId &&
+      br.isActive &&
+      br.startDate <= dateStr &&
+      (!br.endDate || br.endDate >= dateStr)
+    );
+
+    if (!activeBaseRate) return undefined;
+
+    const dayCode = DAY_CODE_MAP[date.getDay()];
+    if (activeBaseRate.dayPrices && activeBaseRate.dayPrices[dayCode] != null) {
+      return activeBaseRate.dayPrices[dayCode];
+    }
+
+    return activeBaseRate.basePrice;
+  };
+
+  const getRateOverrideForDate = (roomTypeId: string, date: Date, defaultRatePlanId?: string) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const dayIndex = toDayIndexMonFirst(date);
+
+    const applicable = rateOverrides.filter(ro => {
+      if (ro.roomTypeId !== roomTypeId) return false;
+      if (ro.startDate > dateStr) return false;
+      if (ro.endDate && ro.endDate < dateStr) return false;
+      if (ro.appliedDays && ro.appliedDays.length > 0 && !ro.appliedDays.includes(dayIndex)) return false;
+      return true;
+    });
+
+    if (applicable.length === 0) return undefined;
+
+    if (defaultRatePlanId) {
+      const defaultPlanOverride = applicable.find(ro => ro.ratePlanIds.includes(defaultRatePlanId));
+      if (defaultPlanOverride) return defaultPlanOverride;
+    }
+
+    return applicable[0];
+  };
+
+  const getRoomTypeCellRate = (roomTypeId: string, date: Date) => {
+    const basePrice = getBaseRatePrice(roomTypeId, date);
+    if (basePrice == null) return { finalPrice: undefined as number | undefined, hasOverride: false };
+
+    const defaultPlan = ratePlans.find(rp => rp.roomTypeId === roomTypeId && rp.default);
+    const override = getRateOverrideForDate(roomTypeId, date, defaultPlan?.id);
+
+    if (!override?.overrideType || override.overrideValue == null) {
+      return { finalPrice: basePrice, hasOverride: false };
+    }
+
+    if (override.overrideType === 'fixed') {
+      return { finalPrice: override.overrideValue, hasOverride: true };
+    }
+
+    if (override.overrideType === 'percentage') {
+      return { finalPrice: basePrice * (1 + override.overrideValue / 100), hasOverride: true };
+    }
+
+    return { finalPrice: basePrice, hasOverride: false };
+  };
   
   const DAY_WIDTH_PX = 80;
 
@@ -585,7 +729,32 @@ const CalendarGridDisplay: React.FC<CalendarGridDisplayProps> = ({
               >
                 {rt.name}
               </div>
-              <div className="border-b border-r border-border bg-primary/5 h-12" style={{ gridColumn: `2 / span ${viewModeInDays}` }} />
+              <div
+                className="border-b border-r border-border bg-primary/5 h-12 grid"
+                style={{
+                  gridColumn: `2 / span ${viewModeInDays}`,
+                  gridTemplateColumns: `repeat(${datesToDisplay.length}, minmax(${DAY_WIDTH_PX}px, 1fr))`,
+                }}
+              >
+                {datesToDisplay.map((date) => {
+                  const cellRate = getRoomTypeCellRate(rt.id, date);
+                  return (
+                    <div
+                      key={`${rt.id}-rate-${date.toISOString()}`}
+                      className="border-r border-border last:border-r-0 flex items-center justify-center text-[10px] font-semibold"
+                      title={cellRate.finalPrice != null ? `${currency || ''}${Math.round(cellRate.finalPrice)}${cellRate.hasOverride ? ' (override)' : ''}` : 'No base rate'}
+                    >
+                      {cellRate.finalPrice != null ? (
+                        <span className={cellRate.hasOverride ? 'text-orange-600' : 'text-primary'}>
+                          {currency || ''}{Math.round(cellRate.finalPrice)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               {roomsInThisType.length > 0 ? (
                 roomsInThisType.map(room => (
@@ -662,10 +831,15 @@ const isRoomAvailableForUpdate = (
 
 // --- Main Page Component ---
 export default function CalendarPage() {
-  const { user, isLoadingAuth } = useAuth();
+  const router = useRouter();
+  const { user, isLoadingAuth, property } = useAuth();
   const { t } = useTranslation(['pages/calendar/calendar', 'pages/dashboard/reservation-form']);
-  const [propertyId, setPropertyId] = useState<string | null>(null);
-  const [propertySettings, setPropertySettings] = useState<Property | null>(null);
+  // Use property.id (same source as room-types/rooms settings pages) for reliable propertyId
+  const propertyId = (property as any)?.id ?? user?.propertyId ?? null;
+  const propertySettings = property as any; // Supabase property object
+  const [bookingLogicSettings, setBookingLogicSettings] = useState<BookingLogicSettings>({
+    allowSameDayTurnover: false,
+  });
 
   const [viewStartDate, setViewStartDate] = useState<Date>(startOfDay(new Date()));
   const viewModeInDays = 30; // Hardcoded to 30 days
@@ -675,15 +849,16 @@ export default function CalendarPage() {
   const [allReservations, setAllReservations] = useState<FirestoreReservation[]>([]);
   const [allRatePlans, setAllRatePlans] = useState<RatePlan[]>([]);
   const [availabilitySettings, setAvailabilitySettings] = useState<AvailabilitySetting[]>([]);
-  const [seasonalRates, setSeasonalRates] = useState<SeasonalRate[]>([]);
+  const [baseRates, setBaseRates] = useState<BaseRateRecord[]>([]);
+  const [rateOverrides, setRateOverrides] = useState<RateOverrideRecord[]>([]);
   
   const [isLoadingRoomTypes, setIsLoadingRoomTypes] = useState(true);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
   const [isLoadingReservations, setIsLoadingReservations] = useState(true);
   const [isLoadingAvailabilitySettings, setIsLoadingAvailabilitySettings] = useState(true);
   const [isLoadingRatePlans, setIsLoadingRatePlans] = useState(true);
-  const [isLoadingSeasonalRates, setIsLoadingSeasonalRates] = useState(true);
-  const isGridDataLoading = isLoadingRoomTypes || isLoadingRooms || isLoadingReservations || isLoadingAvailabilitySettings || isLoadingRatePlans || isLoadingSeasonalRates;
+  const [hasCompletedInitialLoad, setHasCompletedInitialLoad] = useState(false);
+  const isGridDataLoading = isLoadingRoomTypes || isLoadingRooms || isLoadingReservations || isLoadingAvailabilitySettings || isLoadingRatePlans;
 
   const [isNewReservationModalOpen, setIsNewReservationModalOpen] = useState(false);
   const [isViewReservationModalOpen, setIsViewReservationModalOpen] = useState(false);
@@ -696,103 +871,268 @@ export default function CalendarPage() {
 
   const [draggedReservation, setDraggedReservation] = useState<FirestoreReservation | null>(null);
 
-
-  useEffect(() => {
-    if (user?.id) {
-      const staffDocRef = doc(db, "staff", user.id);
-      const unsubStaff = onSnapshot(staffDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const staffData = docSnap.data() as FirestoreUser;
-          setPropertyId(staffData.propertyId);
-        } else {
-          setPropertyId(null);
-        }
-      });
-      return () => unsubStaff();
+  // ── Helpers ────────────────────────────────────────────────────────
+  const getAuthHeaders = useCallback(async (): Promise<Record<string, string> | null> => {
+    const supabase = createClient();
+    let sessionData = null;
+    for (let i = 0; i < 3; i++) {
+      const result = await supabase.auth.getSession();
+      if (result.data?.session) { sessionData = result.data; break; }
+      if (i < 2) await new Promise(r => setTimeout(r, 100));
     }
-  }, [user?.id]);
+    if (!sessionData?.session) return null;
+    return { 'Authorization': `Bearer ${sessionData.session.access_token}` };
+  }, []);
+
+  const allowSameDayTurnover = bookingLogicSettings.allowSameDayTurnover;
 
   useEffect(() => {
-    if (propertyId) {
-      const propDocRef = doc(db, "properties", propertyId);
-      const unsubProp = onSnapshot(propDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          setPropertySettings(docSnap.data() as Property);
-        } else {
-          setPropertySettings(null);
+    if (isLoadingAuth || !propertyId) return;
+
+    let cancelled = false;
+
+    const loadBookingLogicSettings = async () => {
+      const headers = await getAuthHeaders();
+      if (!headers || cancelled) return;
+
+      try {
+        const response = await fetch(
+          `/api/properties/system/preferences/update?propertyId=${encodeURIComponent(propertyId)}`,
+          { headers }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to load booking logic settings: ${response.status}`);
         }
-      });
-      return () => unsubProp();
-    }
-  }, [propertyId]);
 
+        const data = await response.json();
+        const settings = data?.settings || {};
+
+        if (cancelled) return;
+
+        setBookingLogicSettings({
+          allowSameDayTurnover: settings.allowSameDayTurnover ?? propertySettings?.bookingPageSettings?.allowSameDayTurnover ?? false,
+        });
+      } catch (error) {
+        console.error('[calendar] failed to load booking logic settings', error);
+
+        if (!cancelled) {
+          setBookingLogicSettings({
+            allowSameDayTurnover: propertySettings?.bookingPageSettings?.allowSameDayTurnover ?? false,
+          });
+        }
+      }
+    };
+
+    loadBookingLogicSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId, isLoadingAuth, getAuthHeaders, propertySettings]);
+
+  // ── Data Fetching ───────────────────────────────────────────────────
   useEffect(() => {
+    // Wait for auth to finish before doing anything
+    if (isLoadingAuth) return;
+
     if (!propertyId) {
-      setRoomTypes([]); setRooms([]); setAllReservations([]); setAvailabilitySettings([]); setAllRatePlans([]); setSeasonalRates([]);
-      setIsLoadingRoomTypes(true); setIsLoadingRooms(true); setIsLoadingReservations(true); setIsLoadingAvailabilitySettings(true); setIsLoadingRatePlans(true); setIsLoadingSeasonalRates(true);
+      setRoomTypes([]); setRooms([]); setAllReservations([]); setAvailabilitySettings([]); setAllRatePlans([]); setBaseRates([]); setRateOverrides([]);
+      setIsLoadingRoomTypes(false); setIsLoadingRooms(false); setIsLoadingReservations(false);
+      setIsLoadingAvailabilitySettings(false); setIsLoadingRatePlans(false);
+      setHasCompletedInitialLoad(false);
       return;
     }
-    
-    setIsLoadingRoomTypes(true);
-    const rtUnsub = onSnapshot(query(collection(db, "roomTypes"), where("propertyId", "==", propertyId)), (snap) => {
-      setRoomTypes(snap.docs.map(d => ({ id: d.id, ...d.data() } as RoomType)));
+
+    let cancelled = false;
+
+    const fetchAll = async () => {
+      setHasCompletedInitialLoad(false);
+      setIsLoadingRoomTypes(true);
+      setIsLoadingRooms(true);
+      setIsLoadingRatePlans(true);
+      setIsLoadingReservations(true);
+      setIsLoadingAvailabilitySettings(true);
+
+      const headers = await getAuthHeaders();
+      console.log('[calendar] fetchAll — propertyId:', propertyId, '| hasHeaders:', !!headers);
+      if (!headers || cancelled) {
+        // No session – reset loading so the page doesn't spin forever
+        setIsLoadingRoomTypes(false); setIsLoadingRooms(false); setIsLoadingReservations(false);
+        setIsLoadingAvailabilitySettings(false); setIsLoadingRatePlans(false);
+        setHasCompletedInitialLoad(true);
+        return;
+      }
+
+      const base = `/api`;
+
+      const [rtRes, rRes, rpRes, resRes] = await Promise.all([
+        fetch(`${base}/rooms/room-types/list?propertyId=${propertyId}`, { headers }),
+        fetch(`${base}/rooms/list?propertyId=${propertyId}`, { headers }),
+        fetch(`${base}/rate-plans/list?propertyId=${propertyId}`, { headers }),
+        fetch(`${base}/reservations/list?propertyId=${propertyId}`, { headers }),
+      ]);
+
+      if (cancelled) {
+        setIsLoadingRoomTypes(false); setIsLoadingRooms(false); setIsLoadingReservations(false);
+        setIsLoadingAvailabilitySettings(false); setIsLoadingRatePlans(false);
+        return;
+      }
+
+      if (rtRes.ok) {
+        const data = await rtRes.json();
+        console.log('[calendar] room-types:', data.roomTypes?.length, 'items');
+        setRoomTypes(data.roomTypes || []);
+      } else {
+        console.error('[calendar] room-types fetch failed', rtRes.status, await rtRes.text().catch(() => ''));
+      }
       setIsLoadingRoomTypes(false);
-    }, (err) => { console.error("RT Fetch Error:", err); setIsLoadingRoomTypes(false); });
 
-    setIsLoadingRooms(true);
-    const rUnsub = onSnapshot(query(collection(db, "rooms"), where("propertyId", "==", propertyId)), (snap) => {
-      setRooms(snap.docs.map(d => ({ id: d.id, ...d.data() } as FirestoreRoom)));
+      if (rRes.ok) {
+        const data = await rRes.json();
+        console.log('[calendar] rooms:', data.rooms?.length, 'items');
+        setRooms(data.rooms || []);
+      } else {
+        console.error('[calendar] rooms fetch failed', rRes.status, await rRes.text().catch(() => ''));
+      }
       setIsLoadingRooms(false);
-    }, (err) => { console.error("Rooms Fetch Error:", err); setIsLoadingRooms(false); });
 
-    setIsLoadingReservations(true);
-    const resUnsub = onSnapshot(query(collection(db, "reservations"), where("propertyId", "==", propertyId)), (snap) => {
-      setAllReservations(snap.docs.map(d => {
-        const data = d.data();
-        return { 
-          ...data, 
-          id: d.id, 
-          startDate: (data.startDate as Timestamp).toDate(), 
-          endDate: (data.endDate as Timestamp).toDate(),
-          createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined,
-          updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined,
-          actualCheckInTime: data.actualCheckInTime ? (data.actualCheckInTime as Timestamp).toDate() : undefined,
-          actualCheckOutTime: data.actualCheckOutTime ? (data.actualCheckOutTime as Timestamp).toDate() : undefined,
-          isCheckedOut: data.isCheckedOut || false,
-        } as FirestoreReservation;
-      }));
+      if (rpRes.ok) {
+        const data = await rpRes.json();
+        setAllRatePlans(data.ratePlans || []);
+      } else {
+        console.error('[calendar] rate-plans fetch failed', rpRes.status);
+      }
+      setIsLoadingRatePlans(false);
+
+      if (resRes.ok) {
+        const data = await resRes.json();
+        const mapped: FirestoreReservation[] = (data.reservations || []).map((r: any) => ({
+          ...r,
+          startDate: new Date(r.startDate),
+          endDate: new Date(r.endDate),
+          createdAt: r.createdAt ? new Date(r.createdAt) : undefined,
+          updatedAt: r.updatedAt ? new Date(r.updatedAt) : undefined,
+          actualCheckInTime: r.actualCheckInTime ? new Date(r.actualCheckInTime) : undefined,
+          actualCheckOutTime: r.actualCheckOutTime ? new Date(r.actualCheckOutTime) : undefined,
+        }));
+        setAllReservations(mapped);
+      } else {
+        console.error('[calendar] reservations fetch failed', resRes.status);
+      }
       setIsLoadingReservations(false);
-    }, (err) => { console.error("Res Fetch Error:", err); setIsLoadingReservations(false); });
-    
-    setIsLoadingAvailabilitySettings(true);
-    const availUnsub = onSnapshot(query(collection(db, "availability"), where("propertyId", "==", propertyId)), (snap) => {
-      setAvailabilitySettings(snap.docs.map(d => {
-        const data = d.data();
-        return {
-          ...data,
-          id: d.id,
-          startDate: data.startDate,
-          endDate: data.endDate,
-        } as AvailabilitySetting;
-      }));
-      setIsLoadingAvailabilitySettings(false);
-    }, (err) => { console.error("Availability Settings Fetch Error:", err); setIsLoadingAvailabilitySettings(false);});
-    
-    setIsLoadingRatePlans(true);
-    const rpUnsub = onSnapshot(query(collection(db, "ratePlans"), where("propertyId", "==", propertyId)), (snap) => {
-        setAllRatePlans(snap.docs.map(d => ({id: d.id, ...d.data() } as RatePlan)));
-        setIsLoadingRatePlans(false);
-    }, (err) => { setIsLoadingRatePlans(false); console.error("Error fetching rate plans:", err);});
 
-    setIsLoadingSeasonalRates(true);
-    const srUnsub = onSnapshot(query(collection(db, "seasonalRates"), where("propertyId", "==", propertyId), where("active", "==", true)), (snap) => {
-        setSeasonalRates(snap.docs.map(d => ({...d.data(), id: d.id, startDate: (d.data().startDate as Timestamp).toDate(), endDate: (d.data().endDate as Timestamp).toDate()} as SeasonalRate)));
-        setIsLoadingSeasonalRates(false);
-    }, (err) => { setIsLoadingSeasonalRates(false); console.error("Error fetching seasonal rates:", err);});
+      // Fetch availability (blocked ranges) – wide date window
+      const startDate = format(subDays(new Date(), 30), 'yyyy-MM-dd');
+      const endDate = format(addDays(new Date(), 730), 'yyyy-MM-dd');
+      try {
+        const [availRes, baseRatesRes, ratesCalendarRes] = await Promise.all([
+          fetch(
+            `${base}/property-settings/rates-availability/availability?propertyId=${propertyId}&startDate=${startDate}&endDate=${endDate}&status=blocked`,
+            { headers }
+          ),
+          fetch(
+            `${base}/pricing/base-rates?propertyId=${propertyId}`,
+            { headers }
+          ),
+          fetch(
+            `${base}/property-settings/rates-availability/calendar?propertyId=${propertyId}&minDate=${startDate}&maxDate=${endDate}`,
+            { headers }
+          ),
+        ]);
 
+        if (!cancelled && availRes.ok) {
+          const data = await availRes.json();
+          const mapped: AvailabilitySetting[] = (data.data || []).map((a: any) => ({
+            id: a.id,
+            propertyId: a.property_id,
+            roomTypeId: a.room_type_id,
+            roomId: a.room_id || null,
+            startDate: a.date,
+            endDate: a.end_date || a.date,
+            status: a.status as 'blocked' | 'available',
+            notes: a.notes,
+          }));
+          setAvailabilitySettings(mapped);
+        }
 
-    return () => { rtUnsub(); rUnsub(); resUnsub(); availUnsub(); rpUnsub(); srUnsub(); };
-  }, [propertyId]);
+        if (!cancelled && baseRatesRes.ok) {
+          const data = await baseRatesRes.json();
+          const mapped: BaseRateRecord[] = (data.baseRates || []).map((br: any) => {
+            let dayPrices: Record<string, number> | undefined;
+            if (br.day_prices && typeof br.day_prices === 'object') {
+              dayPrices = br.day_prices;
+            } else if (typeof br.day_prices === 'string') {
+              try {
+                dayPrices = JSON.parse(br.day_prices);
+              } catch {
+                dayPrices = undefined;
+              }
+            }
+
+            return {
+              id: br.id,
+              roomTypeId: br.room_type_id,
+              basePrice: Number(br.base_price) || 0,
+              startDate: br.start_date,
+              endDate: br.end_date || null,
+              dayPrices,
+              isActive: br.is_active !== false,
+            };
+          });
+          setBaseRates(mapped);
+        }
+
+        if (!cancelled && ratesCalendarRes.ok) {
+          const data = await ratesCalendarRes.json();
+          const mapped: RateOverrideRecord[] = (data.rateOverrides || []).map((ro: any) => {
+            let appliedDays: number[] | null = null;
+            if (Array.isArray(ro.applied_days)) {
+              appliedDays = ro.applied_days;
+            } else if (typeof ro.applied_days === 'string') {
+              try {
+                const parsed = JSON.parse(ro.applied_days);
+                appliedDays = Array.isArray(parsed) ? parsed : null;
+              } catch {
+                appliedDays = null;
+              }
+            }
+
+            const ratePlanIds = ro.rate_plan_id
+              ? [ro.rate_plan_id]
+              : (Array.isArray(ro.rate_plan_ids) ? ro.rate_plan_ids : []);
+
+            return {
+              roomTypeId: ro.room_type_id,
+              ratePlanIds,
+              startDate: ro.date,
+              endDate: ro.end_date || null,
+              overrideType: ro.override_type ?? null,
+              overrideValue: ro.override_value ?? null,
+              appliedDays,
+            };
+          });
+          setRateOverrides(mapped);
+        }
+      } catch (err) {
+        console.error('[calendar] availability fetch error:', err);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingAvailabilitySettings(false);
+          setHasCompletedInitialLoad(true);
+        }
+      }
+    };
+
+    fetchAll().catch(err => {
+      console.error('[calendar] fetchAll error:', err);
+      setIsLoadingRoomTypes(false); setIsLoadingRooms(false); setIsLoadingReservations(false);
+      setIsLoadingAvailabilitySettings(false); setIsLoadingRatePlans(false);
+      setHasCompletedInitialLoad(true);
+    });
+
+    return () => { cancelled = true; };
+  }, [propertyId, isLoadingAuth, getAuthHeaders]);
   
  const handleSelectionCreate = useCallback((room: FirestoreRoom, startDate: Date, endDate: Date) => {
     const roomType = roomTypes.find(rt => rt.id === room.roomTypeId);
@@ -804,27 +1144,34 @@ export default function CalendarPage() {
     const availableRatePlans = allRatePlans.filter(rp => rp.roomTypeId === room.roomTypeId);
     const defaultPlan = availableRatePlans.find(rp => rp.default) || availableRatePlans[0];
 
-    const newReservationRoom: ReservationRoom = {
-      roomId: room.id,
-      roomName: room.name,
+    const prefillRef = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const storageKey = `reservation-prefill:${prefillRef}`;
+    const payload: CalendarReservationPrefillPayload = {
+      source: 'calendar-drag',
+      checkIn: format(startDate, 'yyyy-MM-dd'),
+      checkOut: format(endDate, 'yyyy-MM-dd'),
       roomTypeId: roomType.id,
       roomTypeName: roomType.name,
+      roomId: room.id,
+      roomName: room.name,
       ratePlanId: defaultPlan?.id || '',
       ratePlanName: defaultPlan?.planName || '',
-      price: 0, 
-      adults: 1, // Will be updated by form
+      adults: 1,
       children: 0,
-      pricingMode: 'rate_plan',
     };
-    
-    setPrefillReservationData({
-      rooms: [newReservationRoom],
-      startDate: startDate,
-      endDate: endDate,
-      status: 'Pending',
-    });
-    setIsNewReservationModalOpen(true);
-  }, [roomTypes, allRatePlans, t]);
+
+    try {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(payload));
+      router.push(`/reservations/new?prefillRef=${encodeURIComponent(prefillRef)}`);
+    } catch (error) {
+      console.error('[calendar] failed to persist reservation prefill payload', error);
+      toast({
+        title: t('toasts.error_title'),
+        description: 'Could not open the new reservation page with prefilled data.',
+        variant: 'destructive',
+      });
+    }
+  }, [roomTypes, allRatePlans, router, t]);
 
   const handleBookedCellClick = (reservation: FirestoreReservation) => {
     setSelectedReservationForDetail(reservation);
@@ -846,7 +1193,7 @@ export default function CalendarPage() {
       { from: reservation.startDate, to: newEndDate },
       allReservations,
       reservation.id,
-      propertySettings?.bookingPageSettings?.allowSameDayTurnover || false
+      allowSameDayTurnover
     );
   
     if (!isAvailable) {
@@ -1016,7 +1363,7 @@ export default function CalendarPage() {
         { from: newValues.startDate, to: newValues.endDate },
         allReservations,
         oldReservation.id,
-        propertySettings?.bookingPageSettings?.allowSameDayTurnover || false
+      allowSameDayTurnover
     );
 
     if (!isAvailable) {
@@ -1031,54 +1378,76 @@ export default function CalendarPage() {
     }
 
     try {
-        const resDocRef = doc(db, "reservations", oldReservation.id);
-        const dataToUpdate: Partial<FirestoreReservation> & { updatedAt: FieldValue } = {
-            startDate: Timestamp.fromDate(newValues.startDate),
-            endDate: Timestamp.fromDate(newValues.endDate),
-            // Assuming single room edit for now from calendar
-            rooms: [{
-                ...oldReservation.rooms[0],
+        const headers = await getAuthHeaders();
+        if (!headers) throw new Error('No session');
+
+        const res = await fetch('/api/reservations/crud', {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'update',
+                propertyId,
+                reservationId: oldReservation.id,
+                startDate: format(newValues.startDate, 'yyyy-MM-dd'),
+                endDate: format(newValues.endDate, 'yyyy-MM-dd'),
                 roomId: newValues.roomId,
                 roomName: newValues.roomName,
                 roomTypeId: newValues.roomTypeId,
                 roomTypeName: newValues.roomTypeName,
-                ratePlanId: newValues.ratePlanId || oldReservation.rooms[0].ratePlanId,
-                ratePlanName: newValues.ratePlanName || oldReservation.rooms[0].ratePlanName,
-                pricingMode: 'rate_plan', // Reset to rate plan after move
-            }],
-            updatedAt: serverTimestamp(),
+                ratePlanId: newValues.ratePlanId,
+                ratePlanName: newValues.ratePlanName,
+                totalPrice: newValues.totalPrice,
+                roomsTotal: newValues.roomsTotal,
+                extrasTotal: newValues.extrasTotal,
+                subtotal: newValues.subtotal,
+                discountAmount: newValues.discountAmount,
+                taxAmount: newValues.taxAmount,
+                netAmount: newValues.netAmount,
+                existingRoomsData: oldReservation.rooms,
+            }),
+        });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Update failed');
+        }
+        
+        toast({ title: t('toasts.success_title'), description: t('toasts.update_success_description') });
+
+        const updatedRooms = [{
+            ...oldReservation.rooms[0],
+            roomId: newValues.roomId,
+            roomName: newValues.roomName,
+            roomTypeId: newValues.roomTypeId,
+            roomTypeName: newValues.roomTypeName,
+            ratePlanId: newValues.ratePlanId || oldReservation.rooms[0].ratePlanId,
+            ratePlanName: newValues.ratePlanName || oldReservation.rooms[0].ratePlanName,
+            pricingMode: 'rate_plan',
+        }] as ReservationRoom[];
+
+        const updatedReservation: FirestoreReservation = {
+            ...oldReservation,
+            startDate: newValues.startDate,
+            endDate: newValues.endDate,
+            rooms: updatedRooms,
             totalPrice: newValues.totalPrice,
             roomsTotal: newValues.roomsTotal,
-            subtotal: newValues.subtotal,
             extrasTotal: newValues.extrasTotal,
+            subtotal: newValues.subtotal,
             discountAmount: newValues.discountAmount,
             taxAmount: newValues.taxAmount,
             netAmount: newValues.netAmount,
         };
-        
-        await updateDoc(resDocRef, dataToUpdate as any);
-        
-        toast({ title: t('toasts.success_title'), description: t('toasts.update_success_description') });
 
-        const updatedReservation = {
-          ...oldReservation,
-          ...newValues,
-          startDate: newValues.startDate,
-          endDate: newValues.endDate,
-          rooms: dataToUpdate.rooms as ReservationRoom[],
-        };
-
-        setAllReservations(prev => prev.map(res => 
-            res.id === oldReservation.id 
-            ? updatedReservation
-            : res
+        setAllReservations(prev => prev.map(res =>
+            res.id === oldReservation.id ? updatedReservation : res
         ));
-        
+
         if (draggedReservation && draggedReservation.id === oldReservation.id) {
-          setDraggedReservation(updatedReservation);
+            setDraggedReservation(updatedReservation);
         }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error updating reservation:", error);
         toast({ title: t('toasts.error_title'), description: t('toasts.update_error_description'), variant: "destructive" });
     } finally {
@@ -1090,58 +1459,68 @@ export default function CalendarPage() {
   const handleCheckIn = async (reservationId: string) => {
     if (!propertyId || !canManageReservations) return;
     try {
-      await updateDoc(doc(db, "reservations", reservationId), { 
-        status: 'Checked-in',
-        actualCheckInTime: serverTimestamp(), 
-        isCheckedOut: false 
+      const headers = await getAuthHeaders();
+      if (!headers) throw new Error('No session');
+
+      const res = await fetch('/api/reservations/crud', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'checkIn', propertyId, reservationId }),
       });
-      toast({title: t('toasts.success_title'), description: t('toasts.check_in_success')});
-    } catch(err) {
-      toast({title: t('toasts.error_title'), description: t('toasts.check_in_error'), variant: "destructive"});
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Check-in failed');
+      }
+
+      setAllReservations(prev => prev.map(r =>
+        r.id === reservationId
+          ? { ...r, status: 'Checked-in', actualCheckInTime: new Date(), isCheckedOut: false }
+          : r
+      ));
+      toast({ title: t('toasts.success_title'), description: t('toasts.check_in_success') });
+    } catch (err) {
+      toast({ title: t('toasts.error_title'), description: t('toasts.check_in_error'), variant: "destructive" });
     }
   };
 
   const handleCheckOut = async (reservation: FirestoreReservation) => {
     if (!propertyId || !reservation.rooms[0].roomId || !canManageReservations || !user) return;
     try {
-      const roomDetails = rooms.find(r => r.id === reservation.rooms[0].roomId);
+      const headers = await getAuthHeaders();
+      if (!headers) throw new Error('No session');
 
-      const batch = writeBatch(db);
-      
-      batch.update(doc(db, "reservations", reservation.id), { 
-        status: 'Completed',
-        actualCheckOutTime: serverTimestamp(), 
-        isCheckedOut: true 
-      });
-      
-      batch.update(doc(db, "rooms", reservation.rooms[0].roomId), { status: 'Dirty' });
-
-      const newTaskRef = doc(collection(db, 'tasks'));
-      const taskPayload = {
-          id: newTaskRef.id,
-          title: `Clean Room: ${reservation.rooms[0].roomName}`,
-          description: `Standard checkout cleaning for room ${reservation.rooms[0].roomName} (${reservation.rooms[0].roomTypeName}). Guest: ${reservation.guestName}.`,
-          property_id: propertyId,
-          room_id: reservation.rooms[0].roomId,
+      const res = await fetch('/api/reservations/crud', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'checkOut',
+          propertyId,
+          reservationId: reservation.id,
+          roomId: reservation.rooms[0].roomId,
           roomName: reservation.rooms[0].roomName,
           roomTypeName: reservation.rooms[0].roomTypeName,
-          floor: roomDetails?.floor || 'N/A',
-          assigned_to_role: 'housekeeping',
-          assigned_to_uid: null,
-          priority: 'High',
-          status: 'Open',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdByName: user?.name || 'System',
-          createdByUid: user?.id || 'system',
-      };
-      batch.set(newTaskRef, taskPayload);
+          guestName: reservation.guestName,
+          createdByName: user.name || 'System',
+          createdByUid: user.id || 'system',
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Check-out failed');
+      }
 
-      await batch.commit();
-      toast({title: t('toasts.success_title'), description: t('toasts.check_out_success', { roomName: reservation.rooms[0].roomName || '' })});
-    } catch(err) {
+      setAllReservations(prev => prev.map(r =>
+        r.id === reservation.id
+          ? { ...r, status: 'Completed', actualCheckOutTime: new Date(), isCheckedOut: true }
+          : r
+      ));
+      setRooms(prev => prev.map(r =>
+        r.id === reservation.rooms[0].roomId ? { ...r, status: 'Dirty' as any } : r
+      ));
+      toast({ title: t('toasts.success_title'), description: t('toasts.check_out_success', { roomName: reservation.rooms[0].roomName || '' }) });
+    } catch (err) {
       console.error("Error checking out:", err);
-      toast({title: t('toasts.error_title'), description: t('toasts.check_out_error'), variant: "destructive"});
+      toast({ title: t('toasts.error_title'), description: t('toasts.check_out_error'), variant: "destructive" });
     }
   };
   
@@ -1155,9 +1534,7 @@ export default function CalendarPage() {
       t.uniqueDisplayId === value.uniqueDisplayId
     ))
   );
-
-
-  if (isLoadingAuth) {
+  if (isLoadingAuth || !propertyId || !hasCompletedInitialLoad || isGridDataLoading) {
     return <div className="flex h-full items-center justify-center"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
   }
 
@@ -1178,11 +1555,7 @@ export default function CalendarPage() {
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="h-full w-full">
-        {isGridDataLoading && roomTypes.length === 0 ? (
-            <div className="flex justify-center items-center h-full text-muted-foreground">
-              <Icons.Spinner className="mr-2 h-6 w-6 animate-spin" /> {t('loading')}
-            </div>
-        ) : roomTypes.length > 0 ? (
+        {roomTypes.length > 0 ? (
             <CalendarGridDisplay
               viewStartDate={viewStartDate}
               viewModeInDays={viewModeInDays}
@@ -1195,15 +1568,17 @@ export default function CalendarPage() {
               onReservationResize={handleReservationResize}
               onSelectionCreate={handleSelectionCreate}
               isLoadingGridData={isGridDataLoading}
-              allowSameDayTurnover={propertySettings?.bookingPageSettings?.allowSameDayTurnover || false}
+              allowSameDayTurnover={allowSameDayTurnover}
               ratePlans={allRatePlans}
+              baseRates={baseRates}
+              rateOverrides={rateOverrides}
               currency={propertySettings?.currency}
               onStartDateChange={setViewStartDate}
               onReservationDragStart={setDraggedReservation}
             />
         ) : (
           <div className="flex justify-center items-center h-full text-muted-foreground">
-            <p>{t('no_room_types')}</p>
+            <Icons.Spinner className="mr-2 h-6 w-6 animate-spin" /> {t('loading')}
           </div>
         )}
         

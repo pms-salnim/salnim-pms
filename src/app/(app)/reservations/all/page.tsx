@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/icons";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -36,6 +36,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from '@/contexts/auth-context';
+import { createClient } from '@/utils/supabase/client';
 import { db, app } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, Timestamp, doc, getDoc, updateDoc, orderBy, deleteDoc, writeBatch, serverTimestamp, getDocs, limit } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
@@ -147,6 +148,24 @@ export default function AllReservationsPage() {
   // Reintroduce missing variables
   const reservationIdToView = searchParams.get('view');
   const canManageReservations = user?.permissions?.reservations;
+
+  const getAuthHeaders = useCallback(async () => {
+    const supabase = createClient();
+    let sessionData = null;
+    for (let i = 0; i < 3; i += 1) {
+      const result = await supabase.auth.getSession();
+      if (result.data?.session) {
+        sessionData = result.data;
+        break;
+      }
+      if (i < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    if (!sessionData?.session) return null;
+    return { Authorization: `Bearer ${sessionData.session.access_token}` };
+  }, []);
 
   // Memoized values
   const filteredReservations = useMemo(() => {
@@ -374,11 +393,70 @@ export default function AllReservationsPage() {
     if (!propertyId) return;
     setIsLoading(true);
     setIsLoadingInvoices(true);
-    let listenerCount = 6; // reservations, properties, roomTypes, rooms, payments, invoices
+    let isActive = true;
+    let listenerCount = 5; // properties, roomTypes, rooms, payments, invoices
     const doneLoading = () => {
         listenerCount--;
         if (listenerCount === 0) setIsLoading(false);
     }
+
+    const loadReservations = async () => {
+      try {
+        const headers = await getAuthHeaders();
+        if (!headers) {
+          throw new Error('Authentication session expired. Please sign in again.');
+        }
+
+        const response = await fetch(`/api/reservations/list?propertyId=${propertyId}`, {
+          headers,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Could not fetch reservations.');
+        }
+
+        const data = await response.json();
+        const latestReservations = Array.isArray(data.reservations) ? data.reservations : [];
+
+        if (!isActive) return;
+
+        const mappedReservations: Reservation[] = latestReservations.map((res: any) => {
+          const rooms = Array.isArray(res.rooms) ? res.rooms : [];
+          const firstRoom = rooms[0] || {};
+
+          return {
+            ...res,
+            status: res.status === 'Cancelled' ? 'Canceled' : res.status,
+            source: res.source || 'Direct',
+            startDate: res.startDate ? new Date(res.startDate) : new Date(),
+            endDate: res.endDate ? new Date(res.endDate) : new Date(),
+            createdAt: res.createdAt ? new Date(res.createdAt) : undefined,
+            updatedAt: res.updatedAt ? new Date(res.updatedAt) : undefined,
+            actualCheckInTime: res.actualCheckInTime ? new Date(res.actualCheckInTime) : undefined,
+            actualCheckOutTime: res.actualCheckOutTime ? new Date(res.actualCheckOutTime) : undefined,
+            rooms,
+            adults: Number(firstRoom.adults) || 1,
+            children: Number(firstRoom.children) || 0,
+            roomId: firstRoom.roomId || '',
+            roomName: firstRoom.roomName || undefined,
+            roomTypeName: firstRoom.roomTypeName || undefined,
+          } as Reservation;
+        });
+
+        setReservations(mappedReservations);
+      } catch (error: any) {
+        if (!isActive) return;
+        console.error('Error fetching reservations from Supabase:', error);
+        toast({
+          title: 'Error',
+          description: error?.message || 'Could not fetch reservations.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    loadReservations();
 
     const unsubProp = onSnapshot(doc(db, "properties", propertyId), (docSnap) => {
       setPropertySettings(docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Property : null);
@@ -395,24 +473,6 @@ export default function AllReservationsPage() {
         doneLoading();
     });
 
-    const unsubReservations = onSnapshot(query(collection(db, "reservations"), where("propertyId", "==", propertyId), orderBy("createdAt", "desc")), (snapshot) => {
-      setReservations(snapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id, ...data,
-          startDate: (data.startDate as Timestamp).toDate(), endDate: (data.endDate as Timestamp).toDate(),
-          createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined, updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined,
-          actualCheckInTime: data.actualCheckInTime ? (data.actualCheckInTime as Timestamp).toDate() : undefined,
-          actualCheckOutTime: data.actualCheckOutTime ? (data.actualCheckOutTime as Timestamp).toDate() : undefined,
-        } as Reservation;
-      }));
-      doneLoading();
-    }, (error) => {
-      console.error("Error fetching reservations:", error);
-      toast({ title: "Error", description: "Could not fetch reservations.", variant: "destructive" });
-      doneLoading();
-    });
-    
     const unsubPayments = onSnapshot(query(collection(db, `properties/${propertyId}/payments`)), (snapshot) => {
         setPayments(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment)));
         doneLoading();
@@ -428,8 +488,8 @@ export default function AllReservationsPage() {
       doneLoading();
     });
 
-    return () => { unsubProp(); unsubRoomTypes(); unsubRooms(); unsubReservations(); unsubPayments(); unsubInvoices(); };
-  }, [propertyId]);
+    return () => { isActive = false; unsubProp(); unsubRoomTypes(); unsubRooms(); unsubPayments(); unsubInvoices(); };
+  }, [propertyId, getAuthHeaders]);
   
   useEffect(() => {
     if (reservationIdToView && !isLoadingInvoices) {
@@ -1026,12 +1086,12 @@ export default function AllReservationsPage() {
                   <DropdownMenuItem onClick={()=>{}}>{t('export_csv')}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <Button asChild disabled={!propertyId || isLoading || !canManageReservations}>
+                <Link href="/reservations/new">
+                  <Icons.PlusCircle className="mr-2 h-4 w-4" /> {t('add_reservation_button')}
+                </Link>
+              </Button>
               <Dialog open={isFormModalOpen} onOpenChange={(isOpen) => { setIsFormModalOpen(isOpen); if (!isOpen) setEditingReservation(null); }}>
-                  <DialogTrigger asChild>
-                      <Button onClick={() => handleOpenReservationForm()} disabled={!propertyId || isLoading || !canManageReservations}>
-                      <Icons.PlusCircle className="mr-2 h-4 w-4" /> {t('add_reservation_button')}
-                      </Button>
-                  </DialogTrigger>
                   <DialogContent className="sm:max-w-5xl p-0 h-[90vh] flex flex-col">
                     <DialogHeader className="px-6 pt-6">
                       <DialogTitle>{editingReservation ? tForm('edit_title') : tForm('create_title')}</DialogTitle>

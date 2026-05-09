@@ -13,6 +13,7 @@ export interface AvailabilitySetting {
   status: 'blocked' | 'available'; // Status of the availability block
   createdBy?: string;      // UID of the user who made the change
   notes?: string | null;   // Optional reason or notes
+  appliedDays?: number[] | null; // Days of week [0-6] where 0=Monday, 6=Sunday. NULL = all days
 
   createdAt?: Timestamp;
   updatedAt?: Timestamp; // Optional for consistency

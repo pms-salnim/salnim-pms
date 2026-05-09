@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ChevronDown, RotateCcw, Check, Search, HelpCircle } from 'lucide-react';
+import { dateToString, stringToDate } from '@/lib/date-utils';
 
 interface BulkAvailabilityPanelProps {
   dateRange: { start: Date | null; end: Date | null };
@@ -36,6 +37,11 @@ interface BulkAvailabilityPanelProps {
   onMinStayNightsChange: (nights: string) => void;
   maxStayNights: string;
   onMaxStayNightsChange: (nights: string) => void;
+  rateOverrideType: 'none' | 'percentage' | 'fixed';
+  onRateOverrideTypeChange: (type: 'none' | 'percentage' | 'fixed') => void;
+  rateOverrideValue: number;
+  onRateOverrideValueChange: (value: number) => void;
+  ratePlans: Array<{ id: string; name: string; base_price?: number }>;
 }
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -73,6 +79,11 @@ export function BulkAvailabilityPanel({
   onMinStayNightsChange,
   maxStayNights,
   onMaxStayNightsChange,
+  rateOverrideType,
+  onRateOverrideTypeChange,
+  rateOverrideValue,
+  onRateOverrideValueChange,
+  ratePlans,
 }: BulkAvailabilityPanelProps) {
   const [expandChannels, setExpandChannels] = useState(false);
   const [expandAvailability, setExpandAvailability] = useState(false);
@@ -150,8 +161,16 @@ export function BulkAvailabilityPanel({
             <label className="block text-xs font-medium text-slate-600 mb-2">Start Date</label>
             <input
               type="date"
-              value={dateRange.start?.toISOString().split('T')[0] || ''}
-              onChange={(e) => onDateRangeChange({ ...dateRange, start: e.target.value ? new Date(e.target.value) : null })}
+              value={dateRange.start ? dateToString(dateRange.start) : ''}
+              onChange={(e) => {
+                const newStart = e.target.value ? stringToDate(e.target.value) : null;
+                console.log('[DateRangePanel] Start date changed:', {
+                  inputValue: e.target.value,
+                  parsedDate: newStart,
+                  dateToString: newStart ? dateToString(newStart) : 'null',
+                });
+                onDateRangeChange({ ...dateRange, start: newStart });
+              }}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             />
           </div>
@@ -160,8 +179,16 @@ export function BulkAvailabilityPanel({
             <input
               type="date"
               disabled={openEnded}
-              value={dateRange.end?.toISOString().split('T')[0] || ''}
-              onChange={(e) => onDateRangeChange({ ...dateRange, end: e.target.value ? new Date(e.target.value) : null })}
+              value={dateRange.end ? dateToString(dateRange.end) : ''}
+              onChange={(e) => {
+                const newEnd = e.target.value ? stringToDate(e.target.value) : null;
+                console.log('[DateRangePanel] End date changed:', {
+                  inputValue: e.target.value,
+                  parsedDate: newEnd,
+                  dateToString: newEnd ? dateToString(newEnd) : 'null',
+                });
+                onDateRangeChange({ ...dateRange, end: newEnd });
+              }}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:cursor-not-allowed"
             />
           </div>
@@ -243,76 +270,7 @@ export function BulkAvailabilityPanel({
 
       <div className="border-t border-slate-200 pt-3" />
 
-      {/* Room Types */}
-      <div>
-        <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wider">Room Types</h3>
-        <select
-          value={selectedRoomType}
-          onChange={(e) => {
-            onSelectedRoomTypeChange(e.target.value);
-            onSelectAllRoomsChange(true);
-            onSelectedRoomsChange([]);
-          }}
-          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        >
-          <option value="all">All Room Types</option>
-          {roomTypes.map((rt) => (
-            <option key={rt.id} value={rt.id}>{rt.name}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Rooms (shown when room type is selected) */}
-      {selectedRoomType !== 'all' && (
-        <div>
-          <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wider">Rooms</h3>
-          <div className="space-y-2">
-            {/* Room Search Field */}
-            <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1.5 focus-within:ring-2 focus-within:ring-blue-500">
-              <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-              <input
-                type="text"
-                placeholder="Search rooms..."
-                value={roomSearchFilter}
-                onChange={(e) => onRoomSearchFilterChange(e.target.value)}
-                className="flex-1 bg-transparent border-none text-xs focus:outline-none ml-2 placeholder-slate-400"
-              />
-            </div>
-
-            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer font-medium">
-              <input
-                type="checkbox"
-                checked={selectAllRooms}
-                onChange={(e) => handleSelectAllRooms(e.target.checked)}
-                className="rounded border-slate-300"
-              />
-              <span>Select All Rooms</span>
-            </label>
-            <div className="pl-6 space-y-2 max-h-40 overflow-y-auto">
-              {filteredRooms.length > 0 ? (
-                filteredRooms.map((room) => (
-                  <label key={room.id} className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectAllRooms || selectedRooms.includes(room.id)}
-                      onChange={(e) => handleRoomToggle(room.id)}
-                      disabled={selectAllRooms}
-                      className="rounded border-slate-300"
-                    />
-                    <span>{room.name}</span>
-                  </label>
-                ))
-              ) : (
-                <p className="text-xs text-slate-400 italic">No rooms match search</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="border-t border-slate-200 pt-3" />
-
-      {/* Availability Update */}
+      {/* Availability Update (MOVED HERE - BEFORE ROOM TYPES) */}
       <div>
         <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wider">Availability Update</h3>
         <div className="relative">
@@ -397,6 +355,179 @@ export function BulkAvailabilityPanel({
           )}
         </div>
       </div>
+
+      <div className="border-t border-slate-200 pt-3" />
+
+      {/* Rate Override */}
+      <div>
+        <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wider">Seasonal Rate Override</h3>
+        <div className="space-y-2">
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input
+                type="radio"
+                checked={rateOverrideType === 'none'}
+                onChange={() => onRateOverrideTypeChange('none')}
+                className="rounded-full border-slate-300"
+              />
+              <span>No Override</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input
+                type="radio"
+                checked={rateOverrideType === 'percentage'}
+                onChange={() => onRateOverrideTypeChange('percentage')}
+                className="rounded-full border-slate-300"
+              />
+              <span>Percentage Change</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input
+                type="radio"
+                checked={rateOverrideType === 'fixed'}
+                onChange={() => onRateOverrideTypeChange('fixed')}
+                className="rounded-full border-slate-300"
+              />
+              <span>Fixed Price</span>
+            </label>
+          </div>
+
+          {rateOverrideType === 'percentage' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Percentage Change</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  placeholder="e.g., 20"
+                  min="-100"
+                  max="200"
+                  value={rateOverrideValue}
+                  onChange={(e) => onRateOverrideValueChange(parseFloat(e.target.value) || 0)}
+                  className="flex-1 px-2 py-1 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                />
+                <span className="text-xs font-medium text-slate-600">%</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Positive = increase, Negative = discount</p>
+            </div>
+          )}
+
+          {rateOverrideType === 'fixed' && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Fixed Price</label>
+              <input
+                type="number"
+                placeholder="e.g., 150.00"
+                min="0"
+                step="0.01"
+                value={rateOverrideValue}
+                onChange={(e) => onRateOverrideValueChange(parseFloat(e.target.value) || 0)}
+                className="w-full px-2 py-1 border border-green-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-green-500 bg-white"
+              />
+              <p className="text-xs text-slate-500 mt-1">Price per night for this period</p>
+            </div>
+          )}
+
+          {rateOverrideType !== 'none' && rateOverrideValue > 0 && (
+            <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1.5">
+              ✓ Rate override configured: {rateOverrideType === 'percentage' ? `${rateOverrideValue}%` : `$${rateOverrideValue.toFixed(2)}`}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-slate-200 pt-3" />
+
+      {/* Room Types */}
+      <div>
+        <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wider">
+          {selectedAvailability.includes('min_stay') || selectedAvailability.includes('max_stay') 
+            ? 'Room Types' 
+            : 'Room Types'}
+        </h3>
+        <select
+          value={selectedRoomType}
+          onChange={(e) => {
+            onSelectedRoomTypeChange(e.target.value);
+            onSelectAllRoomsChange(true);
+            onSelectedRoomsChange([]);
+          }}
+          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        >
+          <option value="all">All Room Types</option>
+          {roomTypes.map((rt) => (
+            <option key={rt.id} value={rt.id}>{rt.name}</option>
+          ))}
+        </select>
+        
+        {/* Info message when min/max stay, CTA, or CTD is selected */}
+        {(selectedAvailability.includes('min_stay') || 
+          selectedAvailability.includes('max_stay') ||
+          selectedAvailability.includes('close_arrival') ||
+          selectedAvailability.includes('close_departure')) && (
+          <p className="text-xs text-blue-600 mt-2 flex items-start gap-1">
+            <span className="mt-0.5">ℹ️</span>
+            <span>
+              {selectedAvailability.includes('min_stay') || selectedAvailability.includes('max_stay') 
+                ? 'Min/Max Stay restrictions' 
+                : selectedAvailability.includes('close_arrival') || selectedAvailability.includes('close_departure')
+                ? 'CTA/CTD settings'
+                : 'Selected settings'} apply to room types only
+            </span>
+          </p>
+        )}
+      </div>
+
+      {/* Rooms (HIDDEN when Min Stay, Max Stay, CTA, or CTD is selected) */}
+      {selectedRoomType !== 'all' && 
+       !selectedAvailability.includes('min_stay') && 
+       !selectedAvailability.includes('max_stay') && 
+       !selectedAvailability.includes('close_arrival') && 
+       !selectedAvailability.includes('close_departure') && (
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-wider">Rooms</h3>
+          <div className="space-y-2">
+            {/* Room Search Field */}
+            <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1.5 focus-within:ring-2 focus-within:ring-blue-500">
+              <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <input
+                type="text"
+                placeholder="Search rooms..."
+                value={roomSearchFilter}
+                onChange={(e) => onRoomSearchFilterChange(e.target.value)}
+                className="flex-1 bg-transparent border-none text-xs focus:outline-none ml-2 placeholder-slate-400"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer font-medium">
+              <input
+                type="checkbox"
+                checked={selectAllRooms}
+                onChange={(e) => handleSelectAllRooms(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              <span>Select All Rooms</span>
+            </label>
+            <div className="pl-6 space-y-2 max-h-40 overflow-y-auto">
+              {filteredRooms.length > 0 ? (
+                filteredRooms.map((room) => (
+                  <label key={room.id} className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectAllRooms || selectedRooms.includes(room.id)}
+                      onChange={(e) => handleRoomToggle(room.id)}
+                      disabled={selectAllRooms}
+                      className="rounded border-slate-300"
+                    />
+                    <span>{room.name}</span>
+                  </label>
+                ))
+              ) : (
+                <p className="text-xs text-slate-400 italic">No rooms match search</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="border-t border-slate-200 pt-3" />
 

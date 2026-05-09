@@ -7,12 +7,27 @@ interface UpdateData {
   totalCells: number;
   uniqueRooms: number;
   uniqueDates: number;
-  availabilityLabel: string;
-  availabilityColor: string;
-  stopSellReason?: string;
   roomsList: string[];
   datesList: string[];
   roomDateRanges?: Record<string, string[]>;
+  updateType?: string;
+  // Days-of-week applied (for OTA sync and audit trail)
+  appliedDays?: {
+    dayIndices: number[]; // 0-6 (Mon-Sun)
+    displayText: string;  // "All days" or "Mo, Tu, We..."
+  };
+  // Availability-specific fields
+  availabilityLabel?: string;
+  availabilityColor?: string;
+  stopSellReason?: string;
+  // Rates-specific fields
+  ratesLabel?: string;
+  rateDetails?: string[];
+  ratesByRoomType?: Record<string, { ratePlans: string[]; rateOverride: string }>;
+  // Restrictions-specific fields
+  restrictionLabel?: string;
+  restrictionTypes?: string[];
+  restrictionRoomTypes?: string[];
 }
 
 interface UpdatePreviewModalProps {
@@ -68,37 +83,159 @@ export function UpdatePreviewModal({
             </div>
           </div>
 
-          {/* Availability Status */}
-          <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Status to Apply</p>
-            <div className="flex items-center gap-3">
-              <div
-                className="w-6 h-6 rounded"
-                style={{ backgroundColor: updateData.availabilityColor, opacity: 0.3 }}
-              />
-              <span className="text-lg font-bold text-slate-900">{updateData.availabilityLabel}</span>
+          {/* Update Type Specific Section */}
+          {updateData.updateType === 'availability' && updateData.availabilityLabel && (
+            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+              <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Status to Apply</p>
+              <div className="flex items-center gap-3">
+                {updateData.availabilityColor && (
+                  <div
+                    className="w-6 h-6 rounded"
+                    style={{ backgroundColor: updateData.availabilityColor, opacity: 0.3 }}
+                  />
+                )}
+                <span className="text-lg font-bold text-slate-900">{updateData.availabilityLabel}</span>
+              </div>
+              {updateData.stopSellReason && (
+                <p className="text-sm text-slate-600 mt-2">
+                  <span className="font-semibold">Reason:</span> {updateData.stopSellReason}
+                </p>
+              )}
             </div>
-            {updateData.stopSellReason && (
-              <p className="text-sm text-slate-600 mt-2">
-                <span className="font-semibold">Reason:</span> {updateData.stopSellReason}
+          )}
+
+          {/* Rates Update Section */}
+          {updateData.updateType === 'rates' && updateData.ratesLabel && (
+            <>
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-3">{updateData.ratesLabel}</p>
+                {updateData.rateDetails && updateData.rateDetails.length > 0 && (
+                  <ul className="space-y-1 mb-4">
+                    {updateData.rateDetails.map((detail, idx) => (
+                      <li key={idx} className="text-sm text-slate-700 flex items-start gap-2">
+                        <span className="text-blue-600 font-bold">•</span>
+                        <span>{detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Room Type and Rate Plans */}
+              {updateData.ratesByRoomType && Object.keys(updateData.ratesByRoomType).length > 0 && (
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-3">Applied to Room Types</p>
+                  <div className="space-y-3">
+                    {Object.entries(updateData.ratesByRoomType).map(([roomTypeName, data]) => (
+                      <div key={roomTypeName} className="bg-white rounded-lg p-3 border border-blue-100">
+                        <p className="text-sm font-bold text-slate-900 mb-2">{roomTypeName}</p>
+                        <div className="ml-3 space-y-1">
+                          {data.ratePlans.map((planName, idx) => (
+                            <p key={idx} className="text-xs text-slate-700 flex items-start gap-2">
+                              <span className="text-blue-500 font-bold">↳</span>
+                              <span>{planName}</span>
+                            </p>
+                          ))}
+                        </div>
+                        {data.rateOverride && (
+                          <p className="text-xs text-blue-700 font-semibold mt-2 italic">{data.rateOverride}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Restrictions Update Section */}
+          {updateData.updateType === 'restrictions' && updateData.restrictionLabel && (
+            <>
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Restrictions to Apply</p>
+                {updateData.restrictionTypes && updateData.restrictionTypes.length > 0 && (
+                  <ul className="space-y-1">
+                    {updateData.restrictionTypes.map((type, idx) => (
+                      <li key={idx} className="text-sm text-slate-700 flex items-start gap-2">
+                        <span className="text-blue-600 font-bold">•</span>
+                        <span>{type}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Room Types Section */}
+              {updateData.restrictionRoomTypes && updateData.restrictionRoomTypes.length > 0 && (
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-3">Applied to Room Types</p>
+                  <div className="space-y-2">
+                    {updateData.restrictionRoomTypes.map((roomType, idx) => (
+                      <div key={idx} className="text-sm bg-white rounded px-3 py-2 border border-blue-100 text-slate-700">
+                        {roomType}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-blue-700 italic mt-3">
+                    ℹ️ Restrictions will apply to all rooms in the selected room types
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Days Applied - Show which days of week will be affected (for OTA sync) */}
+          {updateData.appliedDays && updateData.appliedDays.displayText !== 'Mo, Tu, We, Th, Fr, Sa, Su' && (
+            <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+              <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Days Applied</p>
+              <p className="text-sm font-semibold text-slate-900">{updateData.appliedDays.displayText}</p>
+              <p className="text-xs text-purple-700 italic mt-2">
+                ℹ️ This update will only apply to the selected days of the week within the date range
               </p>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Rooms List */}
           <div>
             <p className="text-sm font-semibold text-slate-900 mb-3">Affected Rooms & Dates</p>
+            {updateData.appliedDays && updateData.appliedDays.displayText !== 'Mo, Tu, We, Th, Fr, Sa, Su' && (
+              <div className="mb-3 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 grid grid-cols-3 gap-3 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                <div>Room</div>
+                <div>Date Range</div>
+                <div>Days</div>
+              </div>
+            )}
             <div className="space-y-3">
               {updateData.roomDateRanges ? (
-                // Show rooms with their date ranges
+                // Show rooms with their date ranges and days
                 Object.entries(updateData.roomDateRanges).map(([roomLabel, dateRanges]) => (
-                  <div key={roomLabel} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                    <p className="text-sm font-semibold text-slate-900">{roomLabel}</p>
-                    <div className="mt-2 space-y-1">
-                      {dateRanges.map((range, idx) => (
-                        <p key={idx} className="text-xs text-slate-600 break-words">{range}</p>
-                      ))}
-                    </div>
+                  <div key={roomLabel}>
+                    {updateData.appliedDays && updateData.appliedDays.displayText !== 'Mo, Tu, We, Th, Fr, Sa, Su' ? (
+                      // Table-like format with Days column
+                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 grid grid-cols-3 gap-3 items-start">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{roomLabel}</p>
+                        </div>
+                        <div>
+                          {dateRanges.map((range, idx) => (
+                            <p key={idx} className="text-xs text-slate-600">{range}</p>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-purple-700">{updateData.appliedDays.displayText}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      // Standard format (all days)
+                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                        <p className="text-sm font-semibold text-slate-900">{roomLabel}</p>
+                        <div className="mt-2 space-y-1">
+                          {dateRanges.map((range, idx) => (
+                            <p key={idx} className="text-xs text-slate-600 break-words">{range}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (

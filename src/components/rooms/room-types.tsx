@@ -66,6 +66,10 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
   // Form state variables
   const [name, setName] = useState("");
   const [maxGuests, setMaxGuests] = useState<string>("");
+  const [maxAdults, setMaxAdults] = useState<string>("");
+  const [maxChildren, setMaxChildren] = useState<string>("");
+  const [adultsIncludedInBaseRate, setAdultsIncludedInBaseRate] = useState<string>("");
+  const [childrenIncludedInBaseRate, setChildrenIncludedInBaseRate] = useState<string>("");
   const [description, setDescription] = useState("");
   const [numberOfRoomsAvailable, setNumberOfRoomsAvailable] = useState<string>("");
   const [assignedRoomNumbersInput, setAssignedRoomNumbersInput] = useState(""); 
@@ -338,6 +342,10 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
   const resetForm = () => {
     setName("");
     setMaxGuests("");
+    setMaxAdults("");
+    setMaxChildren("");
+    setAdultsIncludedInBaseRate("");
+    setChildrenIncludedInBaseRate("");
     setDescription("");
     setNumberOfRoomsAvailable("");
     setAssignedRoomNumbersInput("");
@@ -360,6 +368,10 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
     if (editingRoomType) {
       setName(editingRoomType.name);
       setMaxGuests(editingRoomType.maxGuests !== undefined ? String(editingRoomType.maxGuests) : "");
+      setMaxAdults(editingRoomType.maxAdults !== undefined ? String(editingRoomType.maxAdults) : "");
+      setMaxChildren(editingRoomType.maxChildren !== undefined ? String(editingRoomType.maxChildren) : "");
+      setAdultsIncludedInBaseRate(editingRoomType.adultsIncludedInBaseRate !== undefined ? String(editingRoomType.adultsIncludedInBaseRate) : "");
+      setChildrenIncludedInBaseRate(editingRoomType.childrenIncludedInBaseRate !== undefined ? String(editingRoomType.childrenIncludedInBaseRate) : "");
       setDescription(editingRoomType.description || "");
       setNumberOfRoomsAvailable(editingRoomType.numberOfRoomsAvailable === null || editingRoomType.numberOfRoomsAvailable === undefined ? "" : String(editingRoomType.numberOfRoomsAvailable));
       const roomNumbersStr = editingRoomType.assignedRoomNumbers?.join(', ') || "";
@@ -900,6 +912,10 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
           name,
           description: description || "",
           maxGuests: Number(maxGuests),
+          maxAdults: maxAdults ? Number(maxAdults) : null,
+          maxChildren: maxChildren ? Number(maxChildren) : null,
+          adultsIncludedInBaseRate: adultsIncludedInBaseRate ? Number(adultsIncludedInBaseRate) : null,
+          childrenIncludedInBaseRate: childrenIncludedInBaseRate ? Number(childrenIncludedInBaseRate) : null,
           amenities: JSON.stringify({
             selectedAmenities,
             beds,
@@ -1938,6 +1954,57 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
                             />
                             {hasFieldError('numberOfRoomsAvailable') && <p className="text-xs text-destructive">{formErrors.numberOfRoomsAvailable}</p>}
                         </div>
+                    </div>
+
+                    {/* New Occupancy Fields */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label htmlFor="maxAdults">Max Adults (optional)</Label>
+                        <Input 
+                          id="maxAdults"
+                          type="number" 
+                          value={maxAdults} 
+                          onChange={e => setMaxAdults(e.target.value)} 
+                          placeholder="e.g., 2" 
+                          min="0"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="maxChildren">Max Children (optional)</Label>
+                        <Input 
+                          id="maxChildren"
+                          type="number" 
+                          value={maxChildren} 
+                          onChange={e => setMaxChildren(e.target.value)} 
+                          placeholder="e.g., 2" 
+                          min="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label htmlFor="adultsIncludedInBaseRate">Adults Included in Base Rate</Label>
+                        <Input 
+                          id="adultsIncludedInBaseRate"
+                          type="number" 
+                          value={adultsIncludedInBaseRate} 
+                          onChange={e => setAdultsIncludedInBaseRate(e.target.value)} 
+                          placeholder="e.g., 2" 
+                          min="0"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="childrenIncludedInBaseRate">Children Included in Base Rate</Label>
+                        <Input 
+                          id="childrenIncludedInBaseRate"
+                          type="number" 
+                          value={childrenIncludedInBaseRate} 
+                          onChange={e => setChildrenIncludedInBaseRate(e.target.value)} 
+                          placeholder="e.g., 1" 
+                          min="0"
+                        />
+                      </div>
                     </div>
                      <div className="grid grid-cols-1">
                         <div className="space-y-1">

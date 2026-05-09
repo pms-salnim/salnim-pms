@@ -27,6 +27,7 @@ interface PreferencesData {
   autoNoShowAfterArrival: boolean;
   autoAssignRooms: boolean;
   allowSameDayBookings: boolean;
+  allowSameDayTurnover: boolean;
   sameDayCutoffTime: string;
   autoCheckoutExtension: boolean;
   useDefaultCountry: boolean;
@@ -117,6 +118,7 @@ export function PreferencesForm({ onSave, initialData }: PreferencesFormProps) {
     autoNoShowAfterArrival: true,
     autoAssignRooms: false,
     allowSameDayBookings: true,
+    allowSameDayTurnover: false,
     sameDayCutoffTime: '14:00',
     autoCheckoutExtension: false,
     useDefaultCountry: true,
@@ -498,6 +500,22 @@ export function PreferencesForm({ onSave, initialData }: PreferencesFormProps) {
               type="checkbox"
               checked={formData.allowSameDayBookings}
               onChange={(e) => handleChange('allowSameDayBookings', e.target.checked)}
+              className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Allow Same-Day Turnover */}
+          <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50">
+            <div>
+              <label className="block text-sm font-medium text-slate-900">
+                Allow same-day turnover
+              </label>
+              <p className="text-xs text-slate-600 mt-1">Allow check-out and check-in of the same room on the same day</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={formData.allowSameDayTurnover}
+              onChange={(e) => handleChange('allowSameDayTurnover', e.target.checked)}
               className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
             />
           </div>

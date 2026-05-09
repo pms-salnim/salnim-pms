@@ -11,12 +11,10 @@ import {
 } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
 import { useAuth } from "@/contexts/auth-context";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, Timestamp, doc, getDoc, updateDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { createClient } from "@/utils/supabase/client";
 import type { Reservation } from "@/components/calendar/types";
 import { format, startOfDay, endOfDay, isToday, parseISO } from "date-fns";
 import { enUS, fr } from 'date-fns/locale';
-import type { FirestoreUser } from '@/types/firestoreUser';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -43,12 +41,15 @@ type ActivityStatus = "Arrivée" | "Départ" | "Présent" | "No-Show";
 
 const getActivityStatus = (res: Reservation): ActivityStatus | null => {
     const today = new Date();
-    if (res.status === 'No-Show' && isToday(res.startDate)) return "No-Show";
-    if (isToday(res.endDate) && ['Checked-in', 'Confirmed', 'Pending', 'Completed'].includes(res.status)) return "Départ";
+    const startDate = res.startDate instanceof Date ? res.startDate : new Date(res.startDate);
+    const endDate = res.endDate instanceof Date ? res.endDate : new Date(res.endDate);
+    
+    if (res.status === 'No-Show' && isToday(startDate)) return "No-Show";
+    if (isToday(endDate) && ['Checked-in', 'Confirmed', 'Pending', 'Completed'].includes(res.status)) return "Départ";
     if (res.status === 'Checked-in') {
-        if (!isToday(res.endDate)) return "Présent";
+        if (!isToday(endDate)) return "Présent";
     }
-    if (['Confirmed', 'Pending'].includes(res.status) && isToday(res.startDate)) return "Arrivée";
+    if (['Confirmed', 'Pending'].includes(res.status) && isToday(startDate)) return "Arrivée";
     return null;
 }
 
@@ -71,6 +72,8 @@ export default function ActivityPage() {
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [isNewReservationModalOpen, setIsNewReservationModalOpen] = useState(false);
 
+  const supabase = createClient();
+
   React.useEffect(() => {
     setLocale(i18n.language === 'fr' ? fr : enUS);
   }, [i18n.language]);
@@ -78,111 +81,158 @@ export default function ActivityPage() {
   useEffect(() => {
     if (user?.propertyId) {
       setPropertyId(user.propertyId);
-    } else if (user?.id) {
-      const staffDocRef = doc(db, "staff", user.id);
-      getDoc(staffDocRef).then(docSnap => {
-        if (docSnap.exists()) setPropertyId((docSnap.data() as FirestoreUser).propertyId);
-      });
     }
   }, [user]);
 
+  // Fetch property, rooms, and payments from Supabase
   useEffect(() => {
-    if (propertyId) {
-      const propDocRef = doc(db, "properties", propertyId);
-      const unsubProp = onSnapshot(propDocRef, (docSnap) => {
-        setPropertySettings(docSnap.exists() ? docSnap.data() as Property : null);
-      });
-      const roomsQuery = query(collection(db, "rooms"), where("propertyId", "==", propertyId));
-      const unsubRooms = onSnapshot(roomsQuery, (snapshot) => {
-        setAllRooms(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Room)));
-      });
-      const paymentsQuery = query(collection(db, `properties/${propertyId}/payments`));
-      const unsubPayments = onSnapshot(paymentsQuery, (snapshot) => {
-        setPayments(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment)));
-      });
+    if (!propertyId) return;
 
-      return () => {
-        unsubProp();
-        unsubRooms();
-        unsubPayments();
-      };
-    }
-  }, [propertyId]);
+    const fetchData = async () => {
+      try {
+        // Fetch property
+        const { data: propData } = await supabase
+          .from('properties')
+          .select('*')
+          .eq('id', propertyId)
+          .single();
 
+        if (propData) {
+          setPropertySettings(propData as Property);
+        }
+
+        // Fetch rooms
+        const { data: roomsData } = await supabase
+          .from('rooms')
+          .select('*')
+          .eq('property_id', propertyId);
+
+        if (roomsData) {
+          setAllRooms(roomsData.map(r => ({
+            id: r.id,
+            ...r,
+            propertyId: r.property_id,
+            status: r.status,
+          } as Room)) || []);
+        }
+
+        // Fetch payments
+        const { data: paymentsData } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('property_id', propertyId);
+
+        if (paymentsData) {
+          setPayments(paymentsData.map(p => ({
+            id: p.id,
+            reservationId: p.reservation_id,
+            status: p.status,
+            amount: p.amount,
+            ...p,
+          } as Payment)) || []);
+        }
+      } catch (error) {
+        console.error('Error fetching property data:', error);
+      }
+    };
+
+    fetchData();
+  }, [propertyId, supabase]);
+
+  // Fetch reservations from API
   useEffect(() => {
     if (!propertyId) {
       setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    const reservationsColRef = collection(db, "reservations");
-    const today = new Date();
-    const todayStart = startOfDay(today);
-    const todayEnd = endOfDay(today);
-    
-    const parseReservation = (d: any) => {
-        const data = d.data();
-        return {
-            ...data, id: d.id,
-            startDate: (data.startDate as Timestamp).toDate(),
-            endDate: (data.endDate as Timestamp).toDate(),
-            createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined,
-            actualCheckInTime: data.actualCheckInTime ? (data.actualCheckInTime as Timestamp).toDate() : undefined,
-            actualCheckOutTime: data.actualCheckOutTime ? (data.actualCheckOutTime as Timestamp).toDate() : undefined,
-        } as Reservation
-    }
+    const fetchReservations = async () => {
+      setIsLoading(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
 
-    // Query for arrivals (startDate is today)
-    const arrivalsQuery = query(
-      reservationsColRef,
-      where("propertyId", "==", propertyId),
-      where("startDate", ">=", Timestamp.fromDate(todayStart)),
-      where("startDate", "<=", Timestamp.fromDate(todayEnd))
-    );
+        if (!token) {
+          console.error('No auth token available');
+          setIsLoading(false);
+          return;
+        }
 
-    // Query for departures and in-house (endDate is today or future)
-    const departuresQuery = query(
-      reservationsColRef,
-      where("propertyId", "==", propertyId),
-      where("endDate", ">=", Timestamp.fromDate(todayStart))
-    );
+        const response = await fetch(`/api/reservations/list?propertyId=${propertyId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
 
-    const unsubArrivals = onSnapshot(arrivalsQuery, () => {}, (err) => {
-      console.error("Error fetching arrivals:", err);
-    });
+        if (!response.ok) {
+          throw new Error('Failed to fetch reservations');
+        }
 
-    const unsubDepartures = onSnapshot(departuresQuery, (snapshot) => {
-        const allRes = snapshot.docs.map(parseReservation);
-        setAllReservations(allRes);
+        const data = await response.json();
+        const reservations = (data.reservations || []).map((r: any) => ({
+          ...r,
+          id: r.id,
+          startDate: r.startDate ? new Date(r.startDate) : new Date(),
+          endDate: r.endDate ? new Date(r.endDate) : new Date(),
+          createdAt: r.createdAt ? new Date(r.createdAt) : undefined,
+          actualCheckInTime: r.actualCheckInTime ? new Date(r.actualCheckInTime) : undefined,
+          actualCheckOutTime: r.actualCheckOutTime ? new Date(r.actualCheckOutTime) : undefined,
+        } as Reservation));
+
+        setAllReservations(reservations);
+      } catch (error) {
+        console.error('Error fetching reservations:', error);
+        toast({ 
+          title: t('toasts.error_fetching_reservations_title'), 
+          description: t('toasts.error_fetching_reservations_description'), 
+          variant: "destructive" 
+        });
+      } finally {
         setIsLoading(false);
-    }, (err) => {
-      console.error("Error fetching reservations:", err);
-      toast({ title: t('toasts.error_fetching_reservations_title'), description: t('toasts.error_fetching_reservations_description'), variant: "destructive"});
-      setIsLoading(false);
-    });
-
-    return () => {
-      unsubArrivals();
-      unsubDepartures();
+      }
     };
-  }, [propertyId, t]);
+
+    fetchReservations();
+  }, [propertyId, supabase, t]);
 
   const { arrivals, departures, stayOvers, noShows, arrivalsCheckedIn, departuresCompleted } = useMemo(() => {
     const today = new Date();
     // Arrivals: ALL reservations starting today (regardless of status)
-    const arrivalsCount = allReservations.filter(res => isToday(res.startDate) && res.status !== 'No-Show').length;
+    const arrivalsCount = allReservations.filter(res => {
+      const startDate = res.startDate instanceof Date ? res.startDate : new Date(res.startDate);
+      return isToday(startDate) && res.status !== 'No-Show';
+    }).length;
+    
     // Already checked-in from arrivals
-    const arrivalsCheckedInCount = allReservations.filter(res => isToday(res.startDate) && res.status === 'Checked-in').length;
+    const arrivalsCheckedInCount = allReservations.filter(res => {
+      const startDate = res.startDate instanceof Date ? res.startDate : new Date(res.startDate);
+      return isToday(startDate) && res.status === 'Checked-in';
+    }).length;
+    
     // Departures: ALL reservations ending today (regardless of status)
-    const departuresCount = allReservations.filter(res => isToday(res.endDate) && ['Checked-in', 'Confirmed', 'Pending', 'Completed'].includes(res.status)).length;
+    const departuresCount = allReservations.filter(res => {
+      const endDate = res.endDate instanceof Date ? res.endDate : new Date(res.endDate);
+      return isToday(endDate) && ['Checked-in', 'Confirmed', 'Pending', 'Completed'].includes(res.status);
+    }).length;
+    
     // Already completed from departures
-    const departuresCompletedCount = allReservations.filter(res => isToday(res.endDate) && res.status === 'Completed').length;
+    const departuresCompletedCount = allReservations.filter(res => {
+      const endDate = res.endDate instanceof Date ? res.endDate : new Date(res.endDate);
+      return isToday(endDate) && res.status === 'Completed';
+    }).length;
+    
     // In-House: Count actual guests from checked-in reservations not departing today
     const inHouseGuests = allReservations
-      .filter(res => res.status === 'Checked-in' && !isToday(res.endDate))
+      .filter(res => {
+        const endDate = res.endDate instanceof Date ? res.endDate : new Date(res.endDate);
+        return res.status === 'Checked-in' && !isToday(endDate);
+      })
       .reduce((sum, res) => sum + (Array.isArray(res.rooms) ? res.rooms.reduce((roomSum, r) => roomSum + ((r.adults || 0) + (r.children || 0)), 0) : 0), 0);
-    const noShowsCount = allReservations.filter(res => isToday(res.startDate) && res.status === 'No-Show').length;
+    
+    const noShowsCount = allReservations.filter(res => {
+      const startDate = res.startDate instanceof Date ? res.startDate : new Date(res.startDate);
+      return isToday(startDate) && res.status === 'No-Show';
+    }).length;
     
     return {
       arrivals: arrivalsCount,
@@ -230,57 +280,112 @@ export default function ActivityPage() {
         return;
       }
       
-      await updateDoc(doc(db, "reservations", reservationId), { 
-        status: 'Checked-in',
-        actualCheckInTime: serverTimestamp(), 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('No auth token');
+
+      const response = await fetch('/api/reservations/crud', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'checkIn',
+          propertyId,
+          reservationId,
+        }),
       });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Check-in failed');
+      }
+
+      // Refresh reservations
+      const listResponse = await fetch(`/api/reservations/list?propertyId=${propertyId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setAllReservations((data.reservations || []).map((r: any) => ({
+          ...r,
+          startDate: r.startDate ? new Date(r.startDate) : new Date(),
+          endDate: r.endDate ? new Date(r.endDate) : new Date(),
+        })));
+      }
+
       toast({title: t('toasts.check_in_success_title'), description: t('toasts.check_in_success_description')});
-    } catch(err) {
-      toast({title: t('toasts.check_in_error_title'), description: t('toasts.check_in_error_description'), variant: "destructive"});
+    } catch(err: any) {
+      console.error('Check-in error:', err);
+      toast({title: t('toasts.check_in_error_title'), description: err.message || t('toasts.check_in_error_description'), variant: "destructive"});
     }
   };
 
   const handleCheckOut = async (reservation: Reservation) => {
     if (!propertyId || !reservation.rooms?.[0]?.roomId || !user) return;
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('No auth token');
+
       const roomDetails = allRooms.find(r => r.id === reservation.rooms[0].roomId);
-
-      const batch = writeBatch(db);
       
-      batch.update(doc(db, "reservations", reservation.id), { 
-        status: 'Completed',
-        actualCheckOutTime: serverTimestamp(), 
-        isCheckedOut: true 
-      });
-      
-      batch.update(doc(db, "rooms", reservation.rooms[0].roomId), { status: 'Dirty' });
-
-      const newTaskRef = doc(collection(db, 'tasks'));
-      const taskPayload = {
-          id: newTaskRef.id,
-          title: t('pages/housekeeping/daily-tasks/content:autogenerated_task.title', { roomName: reservation.rooms[0].roomName }),
-          description: t('pages/housekeeping/daily-tasks/content:autogenerated_task.description', { roomName: reservation.rooms[0].roomName, roomTypeName: reservation.rooms[0].roomTypeName, guestName: reservation.guestName }),
-          property_id: propertyId,
-          room_id: reservation.rooms[0].roomId,
+      const response = await fetch('/api/reservations/crud', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'checkOut',
+          propertyId,
+          reservationId: reservation.id,
+          roomId: reservation.rooms[0].roomId,
           roomName: reservation.rooms[0].roomName,
           roomTypeName: reservation.rooms[0].roomTypeName,
-          floor: roomDetails?.floor || 'N/A',
-          assigned_to_role: 'housekeeping',
-          assigned_to_uid: null,
-          priority: 'High',
-          status: 'Open',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+          guestName: reservation.guestName,
           createdByName: user.name || 'System',
           createdByUid: user.id,
-      };
-      batch.set(newTaskRef, taskPayload);
+          floor: roomDetails?.floor || 'N/A',
+        }),
+      });
 
-      await batch.commit();
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Check-out failed');
+      }
+
+      // Refresh reservations and rooms
+      const listResponse = await fetch(`/api/reservations/list?propertyId=${propertyId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        setAllReservations((data.reservations || []).map((r: any) => ({
+          ...r,
+          startDate: r.startDate ? new Date(r.startDate) : new Date(),
+          endDate: r.endDate ? new Date(r.endDate) : new Date(),
+        })));
+      }
+
+      const roomsResponse = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('property_id', propertyId);
+      if (roomsResponse.data) {
+        setAllRooms(roomsResponse.data.map(r => ({
+          id: r.id,
+          ...r,
+          propertyId: r.property_id,
+          status: r.status,
+        } as Room)));
+      }
+
       toast({title: t('toasts.check_out_success_title'), description: t('toasts.check_out_success_description', { roomName: reservation.rooms[0].roomName || '' })});
-    } catch(err) {
+    } catch(err: any) {
       console.error("Error checking out:", err);
-      toast({title: t('toasts.check_out_error_title'), description: t('toasts.check_out_error_description'), variant: "destructive"});
+      toast({title: t('toasts.check_out_error_title'), description: err.message || t('toasts.check_out_error_description'), variant: "destructive"});
     }
   };
   
@@ -407,11 +512,16 @@ export default function ActivityPage() {
                   filteredReservations.map(res => {
                     const totalPaid = calculateTotalPaid(res.id);
                     const totalGuests = Array.isArray(res.rooms) ? res.rooms.reduce((sum, r) => sum + (r.adults || 0) + (r.children || 0), 0) : 0;
-                    const nights = Math.ceil((new Date(res.endDate).getTime() - new Date(res.startDate).getTime()) / (1000 * 60 * 60 * 24));
-                    const checkInDate = format(res.startDate, 'dd/MM/yy', { locale });
-                    const checkOutDate = format(res.endDate, 'dd/MM/yy', { locale });
-                    const bookingDate = format(res.createdAt, 'dd/MM/yy', { locale });
-                    const bookingTime = format(res.createdAt, 'HH:mm', { locale });
+                    
+                    const startDate = res.startDate instanceof Date ? res.startDate : new Date(res.startDate);
+                    const endDate = res.endDate instanceof Date ? res.endDate : new Date(res.endDate);
+                    const createdAt = res.createdAt instanceof Date ? res.createdAt : (res.createdAt ? new Date(res.createdAt) : new Date());
+                    
+                    const nights = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+                    const checkInDate = format(startDate, 'dd/MM/yy', { locale });
+                    const checkOutDate = format(endDate, 'dd/MM/yy', { locale });
+                    const bookingDate = format(createdAt, 'dd/MM/yy', { locale });
+                    const bookingTime = format(createdAt, 'HH:mm', { locale });
 
                     return (
                     <tr key={res.id} className="hover:bg-slate-50/50 transition-colors">

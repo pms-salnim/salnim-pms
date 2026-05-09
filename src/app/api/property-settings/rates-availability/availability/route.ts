@@ -1,8 +1,76 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-// GET availability for a date range
-// POST create/upsert availability
+// ====================================================================
+// HELPER FUNCTIONS FOR DATE RANGE OPERATIONS
+// ====================================================================
+
+function isDateBefore(date1: string, date2: string): boolean {
+  return date1 < date2;
+}
+
+function isDateAfter(date1: string, date2: string): boolean {
+  return date1 > date2;
+}
+
+function isDateEqual(date1: string, date2: string): boolean {
+  return date1 === date2;
+}
+
+function dateToNextDay(dateStr: string): string {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().split('T')[0];
+}
+
+function dateToPrevDay(dateStr: string): string {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() - 1);
+  return date.toISOString().split('T')[0];
+}
+
+function rangesOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
+  return !(isDateAfter(start1, end2) || isDateBefore(end1, start2));
+}
+
+/**
+ * Split an existing range around a new overlapping range
+ * Returns array of non-overlapping parts that should be re-inserted
+ */
+function splitRange(
+  existStart: string,
+  existEnd: string,
+  newStart: string,
+  newEnd: string,
+  existingStatus: string
+): Array<{ start: string; end: string; status: string }> {
+  const result: Array<{ start: string; end: string; status: string }> = [];
+
+  // Part BEFORE the new range
+  if (isDateBefore(existStart, newStart)) {
+    result.push({
+      start: existStart,
+      end: dateToPrevDay(newStart),
+      status: existingStatus,
+    });
+  }
+
+  // Part AFTER the new range
+  if (isDateAfter(existEnd, newEnd)) {
+    result.push({
+      start: dateToNextDay(newEnd),
+      end: existEnd,
+      status: existingStatus,
+    });
+  }
+
+  return result;
+}
+
+// ====================================================================
+// GET: Fetch availability for a date range
+// ====================================================================
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -48,10 +116,6 @@ export async function GET(request: NextRequest) {
     ) || [];
 
     return NextResponse.json({ data: filteredData });
-
-    if (error) throw error;
-
-    return NextResponse.json({ data });
   } catch (error) {
     console.error('Error fetching availability:', error);
     return NextResponse.json(
@@ -61,7 +125,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Create or update availability (bridge to Supabase Edge Function)
+// POST: Create or update availability with automatic range splitting
 export async function POST(request: NextRequest) {
   try {
     // ====================================================================
@@ -92,89 +156,236 @@ export async function POST(request: NextRequest) {
     }
 
     // ====================================================================
-    // STEP 2: Verify user authentication (optional - add your logic)
+    // STEP 2: Initialize Supabase client
     // ====================================================================
     
     const supabase = createClient()
-    // Uncomment if you want to verify authentication:
-    // const { data: { user } } = await supabase.auth.getUser()
-    // if (!user) {
-    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    // }
+
+    console.log(`[Availability API] Processing ${availabilities.length} availability updates for property ${propertyId}`)
 
     // ====================================================================
-    // STEP 3: Forward to Supabase Edge Function
+    // STEP 3: Process each availability update WITH RANGE SPLITTING
     // ====================================================================
-    
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing Supabase environment variables')
-      return NextResponse.json(
-        { 
-          error: 'Server configuration error',
-          code: 'SERVER_CONFIG_ERROR',
-        },
-        { status: 500 }
-      )
+    let totalRecordsUpserted = 0
+
+    for (const availability of availabilities) {
+      try {
+        const { 
+          date: startDate, 
+          endDate, 
+          status, 
+          roomId, 
+          roomTypeId,
+          notes,
+          appliedDays,
+        } = availability
+
+        // Validate required fields
+        if (!startDate || !status) {
+          console.warn('[Availability API] Skipping record with missing date or status:', availability)
+          continue
+        }
+
+        // Determine which field(s) we have
+        if (!roomId && !roomTypeId) {
+          console.warn('[Availability API] Skipping record with missing roomId and roomTypeId:', availability)
+          continue
+        }
+
+        // ✅ If we have roomId, look up the room_type_id
+        let finalRoomId = roomId
+        let finalRoomTypeId = roomTypeId
+
+        if (roomId && !roomTypeId) {
+          // Look up the room to get its room_type_id
+          const { data: roomData, error: roomError } = await supabase
+            .from('rooms')
+            .select('room_type_id')
+            .eq('id', roomId)
+            .single()
+
+          if (roomError || !roomData) {
+            console.warn(`[Availability API] Could not find room_type_id for roomId ${roomId}`, roomError)
+            continue
+          }
+
+          finalRoomTypeId = roomData.room_type_id
+          console.log(`[Availability API] Looked up room_type_id: ${finalRoomTypeId} for roomId: ${roomId}`)
+        }
+
+        const effectiveEndDate = endDate || startDate
+        const targetField = roomId ? 'room_id' : 'room_type_id'
+        const targetId = roomId || roomTypeId
+
+        console.log(`[Availability API] Processing: ${targetField}=${targetId}, dates: ${startDate} to ${effectiveEndDate}, status: ${status}`)
+
+        // ✅ STEP 3a: FETCH all overlapping records for this room/roomType
+        console.log(`[Availability API] Fetching overlapping records...`)
+        
+        const { data: existingRecords, error: fetchError } = await supabase
+          .from('availability_calendar')
+          .select('*')
+          .eq(targetField, targetId)
+          .eq('property_id', propertyId)
+          .lte('date', effectiveEndDate)
+          .gte('end_date', startDate)
+
+        if (fetchError) {
+          console.error('[Availability API] Fetch error:', fetchError)
+          throw new Error(`Failed to fetch overlapping records: ${fetchError.message}`)
+        }
+
+        console.log(`[Availability API] Found ${existingRecords?.length || 0} overlapping records`)
+
+        // ✅ STEP 3b: Process each overlapping record - split and collect for re-insertion
+        const recordsToDelete: string[] = []
+        const recordsToInsert: any[] = []
+
+        for (const existing of existingRecords || []) {
+          const existStart = existing.date
+          const existEnd = existing.end_date
+
+          // Check if this record actually overlaps
+          if (rangesOverlap(existStart, existEnd, startDate, effectiveEndDate)) {
+            console.log(`[Availability API] Splitting existing record: ${existStart} to ${existEnd} (status: ${existing.status})`)
+            
+            // Mark this record for deletion
+            recordsToDelete.push(existing.id)
+
+            // Get the non-overlapping parts
+            const splitParts = splitRange(existStart, existEnd, startDate, effectiveEndDate, existing.status)
+
+            console.log(`[Availability API] Split result: ${splitParts.length} parts to re-insert`)
+
+            // Queue the split parts for re-insertion
+            for (const part of splitParts) {
+              const timestamp = Date.now()
+              const randomSuffix = Math.random().toString(36).substring(2, 8)
+              const idInfo = `${propertyId}|${part.start}|${part.end}|${finalRoomId || finalRoomTypeId}|${part.status}|${timestamp}|${randomSuffix}`
+              const msgBuffer = new TextEncoder().encode(idInfo)
+              const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
+              const hashArray = Array.from(new Uint8Array(hashBuffer))
+              const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+              const partId = hashHex.substring(0, 50)
+
+              // ✅ ONLY include essential fields: id, property_id, room_id, room_type_id, date, end_date, status, notes
+              const partRecord: any = {
+                id: partId,
+                property_id: propertyId,
+                room_id: finalRoomId,
+                room_type_id: finalRoomTypeId,
+                date: part.start,
+                end_date: part.end,
+                status: part.status,
+              }
+
+              // Only add notes if present
+              if (existing.notes !== null && existing.notes !== undefined) {
+                partRecord.notes = existing.notes
+              }
+
+              recordsToInsert.push(partRecord)
+              console.log(`[Availability API] Queued split part: ${part.start} to ${part.end} (${part.status})`)
+            }
+          }
+        }
+
+        // ✅ STEP 3c: Generate ID for the new record
+        const timestamp = Date.now()
+        const randomSuffix = Math.random().toString(36).substring(2, 8)
+        const idInfo = `${propertyId}|${startDate}|${effectiveEndDate}|${finalRoomId || finalRoomTypeId}|${status}|${timestamp}|${randomSuffix}`
+        const msgBuffer = new TextEncoder().encode(idInfo)
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+        const newId = hashHex.substring(0, 50)
+
+        // ✅ STEP 3d: Build the new record - ONLY essential fields
+        const newRecord: any = {
+          id: newId,
+          property_id: propertyId,
+          room_id: finalRoomId,
+          room_type_id: finalRoomTypeId,
+          date: startDate,
+          end_date: effectiveEndDate,
+          status: status,
+        }
+
+        // Only add notes if provided
+        if (notes !== undefined && notes !== null) {
+          newRecord.notes = notes
+        }
+        // ✅ NEW: Include applied_days if provided
+        if (appliedDays !== undefined && appliedDays !== null && Array.isArray(appliedDays)) {
+          newRecord.applied_days = appliedDays
+        }
+        recordsToInsert.push(newRecord)
+        console.log(`[Availability API] Added new record: ${startDate} to ${effectiveEndDate} (${status})`)
+
+        // ✅ STEP 3e: Delete old overlapping records
+        if (recordsToDelete.length > 0) {
+          console.log(`[Availability API] Deleting ${recordsToDelete.length} old records...`)
+          const { error: deleteError, count: deletedCount } = await supabase
+            .from('availability_calendar')
+            .delete()
+            .in('id', recordsToDelete)
+
+          if (deleteError) {
+            console.error('[Availability API] Delete error:', deleteError)
+            throw new Error(`Failed to delete overlapping records: ${deleteError.message}`)
+          }
+
+          console.log(`[Availability API] ✓ Deleted ${deletedCount} records`)
+        }
+
+        // ✅ STEP 3f: Insert all new records (split parts + new record)
+        if (recordsToInsert.length > 0) {
+          console.log(`[Availability API] Inserting ${recordsToInsert.length} records...`)
+          console.log(`[Availability API] Sample record to insert:`, recordsToInsert[0])
+          const { error: insertError, data: insertedData } = await supabase
+            .from('availability_calendar')
+            .insert(recordsToInsert)
+            .select()
+
+          if (insertError) {
+            console.error('[Availability API] Insert error:', {
+              message: insertError.message,
+              code: insertError.code,
+              details: insertError.details,
+              hint: insertError.hint,
+            })
+            throw new Error(`Failed to insert records: ${insertError.message}`)
+          }
+
+          console.log(`[Availability API] ✓ Inserted ${insertedData?.length || 0} records`)
+          totalRecordsUpserted += (insertedData?.length || 0)
+        }
+
+      } catch (recordError) {
+        console.error('[Availability API] Error processing record:', recordError)
+        throw recordError
+      }
     }
 
-    console.log(`[Availability API] Forwarding to edge function: ${availabilities.length} updates for property ${propertyId}`)
-    console.log('[Availability API] Payload:', JSON.stringify({ propertyId, availabilities }, null, 2))
-
-    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/save-availability`
-    let response;
-    let result;
-    
-    try {
-      response = await fetch(edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({ propertyId, availabilities }),
-      })
-
-      result = await response.json()
-    } catch (fetchError) {
-      console.error('[Availability API] Fetch error:', fetchError)
-      return NextResponse.json(
-        {
-          error: 'Failed to connect to edge function',
-          code: 'EDGE_FUNCTION_ERROR',
-          details: fetchError instanceof Error ? fetchError.message : String(fetchError),
-        },
-        { status: 500 }
-      )
-    }
-
     // ====================================================================
-    // STEP 4: Handle response from edge function
+    // STEP 4: Return success response
     // ====================================================================
 
-    if (!response.ok) {
-      console.error(`[Availability API] Edge function returned error:`, {
-        status: response.status,
-        statusText: response.statusText,
-        body: result,
-      })
-      
-      // Pass through the error response (already properly formatted)
-      return NextResponse.json(result, { status: response.status })
-    }
+    console.log(`[Availability API] ✅ Success: Processed ${totalRecordsUpserted} availability records`)
 
-    console.log(`[Availability API] Success: Updated ${result.data?.recordsUpserted || 0} records`)
-
-    // ====================================================================
-    // STEP 5: Return success response
-    // ====================================================================
-    
-    return NextResponse.json(result, { status: 200 })
+    return NextResponse.json({
+      success: true,
+      data: {
+        recordsUpserted: totalRecordsUpserted,
+      },
+    }, { status: 200 })
 
   } catch (error) {
-    console.error('[Availability API] Unexpected error:', error)
+    console.error('[Availability API] Unexpected error:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
     
     return NextResponse.json(
       {

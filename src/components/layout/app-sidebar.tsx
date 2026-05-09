@@ -37,7 +37,7 @@ import { useTranslation } from "react-i18next";
 export function AppSidebar() {
   const pathname = usePathname();
   const { user, unreadEmailCount, unreadMessageCount } = useAuth();
-  const { toggleSidebar, state } = useSidebar(); 
+  const { toggleSidebar, state, setOpen, isMobile } = useSidebar(); 
   const [propertyName, setPropertyName] = useState<string | null>(null);
   const [propertyAddress, setPropertyAddress] = useState<string | null>(null);
   const [isLoadingProperty, setIsLoadingProperty] = useState(true);
@@ -125,8 +125,27 @@ export function AppSidebar() {
     fetchPropertyDetails();
   }, [user?.propertyId]);
 
+  const handleSidebarMouseEnter = () => {
+    if (!isMobile) {
+      setOpen(true);
+    }
+  };
+
+  const handleSidebarMouseLeave = () => {
+    if (!isMobile) {
+      setOpen(false);
+    }
+  };
+
   return (
-    <Sidebar collapsible="icon" variant="sidebar" side="left" className="z-[51]"> 
+    <Sidebar
+      collapsible="icon"
+      variant="sidebar"
+      side="left"
+      className="z-[51]"
+      onMouseEnter={handleSidebarMouseEnter}
+      onMouseLeave={handleSidebarMouseLeave}
+    > 
       <SidebarHeader className="p-0">
         <div className="flex h-auto min-h-[4rem] items-center justify-start border-b border-sidebar-border group-data-[collapsible=icon]:h-12 px-3 py-2 group-data-[collapsible=icon]:py-0 group-data-[collapsible=icon]:justify-center">
           <div className="flex flex-col items-start group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:text-center">
@@ -312,31 +331,6 @@ export function AppSidebar() {
         )}
       </SidebarFooter>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="outline"
-            size="icon"
-            className={cn(
-              "absolute top-16 right-0 z-[52] hidden md:flex",
-              "h-8 w-8 rounded-full shadow-md", 
-              "bg-background hover:bg-accent text-foreground", 
-              "transform translate-x-1/2 -translate-y-1/2"
-            )}
-            onClick={toggleSidebar}
-          >
-            <Icons.SidebarToggle className="h-4 w-4" />
-            <span className="sr-only">{state === 'expanded' ? t('collapse') : t('expand')}</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent
-          side="right"
-          align="center"
-          className="bg-popover text-popover-foreground"
-        >
-          {state === 'expanded' ? t('collapse') : t('expand')}
-        </TooltipContent>
-      </Tooltip>
     </Sidebar>
   );
 }

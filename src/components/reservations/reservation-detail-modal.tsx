@@ -2455,7 +2455,14 @@ export default function ReservationDetailModal({ isOpen, onClose, initialData, p
                       </thead>
                       <tbody>
                         {Array.isArray(reservation.rooms) && reservation.rooms.map((room, index) => {
-                          const roomTotal = (room.roomRate || 0) * nights + (Array.isArray(room.selectedExtras) ? room.selectedExtras.reduce((sum, extra) => sum + calculateExtraItemTotal(extra).total, 0) : 0);
+                          const rowStartDate = toDate((room as any).segmentStartDate || (room as any).startDate || reservation.startDate) as Date;
+                          const rowEndDate = toDate((room as any).segmentEndDate || (room as any).endDate || reservation.endDate) as Date;
+                          const rowNights = Math.max(1, differenceInDays(rowEndDate, rowStartDate));
+                          const roomTotal = Number.isFinite(Number((room as any).roomTotal))
+                            ? Number((room as any).roomTotal)
+                            : Number.isFinite(Number(room.price))
+                              ? Number(room.price)
+                              : (Number((room as any).roomRate || 0) * rowNights) + (Array.isArray(room.selectedExtras) ? room.selectedExtras.reduce((sum, extra) => sum + calculateExtraItemTotal(extra).total, 0) : 0);
                           const guestCount = (room.adults || 0) + (room.children || 0);
                           return (
                             <tr key={index} className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
@@ -2508,7 +2515,7 @@ export default function ReservationDetailModal({ isOpen, onClose, initialData, p
                                 <div className="text-xs text-slate-500 truncate max-w-xs">{reservation.guestEmail || "N/A"}</div>
                               </td>
                               <td className="px-2 py-1.5 text-xs text-slate-800 whitespace-nowrap">
-                                {format(toDate(reservation.startDate) as Date, "dd MMM")} - {format(toDate(reservation.endDate) as Date, "dd MMM")}
+                                {format(rowStartDate, "dd MMM")} - {format(rowEndDate, "dd MMM")}
                               </td>
                               <td className="px-2 py-1.5 text-xs text-slate-800 whitespace-nowrap">
                                 <div className="flex items-center gap-2">
@@ -2522,8 +2529,8 @@ export default function ReservationDetailModal({ isOpen, onClose, initialData, p
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-2 py-1.5 text-xs text-slate-800 whitespace-nowrap font-medium">{nights}</td>
-                              <td className="px-2 py-1.5 text-xs text-slate-800 whitespace-nowrap font-bold">{currencySymbol}{grandTotal.toFixed(2)}</td>
+                              <td className="px-2 py-1.5 text-xs text-slate-800 whitespace-nowrap font-medium">{rowNights}</td>
+                              <td className="px-2 py-1.5 text-xs text-slate-800 whitespace-nowrap font-bold">{currencySymbol}{roomTotal.toFixed(2)}</td>
                               <td className="px-2 py-1.5 text-xs whitespace-nowrap">
                                 <Switch 
                                   checked={!!(reservation.actualCheckInTime && !reservation.actualCheckOutTime)}
@@ -2584,7 +2591,7 @@ export default function ReservationDetailModal({ isOpen, onClose, initialData, p
                           <div>
                             <p className="text-sm font-semibold text-slate-600">Arrival - Departure</p>
                             <p className="text-slate-800">
-                              {format(toDate(reservation.startDate) as Date, "dd MMM yyyy")} - {format(toDate(reservation.endDate) as Date, "dd MMM yyyy")}
+                              {format(toDate((room as any).segmentStartDate || (room as any).startDate || reservation.startDate) as Date, "dd MMM yyyy")} - {format(toDate((room as any).segmentEndDate || (room as any).endDate || reservation.endDate) as Date, "dd MMM yyyy")}
                             </p>
                           </div>
                           <div>
@@ -2597,7 +2604,7 @@ export default function ReservationDetailModal({ isOpen, onClose, initialData, p
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-slate-600">Nights</p>
-                            <p className="text-slate-800">{differenceInDays(toDate(reservation.endDate) as Date, toDate(reservation.startDate) as Date)}</p>
+                            <p className="text-slate-800">{Math.max(1, differenceInDays(toDate((room as any).segmentEndDate || (room as any).endDate || reservation.endDate) as Date, toDate((room as any).segmentStartDate || (room as any).startDate || reservation.startDate) as Date))}</p>
                           </div>
                         </div>
                       ))}

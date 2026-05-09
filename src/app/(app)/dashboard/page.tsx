@@ -1,20 +1,19 @@
 "use client";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { db } from "@/lib/firebase";
-import { collection, query, where, orderBy, onSnapshot, Timestamp, doc, getDoc, updateDoc, serverTimestamp, deleteDoc, writeBatch, limit } from "firebase/firestore";
+import { deleteDoc, doc } from "firebase/firestore";
+import { createClient } from "@/utils/supabase/client";
 import type { Reservation } from "@/components/calendar/types";
 import { startOfDay, endOfDay, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInDays, addDays, parseISO, eachDayOfInterval, addWeeks, addMonths, format, subDays, formatDistanceToNow } from "date-fns";
 import { enUS, fr } from 'date-fns/locale';
-import { toDate } from '@/lib/dateUtils';
-import { History, UserPlus, Clock, ChevronRight } from 'lucide-react';
+import { History, ChevronRight } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
-import type { FirestoreUser } from '@/types/firestoreUser';
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardMetrics } from "@/components/dashboard/DashboardMetrics";
-import { RevenueAnalytics } from "@/components/dashboard/RevenueAnalytics";
 import { ActivityTable } from "@/components/dashboard/ActivityTable";
-import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import ReservationList from "@/components/reservations/reservation-list";
 import {
   Dialog,
   DialogContent,
@@ -47,8 +46,11 @@ const ReservationDetailModal = dynamic(() => import('@/components/reservations/r
   loading: () => <div className="flex h-48 items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
 });
 
+const MAX_RECENT_RESERVATIONS = 10;
+
 export default function DashboardPage() {
-  const { user, isLoadingAuth } = useAuth();
+  const router = useRouter();
+  const { user, property } = useAuth();
   const { t: tForm } = useTranslation('pages/dashboard/reservation-form');
   const [propertyId, setPropertyId] = useState<string | null>(null);
   const [propertySettings, setPropertySettings] = useState<Property | null>(null);
@@ -61,25 +63,19 @@ export default function DashboardPage() {
   const [todaysArrivals, setTodaysArrivals] = useState<Reservation[]>([]);
   const [todaysDepartures, setTodaysDepartures] = useState<Reservation[]>([]);
   const [activityTab, setActivityTab] = useState<'checkins' | 'checkouts'>('checkins');
-  
+
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfDay(new Date()),
     to: endOfDay(new Date()),
   });
 
-  const [guestCount, setGuestCount] = useState('2 Adults, 0 Children');
-  const [vips, setVips] = useState<any[]>([]);
-  const [guestRequests, setGuestRequests] = useState<any[]>([]);
-
   const [isDataLoading, setIsDataLoading] = useState(true);
-  const [allPayments, setAllPayments] = useState<any[]>([]);
-  const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
   const [isReservationFormModalOpen, setIsReservationFormModalOpen] = useState(false);
   const [editingReservation, setEditingReservation] = useState<Partial<Reservation> | null>(null);
   const [isReservationDetailModalOpen, setIsReservationDetailModalOpen] = useState(false);
   const [selectedReservationForDetail, setSelectedReservationForDetail] = useState<Reservation | null>(null);
-  
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [reservationToDelete, setReservationToDelete] = useState<string | null>(null);
 
@@ -90,7 +86,6 @@ export default function DashboardPage() {
   // Helper to coerce Firestore Timestamps (or objects with toDate) into JS Dates
   const toDate = useCallback((val: any): Date | undefined => {
     if (!val) return undefined;
-    // Firestore Timestamp has a toDate() method
     if (typeof val.toDate === 'function') return val.toDate();
     if (val instanceof Date) return val;
     try {
@@ -111,7 +106,6 @@ export default function DashboardPage() {
       if (prefilled) {
         try {
           const guestData = JSON.parse(prefilled);
-          // Create a reservation object with guest details populated
           const reservationData: Partial<Reservation> = {
             guestName: guestData.fullName || '',
             guestEmail: guestData.email || '',
@@ -121,7 +115,6 @@ export default function DashboardPage() {
           };
           setEditingReservation(reservationData);
           setIsReservationFormModalOpen(true);
-          // Note: Don't clear from sessionStorage here - let the form do it
         } catch (error) {
           console.error('Error loading prefilled guest data:', error);
         }
@@ -130,230 +123,160 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (user?.propertyId) {
-      setPropertyId(user.propertyId);
-    } else if (user?.id) {
-      getDoc(doc(db, "staff", user.id)).then(docSnap => {
-        if (docSnap.exists()) {
-          setPropertyId((docSnap.data() as FirestoreUser).propertyId);
-        }
-      });
-    }
-  }, [user]);
+    setPropertyId((property as any)?.id ?? user?.propertyId ?? null);
+    setPropertySettings(property || null);
+  }, [property, user?.propertyId]);
 
-  useEffect(() => {
-     if (propertyId) {
-      const unsubProp = onSnapshot(doc(db, "properties", propertyId), (docSnap) => {
-        setPropertySettings(docSnap.exists() ? docSnap.data() as Property : null);
-      });
-      return () => unsubProp();
-    }
-  }, [propertyId, user?.permissions?.finance]);
+  const getAuthHeaders = useCallback(async (): Promise<Record<string, string> | null> => {
+    const supabase = createClient();
+    let sessionData = null;
 
-  useEffect(() => {
-    if (!propertyId) {
-      setIsDataLoading(false);
-      return;
-    }
-
-    setIsDataLoading(true);
-
-    const parseReservation = (docSnap: any) => {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id, ...data,
-        startDate: data.startDate && (data.startDate as Timestamp).toDate(),
-        endDate: data.endDate && (data.endDate as Timestamp).toDate(),
-        createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined,
-        updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined,
-        actualCheckInTime: data.actualCheckInTime ? (data.actualCheckInTime as Timestamp).toDate() : undefined,
-        actualCheckOutTime: data.actualCheckOutTime ? (data.actualCheckOutTime as Timestamp).toDate() : undefined,
-        isCheckedOut: data.isCheckedOut || false,
-      } as Reservation;
-    };
-
-    const todayStart = startOfDay(new Date());
-    const todayEnd = endOfDay(new Date());
-
-    let unsubAllRooms: (() => void) | null = null;
-    let unsubAllReservations: (() => void) | null = null;
-    let unsubAvailability: (() => void) | null = null;
-    let unsubRecentReservations: (() => void) | null = null;
-    let unsubTodaysArrivals: (() => void) | null = null;
-    let unsubTodaysDepartures: (() => void) | null = null;
-    let unsubGuestRequests: (() => void) | null = null;
-    let unsubVips: (() => void) | null = null;
-
-    try {
-      unsubAllRooms = onSnapshot(query(collection(db, "rooms"), where("propertyId", "==", propertyId)), (snap) => setAllRooms(snap.docs.map(d => ({ id: d.id, ...d.data() } as Room))), (err) => console.error('rooms snapshot error', err));
-    } catch (err) {
-      console.error('rooms subscription failed', err);
-    }
-
-    try {
-      unsubAllReservations = onSnapshot(query(collection(db, "reservations"), where("propertyId", "==", propertyId)), (snap) => {
-          setAllReservations(snap.docs.map(parseReservation));
-          setIsDataLoading(false); 
-      }, (err) => {
-          console.error('reservations snapshot error', err);
-          setIsDataLoading(false);
-      });
-    } catch (err) {
-      console.error('reservations subscription failed', err);
-      setIsDataLoading(false);
-    }
-
-    try {
-      unsubAvailability = onSnapshot(query(collection(db, "availability"), where("propertyId", "==", propertyId)), (snap) => setAvailabilitySettings(snap.docs.map(d => d.data() as AvailabilitySetting)), (err) => console.error('availability snapshot error', err));
-    } catch (err) {
-      console.error('availability subscription failed', err);
-    }
-
-    try {
-      unsubRecentReservations = onSnapshot(query(collection(db, "reservations"), where("propertyId", "==", propertyId), orderBy("createdAt", "desc"), limit(10)), (snap) => setRecentReservations(snap.docs.map(parseReservation)), (err) => console.error('recentReservations snapshot error', err));
-    } catch (err) {
-      console.error('recentReservations subscription failed', err);
-    }
-
-    try {
-      unsubTodaysArrivals = onSnapshot(query(collection(db, "reservations"), where("propertyId", "==", propertyId), where("startDate", ">=", todayStart), where("startDate", "<=", todayEnd)), (snap) => setTodaysArrivals(snap.docs.map(parseReservation)), (err) => console.error('todaysArrivals snapshot error', err));
-    } catch (err) {
-      console.error('todaysArrivals subscription failed', err);
-    }
-
-    try {
-      unsubTodaysDepartures = onSnapshot(query(collection(db, "reservations"), where("propertyId", "==", propertyId), where("endDate", ">=", todayStart), where("endDate", "<=", todayEnd)), (snap) => setTodaysDepartures(snap.docs.map(parseReservation)), (err) => console.error('todaysDepartures snapshot error', err));
-    } catch (err) {
-      console.error('todaysDepartures subscription failed', err);
-    }
-
-    try {
-      unsubGuestRequests = onSnapshot(query(collection(db, 'guestRequests'), where('propertyId', '==', propertyId), orderBy('createdAt', 'desc'), limit(10)), (snap) => setGuestRequests(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))), (err) => console.error('guestRequests snapshot error', err));
-    } catch (err) {
-      console.error('guestRequests subscription failed', err);
-    }
-
-    try {
-      unsubVips = onSnapshot(query(collection(db, 'reservations'), where('propertyId', '==', propertyId), where('isVip', '==', true)), (snap) => setVips(snap.docs.map(parseReservation)), (err) => console.error('vips snapshot error', err));
-    } catch (err) {
-      console.error('vips subscription failed', err);
-    }
-
-    // Only subscribe to payments if the user has finance permission
-    let unsubPayments: (() => void) | null = null;
-    if (user?.permissions?.finance) {
-      try {
-        unsubPayments = onSnapshot(query(collection(db, `properties/${propertyId}/payments`)), (snap) => {
-          setAllPayments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        }, (err) => console.error('payments snapshot error', err));
-      } catch (err) {
-        console.error('payments subscription failed', err);
+    for (let attempts = 0; attempts < 3; attempts++) {
+      const result = await supabase.auth.getSession();
+      if (result.data?.session) {
+        sessionData = result.data;
+        break;
+      }
+      if (attempts < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 
-    return () => {
-      if (unsubAllRooms) unsubAllRooms();
-      if (unsubAllReservations) unsubAllReservations();
-      if (unsubRecentReservations) unsubRecentReservations();
-      if (unsubTodaysArrivals) unsubTodaysArrivals();
-      if (unsubTodaysDepartures) unsubTodaysDepartures();
-      if (unsubAvailability) unsubAvailability();
-      if (unsubGuestRequests) unsubGuestRequests();
-      if (unsubVips) unsubVips();
-      if (unsubPayments) unsubPayments();
-    };
-  }, [propertyId, user?.permissions?.finance]);
+    if (!sessionData?.session) return null;
+    return { Authorization: `Bearer ${sessionData.session.access_token}` };
+  }, []);
 
-  const revenueTrendSeries = useMemo(() => {
-    const today = startOfDay(new Date());
+  const mapReservation = useCallback((reservation: any) => ({
+      ...reservation,
+      startDate: reservation.startDate ? new Date(reservation.startDate) : undefined,
+      endDate: reservation.endDate ? new Date(reservation.endDate) : undefined,
+      createdAt: reservation.createdAt ? new Date(reservation.createdAt) : undefined,
+      updatedAt: reservation.updatedAt ? new Date(reservation.updatedAt) : undefined,
+      actualCheckInTime: reservation.actualCheckInTime ? new Date(reservation.actualCheckInTime) : undefined,
+      actualCheckOutTime: reservation.actualCheckOutTime ? new Date(reservation.actualCheckOutTime) : undefined,
+      isCheckedOut: reservation.isCheckedOut || false,
+    } as Reservation), []);
 
-    const calculateRevenueForPeriod = (startDate: Date, endDate: Date) => { // endDate is inclusive
-      let periodRevenue = 0;
-      const daysInPeriod = eachDayOfInterval({ start: startDate, end: endDate });
+  const fetchDashboardData = useCallback(async () => {
+      if (!propertyId) {
+        setAllRooms([]);
+        setAllReservations([]);
+        setAvailabilitySettings([]);
+        setRecentReservations([]);
+        setTodaysArrivals([]);
+        setTodaysDepartures([]);
+        setIsDataLoading(false);
+        return;
+      }
 
-      allReservations.forEach(res => {
-          // Include paid reservations OR checked-out reservations with settled payments
-          if (res.paymentStatus && String(res.paymentStatus).toLowerCase() === 'paid') {
-            const resStartDate = toDate(res.startDate);
-            const resEndDate = toDate(res.endDate);
-            if (!resStartDate || !resEndDate) return;
-            const resStart = startOfDay(resStartDate);
-            const resEnd = startOfDay(resEndDate);
+      setIsDataLoading(true);
 
-            if (resStart >= resEnd) return; // Invalid reservation dates
+      try {
+        const headers = await getAuthHeaders();
+        if (!headers) throw new Error("Authentication session expired. Please sign in again.");
 
-            const totalResDays = differenceInDays(resEnd, resStart) || 1;
-            const dailyRevenue = (res.totalPrice || 0) / totalResDays;
+        const roomsResponse = await fetch(`/api/rooms/list?propertyId=${propertyId}`, { headers });
+        const roomsPayload = await roomsResponse.json();
+        if (!roomsResponse.ok) {
+          throw new Error(roomsPayload?.error || "Failed to fetch rooms.");
+        }
 
-            daysInPeriod.forEach(day => {
-              const d = startOfDay(day);
-              if (d >= resStart && d < resEnd) {
-                  periodRevenue += dailyRevenue;
-              }
-            });
+        const roomsList: Room[] = Array.isArray(roomsPayload?.rooms) ? roomsPayload.rooms : [];
+        setAllRooms(roomsList);
+
+        const reservationsResponse = await fetch(`/api/reservations/list?propertyId=${propertyId}`, { headers });
+        const reservationsPayload = await reservationsResponse.json();
+        if (!reservationsResponse.ok) {
+          throw new Error(reservationsPayload?.error || "Failed to fetch reservations.");
+        }
+
+        const reservationsList: Reservation[] = (Array.isArray(reservationsPayload?.reservations)
+          ? reservationsPayload.reservations
+          : [])
+          .map(mapReservation);
+
+        setAllReservations(reservationsList);
+
+        const sortedByCreatedAt = [...reservationsList].sort((a, b) => {
+          const aTime = toDate(a.createdAt)?.getTime() || 0;
+          const bTime = toDate(b.createdAt)?.getTime() || 0;
+          return bTime - aTime;
+        });
+        setRecentReservations(sortedByCreatedAt.slice(0, MAX_RECENT_RESERVATIONS));
+
+        const todayStart = startOfDay(new Date());
+        const todayEnd = endOfDay(new Date());
+        setTodaysArrivals(
+          reservationsList.filter((reservation) => {
+            const startDate = toDate(reservation.startDate);
+            if (!startDate) return false;
+            return isWithinInterval(startDate, { start: todayStart, end: todayEnd });
+          })
+        );
+        setTodaysDepartures(
+          reservationsList.filter((reservation) => {
+            const endDate = toDate(reservation.endDate);
+            if (!endDate) return false;
+            return isWithinInterval(endDate, { start: todayStart, end: todayEnd });
+          })
+        );
+
+        const rangeStart = startOfDay(dateRange?.from ?? new Date());
+        const rangeEnd = endOfDay(dateRange?.to ?? dateRange?.from ?? new Date());
+        const windowStart = format(rangeStart < todayStart ? rangeStart : todayStart, "yyyy-MM-dd");
+        const windowEnd = format(rangeEnd > todayEnd ? rangeEnd : todayEnd, "yyyy-MM-dd");
+        const roomIds = roomsList.map((room) => room.id).filter(Boolean);
+
+        let availabilitySettingsList: AvailabilitySetting[] = [];
+        if (roomIds.length > 0) {
+          const params = new URLSearchParams({
+            propertyId,
+            minDate: windowStart,
+            maxDate: windowEnd,
+            roomIds: roomIds.join(","),
+          });
+
+          const availabilityResponse = await fetch(`/api/property-settings/rates-availability/calendar?${params.toString()}`, { headers });
+          const availabilityPayload = await availabilityResponse.json();
+
+          if (availabilityResponse.ok && Array.isArray(availabilityPayload?.availability)) {
+            const roomTypeByRoomId = new Map(roomsList.map((room) => [room.id, room.roomTypeId]));
+            availabilitySettingsList = availabilityPayload.availability.map((entry: any, index: number) => ({
+              id: `${entry.room_id || entry.room_type_id || "availability"}-${entry.date}-${index}`,
+              propertyId,
+              roomTypeId: entry.room_type_id || roomTypeByRoomId.get(entry.room_id) || "",
+              roomId: entry.room_id || null,
+              startDate: entry.date,
+              endDate: entry.end_date || entry.date,
+              status: (
+                String(entry.status || "").toLowerCase() === "available" ||
+                entry.close_to_arrival === true ||
+                entry.close_to_departure === true
+              ) ? "available" : "blocked",
+              notes: entry.notes || entry.reason || null,
+              appliedDays: Array.isArray(entry.applied_days) ? entry.applied_days : null,
+            }));
           }
-      });
-      return periodRevenue;
-    };
+        }
 
-    let labels: string[] = [];
-    let revenueTrend: number[] = [];
-    let totalRevenue = 0;
-    let revenueChangePercentage = 0;
+        setAvailabilitySettings(availabilitySettingsList);
+      } catch (error: any) {
+        console.error("Error loading dashboard data from Supabase:", error);
+        setAllRooms([]);
+        setAllReservations([]);
+        setAvailabilitySettings([]);
+        setRecentReservations([]);
+        setTodaysArrivals([]);
+        setTodaysDepartures([]);
+      } finally {
+        setIsDataLoading(false);
+      }
+  }, [propertyId, dateRange?.from, dateRange?.to, getAuthHeaders, mapReservation]);
 
-    if (chartPeriod === 'daily') {
-      const numPeriods = 30;
-      // Show past 30 days (realized revenue)
-      const days = Array.from({ length: numPeriods }, (_, i) => subDays(today, numPeriods - 1 - i));
-      labels = days.map(d => format(d, 'MMM d'));
-      revenueTrend = days.map(d => calculateRevenueForPeriod(d, d));
-      
-      totalRevenue = revenueTrend.reduce((sum, current) => sum + current, 0);
-      
-      // Compare to previous 30 days
-      const prevPeriodEnd = subDays(days[0], 1);
-      const prevPeriodStart = subDays(prevPeriodEnd, numPeriods - 1);
-      const prevTotalRevenue = calculateRevenueForPeriod(prevPeriodStart, prevPeriodEnd);
-      revenueChangePercentage = prevTotalRevenue > 0 ? ((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100 : (totalRevenue > 0 ? 100 : 0);
-    }
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
-    if (chartPeriod === 'weekly') {
-      const numPeriods = 12;
-      // Show past 12 weeks (realized revenue)
-      const weekStarts = Array.from({ length: numPeriods }, (_, i) => startOfWeek(addWeeks(today, -(numPeriods - 1 - i)), { weekStartsOn: 1 }));
-      labels = weekStarts.map(d => format(d, 'MMM d'));
-      revenueTrend = weekStarts.map(d => calculateRevenueForPeriod(d, endOfWeek(d, { weekStartsOn: 1 })));
-      
-      totalRevenue = revenueTrend.reduce((sum, current) => sum + current, 0);
-
-      // Compare to previous 12 weeks
-      const prevPeriodEnd = subDays(weekStarts[0], 1);
-      const prevPeriodStart = subDays(prevPeriodEnd, numPeriods * 7);
-      const prevTotalRevenue = calculateRevenueForPeriod(prevPeriodStart, prevPeriodEnd);
-      revenueChangePercentage = prevTotalRevenue > 0 ? ((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100 : (totalRevenue > 0 ? 100 : 0);
-    }
-
-    if (chartPeriod === 'monthly') {
-      const numPeriods = 12;
-      // Show past 12 months (realized revenue)
-      const monthStarts = Array.from({ length: numPeriods }, (_, i) => startOfMonth(addMonths(today, -(numPeriods - 1 - i))));
-      labels = monthStarts.map(d => format(d, 'MMM yyyy'));
-      revenueTrend = monthStarts.map(d => calculateRevenueForPeriod(d, endOfMonth(d)));
-      
-      totalRevenue = revenueTrend.reduce((sum, current) => sum + current, 0);
-
-      // Compare to previous 12 months
-      const prevPeriodEnd = subDays(monthStarts[0], 1);
-      const prevPeriodStart = addMonths(monthStarts[0], -numPeriods);
-      const prevTotalRevenue = calculateRevenueForPeriod(prevPeriodStart, prevPeriodEnd);
-      revenueChangePercentage = prevTotalRevenue > 0 ? ((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100 : (totalRevenue > 0 ? 100 : 0);
-    }
-
-    return { labels, revenueTrend, totalRevenue, revenueChangePercentage };
-  }, [chartPeriod, allReservations, toDate]);
-
-
-  
   const dashboardMetrics = useMemo(() => {
     const metrics = {
       bookings: 0,
@@ -500,7 +423,7 @@ export default function DashboardPage() {
 
     let bookedUnits = new Set<string>();
     let outOfServiceUnits = new Set<string>();
-    let blockedDatesCount = 0;
+    const blockedRoomIds = new Set<string>();
 
     // Check active reservations for today
     allReservations.forEach(res => {
@@ -513,19 +436,25 @@ export default function DashboardPage() {
       }
     });
 
-    // Check availability blocks for today
+    // Check availability blocks for today.
+    // Exclude: reservation-derived blocks (notes === 'occupied') — already excluded by mapping CTA/CTD as 'available'.
+    // Include: stop_sell (not_available), manual blocks.
     availabilitySettings.forEach(setting => {
-      if (setting.status === 'blocked' && isWithinInterval(today, { start: parseISO(setting.startDate), end: parseISO(setting.endDate) })) {
+      if (
+        setting.status === 'blocked' &&
+        setting.notes !== 'occupied' &&
+        isWithinInterval(today, { start: parseISO(setting.startDate), end: parseISO(setting.endDate) })
+      ) {
         if (setting.roomId) {
+          blockedRoomIds.add(setting.roomId);
           outOfServiceUnits.add(setting.roomId);
-          blockedDatesCount += 1;
         } else if (setting.roomTypeId) {
           allRooms.forEach(room => {
             if (room.roomTypeId === setting.roomTypeId) {
+              blockedRoomIds.add(room.id);
               outOfServiceUnits.add(room.id);
             }
           });
-          blockedDatesCount += 1;
         }
       }
     });
@@ -539,7 +468,7 @@ export default function DashboardPage() {
       bookedUnits: bookedUnits.size,
       availableUnits: Math.max(0, availableUnits),
       outOfService: outOfServiceUnits.size,
-      blockedDates: blockedDatesCount
+      blockedDates: blockedRoomIds.size
     };
   }, [allReservations, allRooms, availabilitySettings]);
 
@@ -564,16 +493,28 @@ export default function DashboardPage() {
   const handleCheckIn = async (reservation: Reservation) => {
     if (!propertyId || !reservation.rooms?.[0]?.roomId || !canManageReservations) return;
     try {
-      const batch = writeBatch(db);
-      
-      batch.update(doc(db, "reservations", reservation.id), { 
-        status: 'Checked-in',
-        actualCheckInTime: serverTimestamp()
-      });
-      
-      batch.update(doc(db, "rooms", reservation.rooms[0].roomId), { status: 'Occupied' });
+      const supabase = createClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('No auth token');
 
-      await batch.commit();
+      const res = await fetch('/api/reservations/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: 'checkIn',
+          propertyId,
+          reservationId: reservation.id,
+          roomId: reservation.rooms[0].roomId,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Check-in failed');
+      }
+
+      await fetchDashboardData();
       toast({title: t('toasts.check_in_success_title'), description: t('toasts.check_in_success_description', { roomName: reservation.rooms[0].roomName || '' })});
     } catch(err) {
       console.error("Error checking in:", err);
@@ -584,40 +525,36 @@ export default function DashboardPage() {
   const handleCheckOut = async (reservation: Reservation) => {
     if (!propertyId || !reservation.rooms?.[0]?.roomId || !canManageReservations || !user) return;
     try {
+      const supabase = createClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('No auth token');
+
       const roomDetails = allRooms.find(r => r.id === reservation.rooms[0].roomId);
 
-      const batch = writeBatch(db);
-      
-      batch.update(doc(db, "reservations", reservation.id), { 
-        status: 'Completed',
-        actualCheckOutTime: serverTimestamp(), 
-        isCheckedOut: true 
-      });
-      
-      batch.update(doc(db, "rooms", reservation.rooms[0].roomId), { status: 'Dirty' });
-
-      const newTaskRef = doc(collection(db, 'tasks'));
-      const taskPayload = {
-          id: newTaskRef.id,
-          title: t('pages/housekeeping/daily-tasks/content:autogenerated_task.title', { roomName: reservation.rooms[0].roomName }),
-          description: t('pages/housekeeping/daily-tasks/content:autogenerated_task.description', { roomName: reservation.rooms[0].roomName, roomTypeName: reservation.rooms[0].roomTypeName, guestName: reservation.guestName }),
-          property_id: propertyId,
-          room_id: reservation.rooms[0].roomId,
+      const res = await fetch('/api/reservations/crud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: 'checkOut',
+          propertyId,
+          reservationId: reservation.id,
+          roomId: reservation.rooms[0].roomId,
           roomName: reservation.rooms[0].roomName,
           roomTypeName: reservation.rooms[0].roomTypeName,
+          guestName: reservation.guestName,
           floor: roomDetails?.floor || 'N/A',
-          assigned_to_role: 'housekeeping',
-          assigned_to_uid: null,
-          priority: 'High',
-          status: 'Open',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
           createdByName: user.name || 'System',
           createdByUid: user.id,
-      };
-      batch.set(newTaskRef, taskPayload);
+        }),
+      });
 
-      await batch.commit();
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Check-out failed');
+      }
+
+      await fetchDashboardData();
       toast({title: t('toasts.check_out_success_title'), description: t('toasts.check_out_success_description', { roomName: reservation.rooms[0].roomName || '' })});
     } catch(err) {
       console.error("Error checking out:", err);
@@ -670,7 +607,7 @@ export default function DashboardPage() {
         <DashboardHeader 
           dateRange={dateRange} 
           setDateRange={setDateRange} 
-          onNewReservation={() => { setIsReservationFormModalOpen(true); setEditingReservation(null); }} 
+          onNewReservation={() => router.push('/reservations/new')} 
         />
         <DashboardMetrics metrics={dashboardMetrics} />
         <ActivityTable 
@@ -693,55 +630,47 @@ export default function DashboardPage() {
           channelWalkIn={channelMixMetrics.walkIn}
         />
 
-        {/* Recent Reservations (3/4) + Three Components (1/4) */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left: Recent Reservations - 3/4 width */}
-          <section className="lg:col-span-3 bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-            <div className="flex items-center gap-2 mb-4">
+        {/* Recent Reservations */}
+        <div className="grid grid-cols-1 gap-6">
+          <section className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 space-y-4">
+            <div className="flex items-center gap-2">
               <History size={18} style={{ color: '#003166' }} />
               <h2 className="text-sm font-bold text-slate-800">{t('recent_reservations.title')}</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {recentReservations.slice(0, 6).map((res, i) => (
-                <div key={res.id || i} className="flex justify-between items-center pb-3 border-b border-slate-50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-[#003166]"><UserPlus size={14} /></div>
-                    <div>
-                      <p className="text-xs font-bold">{res.guestName}</p>
-                      <p className="text-[10px] text-slate-400">{Array.isArray(res.rooms) ? `${(toDate(res.endDate) && toDate(res.startDate)) ? differenceInDays(toDate(res.endDate) as Date, toDate(res.startDate) as Date) : 0} nights • ${res.rooms.map(r => r.roomTypeName).join(', ')}` : ''}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-emerald-600">{propertySettings?.currency || '$'}{Number(res.totalPrice || 0).toFixed(2)}</p>
-                    <div className="flex items-center justify-end text-[9px] text-slate-400"><Clock size={8} className="mr-0.5" /> {formatDistanceToNow(toDate(res.createdAt) || new Date(), { addSuffix: true })}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button className="w-full mt-4 py-2.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 uppercase tracking-tighter">{t('recent_reservations.view_all_button')} <ChevronRight size={12} /></button>
-          </section>
-
-          {/* Right: Three Components - 1/4 width, stacked vertically */}
-          <div className="lg:col-span-1 flex flex-col gap-6">
-            <RevenueAnalytics 
-              chartPeriod={chartPeriod} 
-              setChartPeriod={setChartPeriod} 
+            <ReservationList
+              reservations={recentReservations}
+              isLoading={isDataLoading}
+              onEditReservation={handleOpenReservationForm}
+              onViewReservation={handleViewReservationDetails}
+              onDeleteReservation={handleDeleteReservation}
+              onCheckIn={() => {}}
+              onCheckOut={() => {}}
+              canManage={Boolean(canManageReservations)}
+              propertyCurrency={propertySettings?.currency || "$"}
+              currentPropertyId={propertyId}
+              currentPage={1}
+              totalPages={1}
+              totalFilteredCount={recentReservations.length}
+              onNextPage={() => {}}
+              onPrevPage={() => {}}
+              reservationsPerPage={MAX_RECENT_RESERVATIONS}
+              onReservationsPerPageChange={() => {}}
+              bulkActions={[]}
               propertySettings={propertySettings}
-              propertyId={propertyId}
-              dateRange={dateRange}
-              housekeepingWidget={
-                <DashboardSidebar 
-                  propertyId={propertyId}
-                  propertySettings={propertySettings}
-                  vips={vips}
-                  guestRequests={guestRequests}
-                  recentReservations={recentReservations}
-                />
-              }
+              hideCreateGuest
+              hideDateBookedColumn
+              mergeStayColumn
+              hidePagination
             />
-          </div>
+
+            <button
+              onClick={() => router.push('/reservations/all')}
+              className="w-full py-2.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 uppercase tracking-tighter"
+            >
+              {t('recent_reservations.view_all_button')} <ChevronRight size={12} />
+            </button>
+          </section>
         </div>
       </main>
       {/* Modals and dialogs preserved */}

@@ -38,8 +38,6 @@ export type AvailabilityStatus =
   | 'closed_to_arrival'
   | 'closed_to_departure'
   | 'on_request'
-  | 'blocked'
-  | 'unavailable'
 
 export interface DateRange {
   startDate: string // YYYY-MM-DD

@@ -39,6 +39,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useTranslation } from 'react-i18next';
 import SendEmailDialog from './send-email-dialog';
 import PaymentStatusBadge from '../payments/payment-status-badge';
+import { Moon as MoonIcon, User as UserIcon, Baby as BabyIcon } from 'lucide-react';
 
 interface ReservationListProps {
   reservations: Reservation[];
@@ -73,6 +74,9 @@ interface ReservationListProps {
   onOpenRefundDialog?: (reservation: Reservation) => void;
   showRefundTotal?: boolean;
   hideCreateGuest?: boolean;
+  hideDateBookedColumn?: boolean;
+  mergeStayColumn?: boolean;
+  hidePagination?: boolean;
 }
 
 export default function ReservationList({ 
@@ -106,6 +110,9 @@ export default function ReservationList({
   onOpenRefundDialog,
   showRefundTotal,
   hideCreateGuest,
+  hideDateBookedColumn = false,
+  mergeStayColumn = false,
+  hidePagination = false,
 }: ReservationListProps) {
   
   const [selectedRowIds, setSelectedRowIds] = React.useState<Set<string>>(new Set());
@@ -159,6 +166,7 @@ export default function ReservationList({
   };
 
   const statusOptions: ReservationStatus[] = ['Pending', 'Confirmed', 'Canceled', 'No-Show'];
+  const columnCount = 12 - (hideDateBookedColumn ? 1 : 0) - (mergeStayColumn ? 2 : 0);
 
    const handleCreateGuest = async (reservationId: string) => {
     if (!canManage) return;
@@ -248,11 +256,17 @@ export default function ReservationList({
                 </th>
                 <th className="py-3 px-4 border-r border-slate-50">Res No.</th>
                 <th className="py-3 px-4 border-r border-slate-50">Guest</th>
-                <th className="py-3 px-4 border-r border-slate-50">Date Booked</th>
+                {!hideDateBookedColumn && <th className="py-3 px-4 border-r border-slate-50">Date Booked</th>}
                 <th className="py-3 px-4 border-r border-slate-50">Room</th>
-                <th className="py-3 px-4 border-r border-slate-50">Check-in</th>
-                <th className="py-3 px-4 border-r border-slate-50">Check-out</th>
-                <th className="py-3 px-4 border-r border-slate-50">Nights</th>
+                {mergeStayColumn ? (
+                  <th className="py-3 px-4 border-r border-slate-50">Stay</th>
+                ) : (
+                  <>
+                    <th className="py-3 px-4 border-r border-slate-50">Check-in</th>
+                    <th className="py-3 px-4 border-r border-slate-50">Check-out</th>
+                    <th className="py-3 px-4 border-r border-slate-50">Nights</th>
+                  </>
+                )}
                 <th className="py-3 px-4 border-r border-slate-50">Total Price</th>
                 <th className="py-3 px-4 border-r border-slate-50">Status</th>
                 <th className="py-3 px-4 border-r border-slate-50">Source</th>
@@ -261,14 +275,22 @@ export default function ReservationList({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading && (
-                <tr><td colSpan={12} className="h-48 text-center"><Icons.Spinner className="mx-auto h-6 w-6 animate-spin" /></td></tr>
+                <tr><td colSpan={columnCount} className="h-48 text-center"><Icons.Spinner className="mx-auto h-6 w-6 animate-spin" /></td></tr>
               )}
               {!isLoading && reservations.map((reservation) => {
                 const totalPaid = calculateTotalPaid(reservation.id);
                 const totalGuests = Array.isArray(reservation.rooms) ? reservation.rooms.reduce((sum, r) => sum + (r.adults || 0) + (r.children || 0), 0) : 0;
+                const adultsCount = Array.isArray(reservation.rooms) && reservation.rooms.length > 0
+                  ? reservation.rooms.reduce((sum, r) => sum + (r.adults || 0), 0)
+                  : (reservation.adults || 0);
+                const childrenCount = Array.isArray(reservation.rooms) && reservation.rooms.length > 0
+                  ? reservation.rooms.reduce((sum, r) => sum + (r.children || 0), 0)
+                  : (reservation.children || 0);
                 const nights = (toDate(reservation.endDate) && toDate(reservation.startDate)) ? Math.ceil((toDate(reservation.endDate) as any - toDate(reservation.startDate) as any) / (1000 * 60 * 60 * 24)) : 0;
                 const checkInDate = toDate(reservation.startDate) ? format(toDate(reservation.startDate) as Date, "dd/MM/yy") : '';
                 const checkOutDate = toDate(reservation.endDate) ? format(toDate(reservation.endDate) as Date, "dd/MM/yy") : '';
+                const stayStartDate = toDate(reservation.startDate) ? format(toDate(reservation.startDate) as Date, "dd/MM/yyyy") : '';
+                const stayEndDate = toDate(reservation.endDate) ? format(toDate(reservation.endDate) as Date, "dd/MM/yyyy") : '';
                 const bookingDate = reservation.createdAt ? format(toDate(reservation.createdAt) as Date, "dd/MM/yy") : '';
                 const bookingTime = reservation.createdAt ? format(toDate(reservation.createdAt) as Date, "HH:mm") : '';
                 const source = (reservation as any).source || 'Direct';
@@ -288,25 +310,51 @@ export default function ReservationList({
                     </td>
                     <td className="py-3 px-4 border-r border-slate-50">
                       <div className="font-bold text-slate-800">{reservation.guestName}</div>
-                      <div className="text-[10px] text-slate-400">{totalGuests} guest{totalGuests !== 1 ? 's' : ''}</div>
+                      {!mergeStayColumn && (
+                        <div className="text-[10px] text-slate-400">{totalGuests} guest{totalGuests !== 1 ? 's' : ''}</div>
+                      )}
                     </td>
-                    <td className="py-3 px-4 border-r border-slate-50">
-                      <div className="text-sm text-slate-800 font-medium">{bookingDate}</div>
-                      <div className="text-xs text-slate-500">{bookingTime}</div>
-                    </td>
+                    {!hideDateBookedColumn && (
+                      <td className="py-3 px-4 border-r border-slate-50">
+                        <div className="text-sm text-slate-800 font-medium">{bookingDate}</div>
+                        <div className="text-xs text-slate-500">{bookingTime}</div>
+                      </td>
+                    )}
                     <td className="py-3 px-4 border-r border-slate-50">
                       <div className="font-medium text-slate-800">{Array.isArray(reservation.rooms) && reservation.rooms[0] ? reservation.rooms[0].roomName : 'N/A'}</div>
                       <div className="text-xs text-slate-500">{Array.isArray(reservation.rooms) && reservation.rooms[0] ? reservation.rooms[0].roomTypeName : ''}</div>
                     </td>
-                    <td className="py-3 px-4 border-r border-slate-50">
-                      <div className="text-sm text-slate-800">{checkInDate}</div>
-                    </td>
-                    <td className="py-3 px-4 border-r border-slate-50">
-                      <div className="text-sm text-slate-800">{checkOutDate}</div>
-                    </td>
-                    <td className="py-3 px-4 border-r border-slate-50">
-                      <div className="text-sm text-slate-800">{nights} night{nights !== 1 ? 's' : ''}</div>
-                    </td>
+                    {mergeStayColumn ? (
+                      <td className="py-3 px-4 border-r border-slate-50 min-w-[220px]">
+                        <div className="text-sm text-slate-700 font-medium">{stayStartDate} - {stayEndDate}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                            <span>{nights}</span>
+                            <MoonIcon className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                            <span>{adultsCount}</span>
+                            <UserIcon className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
+                            <span>{childrenCount}</span>
+                            <BabyIcon className="h-3.5 w-3.5" />
+                          </span>
+                        </div>
+                      </td>
+                    ) : (
+                      <>
+                        <td className="py-3 px-4 border-r border-slate-50">
+                          <div className="text-sm text-slate-800">{checkInDate}</div>
+                        </td>
+                        <td className="py-3 px-4 border-r border-slate-50">
+                          <div className="text-sm text-slate-800">{checkOutDate}</div>
+                        </td>
+                        <td className="py-3 px-4 border-r border-slate-50">
+                          <div className="text-sm text-slate-800">{nights} night{nights !== 1 ? 's' : ''}</div>
+                        </td>
+                      </>
+                    )}
                     <td className="py-3 px-4 border-r border-slate-50">
                       <div className="text-sm font-semibold text-slate-800">{propertyCurrency}{(reservation.totalPrice || 0).toFixed(2)}</div>
                     </td>
@@ -468,7 +516,7 @@ export default function ReservationList({
               })}
               {!isLoading && totalFilteredCount === 0 && (
                   <tr>
-                    <td colSpan={12} className="h-24 text-center text-slate-500">
+                    <td colSpan={columnCount} className="h-24 text-center text-slate-500">
                       {t('list.no_reservations_message')}
                     </td>
                   </tr>
@@ -476,7 +524,7 @@ export default function ReservationList({
             </tbody>
           </table>
         </div>
-        {!isLoading && totalPages > 0 && (
+        {!hidePagination && !isLoading && totalPages > 0 && (
             <div className="flex items-center justify-end space-x-6 p-4">
                 <div className="flex items-center space-x-2">
                     <p className="text-sm font-medium">{t('table.pagination.rows_per_page')}</p>

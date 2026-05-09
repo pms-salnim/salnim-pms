@@ -5,19 +5,16 @@ import type { User } from '@/types/user';
 import type { FirestoreUser, PropertyType as SignupPropertyType } from '@/types/firestoreUser';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import type { AuthSession } from '@supabase/supabase-js';
 import type { StaffRole, Permissions, AppModuleKey } from '@/types/staff';
 import { appModules, defaultPermissions, fullPermissions } from '@/types/staff';
 import type { Property } from '@/types/property';
 import { toast } from '@/hooks/use-toast';
 import i18n from '@/lib/i18n';
+import { createClient } from '@/utils/supabase/client';
 
 // Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
-);
+const supabase = createClient();
 
 // This type is used across the app, so it's defined here for broader access.
 export interface Email {

@@ -26,6 +26,15 @@ import { cn } from '@/lib/utils';
 import { format, startOfDay } from 'date-fns';
 import { Calendar } from '../ui/calendar';
 import { type DateRange } from 'react-day-picker';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+interface BaseRate {
+  id: string;
+  base_price: number;
+  start_date: string;
+  end_date?: string;
+  is_active: boolean;
+}
 
 interface RatePlanFormProps {
   initialData: RatePlan | null;
@@ -47,6 +56,59 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
   const [isDefaultPlan, setIsDefaultPlan] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isOpenEnded, setIsOpenEnded] = useState(false);
+  
+  // New base rate derivation fields
+  const [useBaseRateDerivation, setUseBaseRateDerivation] = useState(false);
+  const [baseRates, setBaseRates] = useState<BaseRate[]>([]);
+  const [selectedBaseRateId, setSelectedBaseRateId] = useState<string>('');
+  const [adjustmentType, setAdjustmentType] = useState<'none' | 'fixed' | 'percentage'>('none');
+  const [adjustmentValue, setAdjustmentValue] = useState<string>('0');
+  const [calculatedPrice, setCalculatedPrice] = useState<number | null>(null);
+  const [isLoadingBaseRates, setIsLoadingBaseRates] = useState(false);
+
+  // Advanced debugging wrapper for date range changes
+  const handleDateRangeChange = (newDateRange: DateRange | undefined) => {
+    console.group('[RatePlanForm] 📅 DATE PICKER CHANGED');
+    console.log('Time:', new Date().toLocaleTimeString());
+    console.log('Raw dateRange object:', newDateRange);
+    
+    if (newDateRange?.from) {
+      console.log('FROM date object:', {
+        jsDate: newDateRange.from,
+        iso: newDateRange.from.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        local: `${newDateRange.from.getFullYear()}-${String(newDateRange.from.getMonth() + 1).padStart(2, '0')}-${String(newDateRange.from.getDate()).padStart(2, '0')}`,
+        components: {
+          year: newDateRange.from.getFullYear(),
+          month: newDateRange.from.getMonth() + 1,
+          day: newDateRange.from.getDate(),
+          hours: newDateRange.from.getHours(),
+          minutes: newDateRange.from.getMinutes(),
+          seconds: newDateRange.from.getSeconds(),
+        }
+      });
+    }
+    
+    if (newDateRange?.to) {
+      console.log('TO date object:', {
+        jsDate: newDateRange.to,
+        iso: newDateRange.to.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        local: `${newDateRange.to.getFullYear()}-${String(newDateRange.to.getMonth() + 1).padStart(2, '0')}-${String(newDateRange.to.getDate()).padStart(2, '0')}`,
+        components: {
+          year: newDateRange.to.getFullYear(),
+          month: newDateRange.to.getMonth() + 1,
+          day: newDateRange.to.getDate(),
+          hours: newDateRange.to.getHours(),
+          minutes: newDateRange.to.getMinutes(),
+          seconds: newDateRange.to.getSeconds(),
+        }
+      });
+    }
+    
+    console.groupEnd();
+    setDateRange(newDateRange);
+  };
 
   const selectedRoomType = availableRoomTypes.find(rt => rt.id === selectedRoomTypeId);
   const maxGuestsForType = selectedRoomType ? selectedRoomType.maxGuests : 0;
@@ -82,7 +144,12 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
         (initialData.endDate instanceof Date ? initialData.endDate : new Date(initialData.endDate)) 
         : undefined;
       
-      setDateRange({
+      console.group('[RatePlanForm] 🔧 INITIAL DATA LOADED');
+      console.log('Start date:', startDate);
+      console.log('End date:', endDate);
+      console.groupEnd();
+      
+      handleDateRangeChange({
         from: startDate,
         to: endDate,
       });
@@ -96,16 +163,106 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
       setBasePrice('');
       setCancellationPolicy('');
       setIsDefaultPlan(false);
-      setDateRange({ from: new Date(), to: undefined });
+      handleDateRangeChange({ from: new Date(), to: undefined });
       setIsOpenEnded(true);
     }
   }, [initialData]);
   
   useEffect(() => {
     if (isOpenEnded) {
-        setDateRange(prev => ({ from: prev?.from, to: undefined }));
+      console.log('[RatePlanForm] 🔓 OPEN-ENDED MODE: Clearing end date');
+      handleDateRangeChange(prev => ({ from: prev?.from, to: undefined }));
     }
   }, [isOpenEnded]);
+
+  // Fetch base rates when room type or derivation mode changes
+  useEffect(() => {
+    if (useBaseRateDerivation && selectedRoomTypeId && propertyId) {
+      fetchBaseRates();
+    }
+  }, [selectedRoomTypeId, useBaseRateDerivation, propertyId]);
+
+  // Calculate price in real-time
+  useEffect(() => {
+    if (useBaseRateDerivation && selectedBaseRateId && baseRates.length > 0) {
+      const selectedRate = baseRates.find(r => r.id === selectedBaseRateId);
+      if (selectedRate) {
+        const basePrice = selectedRate.base_price;
+        let finalPrice = basePrice;
+
+        if (adjustmentType === 'fixed') {
+          finalPrice = basePrice + parseFloat(adjustmentValue || '0');
+        } else if (adjustmentType === 'percentage') {
+          const percentage = parseFloat(adjustmentValue || '0');
+          finalPrice = basePrice + (basePrice * percentage / 100);
+        }
+
+        setCalculatedPrice(finalPrice);
+        console.log(`[RatePlanForm] Calculated price: ${finalPrice} (Base: ${basePrice} + ${adjustmentType}(${adjustmentValue})`);
+      }
+    }
+  }, [selectedBaseRateId, adjustmentType, adjustmentValue, baseRates, useBaseRateDerivation]);
+
+  const fetchBaseRates = async () => {
+    setIsLoadingBaseRates(true);
+    try {
+      const response = await fetch('/api/pricing/base-rates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'read',
+          propertyId,
+          baseRate: {
+            room_type_id: selectedRoomTypeId
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setBaseRates(result.data || []);
+        console.log('[RatePlanForm] Fetched base rates:', result.data);
+      } else {
+        console.error('Failed to fetch base rates');
+        toast({ title: 'Error', description: 'Could not fetch base rates', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Error fetching base rates:', error);
+      toast({ title: 'Error', description: 'Failed to load base rates', variant: 'destructive' });
+    } finally {
+      setIsLoadingBaseRates(false);
+    }
+  };
+
+  const saveDerivedRateAdjustments = async (ratePlanId: string) => {
+    if (!useBaseRateDerivation) return;
+
+    try {
+      const response = await fetch('/api/pricing/rate-plan-adjustments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          ratePlanId,
+          adjustment: {
+            adjustment_type: adjustmentType,
+            adjustment_value: parseFloat(adjustmentValue || '0'),
+            is_derived_from_base: true
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save adjustment rules');
+      }
+
+      console.log('[RatePlanForm] Saved adjustment rules for rate plan:', ratePlanId);
+    } catch (error) {
+      console.error('Error saving adjustment rules:', error);
+      throw error;
+    }
+  }
 
   useEffect(() => {
     // Reset pricing when room type changes to ensure consistency with new max guest count
@@ -124,6 +281,9 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     
+    console.group('[RatePlanForm] 📤 FORM SUBMISSION');
+    console.log('Time:', new Date().toLocaleTimeString());
+    
     // Validate room type has valid max occupancy
     if (!selectedRoomTypeId || maxGuestsForType === 0) {
       toast({ 
@@ -131,6 +291,7 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
         description: 'Please select a room type with valid occupancy (more than 0 guests)', 
         variant: "destructive" 
       });
+      console.groupEnd();
       return;
     }
     
@@ -156,7 +317,30 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
 
     if (!planName || !hasPrice || !dateRange?.from) {
         toast({ title: t('toasts.validation_error_title'), description: t('toasts.validation_error_description'), variant: "destructive" });
+        console.groupEnd();
         return;
+    }
+
+    // Log detailed date information before submission
+    console.log('📅 DATE RANGE SUBMISSION DEBUG:');
+    if (dateRange.from) {
+      const startDateForSubmit = startOfDay(dateRange.from);
+      console.log('START date after startOfDay():', {
+        jsDate: startDateForSubmit,
+        iso: startDateForSubmit.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        formatted: `${startDateForSubmit.getFullYear()}-${String(startDateForSubmit.getMonth() + 1).padStart(2, '0')}-${String(startDateForSubmit.getDate()).padStart(2, '0')}`,
+      });
+    }
+    
+    if (dateRange.to && !isOpenEnded) {
+      const endDateForSubmit = startOfDay(dateRange.to);
+      console.log('END date after startOfDay():', {
+        jsDate: endDateForSubmit,
+        iso: endDateForSubmit.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        formatted: `${endDateForSubmit.getFullYear()}-${String(endDateForSubmit.getMonth() + 1).padStart(2, '0')}-${String(endDateForSubmit.getDate()).padStart(2, '0')}`,
+      });
     }
 
     const ratePlanData = {
@@ -170,9 +354,22 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
       endDate: dateRange.to && !isOpenEnded ? startOfDay(dateRange.to) : null,
       ...(pricingMethod === 'per_night' && { basePrice: parseFloat(basePrice) }),
       ...(pricingMethod === 'per_guest' && { pricingPerGuest: numericPricingPerGuest }),
+      // Add base rate derivation fields
+      ...(useBaseRateDerivation && {
+        adjustment_type: adjustmentType,
+        adjustment_value: parseFloat(adjustmentValue || '0'),
+        is_derived_from_base: true
+      }),
     };
     
-    onSave(ratePlanData as Omit<RatePlan, 'id' | 'propertyId' | 'createdAt' | 'updatedAt' | 'createdBy'>);
+    console.log('🚀 FINAL DATA BEING SENT TO API:', ratePlanData);
+    console.groupEnd();
+    
+    // Pass a callback to save adjustments after the main plan is created
+    onSave({
+      ...ratePlanData,
+      _saveAdjustments: useBaseRateDerivation ? saveDerivedRateAdjustments : undefined
+    } as any);
   };
 
   return (
@@ -276,6 +473,107 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
       )}
 
       <section className="space-y-3">
+        <h3 className="text-lg font-medium text-foreground border-b pb-1.5">Pricing Model</h3>
+        <div className="flex items-center space-x-2 pt-1">
+          <Checkbox 
+            id="useBaseRateDerivation" 
+            checked={useBaseRateDerivation} 
+            onCheckedChange={(checked) => {
+              setUseBaseRateDerivation(checked as boolean);
+              if (!checked) {
+                setCalculatedPrice(null);
+                setBaseRates([]);
+              }
+            }} 
+          />
+          <Label htmlFor="useBaseRateDerivation" className="font-normal cursor-pointer">
+            Use Base Rate Derivation (Recommended)
+          </Label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          When enabled, the price is calculated dynamically from a base rate + adjustments. Changes to the base rate automatically update all prices.
+        </p>
+      </section>
+
+      {useBaseRateDerivation && selectedRoomTypeId && (
+        <section className="space-y-3 animate-in fade-in-50 bg-blue-50 dark:bg-blue-950 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+          <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100">Base Rate Derivation Settings</h3>
+          
+          {isLoadingBaseRates ? (
+            <div className="flex items-center justify-center py-4">
+              <Icons.Spinner className="h-5 w-5 animate-spin" />
+              <span className="ml-2 text-sm">Loading base rates...</span>
+            </div>
+          ) : baseRates.length === 0 ? (
+            <Alert variant="destructive" className="bg-yellow-50 text-yellow-800 border-yellow-200">
+              <AlertDescription>
+                No base rates found for this room type. Please create a base rate first in the pricing settings.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <Label htmlFor="baseRateSelect">Select Base Rate *</Label>
+                <Select value={selectedBaseRateId} onValueChange={setSelectedBaseRateId}>
+                  <SelectTrigger id="baseRateSelect">
+                    <SelectValue placeholder="Choose a base rate..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {baseRates.map(rate => (
+                      <SelectItem key={rate.id} value={rate.id}>
+                        ${rate.base_price.toFixed(2)} ({rate.start_date} {rate.end_date ? `to ${rate.end_date}` : 'Open-ended'})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="adjustmentType">Adjustment Type *</Label>
+                <Select value={adjustmentType} onValueChange={(value: any) => setAdjustmentType(value)}>
+                  <SelectTrigger id="adjustmentType">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (Use base rate as-is)</SelectItem>
+                    <SelectItem value="fixed">Fixed Amount (Base + $X)</SelectItem>
+                    <SelectItem value="percentage">Percentage (Base + X%)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {adjustmentType !== 'none' && (
+                <div className="space-y-1">
+                  <Label htmlFor="adjustmentValue">
+                    {adjustmentType === 'fixed' ? 'Adjustment Amount ($)' : 'Adjustment Percentage (%)'}
+                  </Label>
+                  <Input
+                    id="adjustmentValue"
+                    type="number"
+                    value={adjustmentValue}
+                    onChange={(e) => setAdjustmentValue(e.target.value)}
+                    placeholder={adjustmentType === 'fixed' ? 'e.g., 50' : 'e.g., 20'}
+                    step={adjustmentType === 'fixed' ? '0.01' : '0.1'}
+                  />
+                </div>
+              )}
+
+              {calculatedPrice !== null && (
+                <Alert className="bg-green-50 border-green-200">
+                  <AlertDescription className="text-green-800 font-semibold">
+                    Calculated Price: ${calculatedPrice.toFixed(2)}
+                    <span className="block text-xs text-green-700 mt-1">
+                      This is the final price guests will see.
+                    </span>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      <section className="space-y-3">
         <h3 className="text-lg font-medium text-foreground border-b pb-1.5">{t('form.sections.validity_period')}</h3>
          <div className="space-y-1">
           <Label htmlFor="dateRange">{t('form.date_range_label')} <span className="text-destructive">*</span></Label>
@@ -287,7 +585,7 @@ export default function RatePlanForm({ initialData, availableRoomTypes, onSave, 
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
-              <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} />
+              <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={handleDateRangeChange} numberOfMonths={2} />
             </PopoverContent>
           </Popover>
            <div className="flex items-center space-x-2 pt-2">

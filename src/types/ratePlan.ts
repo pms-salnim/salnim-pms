@@ -2,6 +2,7 @@
 import type { Timestamp } from 'firebase/firestore';
 
 export type PricingMethod = 'per_guest' | 'per_night';
+export type AdjustmentType = 'none' | 'fixed' | 'percentage';
 
 export interface RatePlan {
   id: string; // Firestore document ID
@@ -20,6 +21,11 @@ export interface RatePlan {
   // New date range fields
   startDate?: Timestamp;
   endDate?: Timestamp | null; // null for open-ended
+
+  // Base rate derivation fields
+  is_derived_from_base?: boolean; // Whether this plan is derived from base rate
+  adjustment_type?: AdjustmentType; // Type of adjustment: 'none', 'fixed', or 'percentage'
+  adjustment_value?: number; // Value of adjustment (dollar amount or percentage)
 
   createdBy: string; // UID of the user who created the plan
   createdAt: Timestamp;

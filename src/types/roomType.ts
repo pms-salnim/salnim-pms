@@ -25,6 +25,10 @@ export interface RoomType {
   id: string; // Firestore document ID
   name: string; // e.g., "Standard Double", "Deluxe Suite"
   maxGuests: number; // Maximum number of guests for this room type
+  maxAdults?: number | null; // Maximum adults (optional)
+  maxChildren?: number | null; // Maximum children (optional)
+  adultsIncludedInBaseRate?: number | null; // Number of adults included in base rate
+  childrenIncludedInBaseRate?: number | null; // Number of children included in base rate
   baseRate?: number; // Base price per night for this room type
 
   description?: string; // Brief description

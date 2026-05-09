@@ -75,7 +75,11 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('property_id', propertyId)
+      .order('is_default', { ascending: false })
       .order('created_at', { ascending: false });
+
+    console.log('API: Fetched rate plans from DB:', ratePlans);
+    console.log('API: Fetch error:', fetchError);
 
     if (fetchError) {
       console.error('Fetch error:', fetchError);
@@ -96,7 +100,7 @@ export async function GET(request: NextRequest) {
         };
       }
 
-      return {
+      const transformed = {
         id: plan.id,
         planName: plan.plan_name,
         description: plan.description,
@@ -114,7 +118,11 @@ export async function GET(request: NextRequest) {
         updatedAt: plan.updated_at ? new Date(plan.updated_at) : null,
         room_types: roomType,
       };
+      console.log('API: Transformed plan:', transformed);
+      return transformed;
     });
+
+    console.log('API: Returning transformed plans:', transformedRatePlans);
 
     return NextResponse.json({
       ratePlans: transformedRatePlans || [],

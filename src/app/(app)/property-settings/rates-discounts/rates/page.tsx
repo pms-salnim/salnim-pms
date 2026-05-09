@@ -48,6 +48,7 @@ const RatePlanForm = dynamic(() => import('@/components/rate-plans/rate-plan-for
 
 const ratesDiscountsSubtabs = [
   { id: 'rates', label: 'Rate Plans', href: '/property-settings/rates-discounts/rates' },
+  { id: 'base-rates', label: 'Base Rates', href: '/property-settings/rates-discounts/base-rates' },
   { id: 'seasonal', label: 'Seasonal Pricing', href: '/property-settings/rates-discounts/seasonal' },
   { id: 'discounts', label: 'Discounts', href: '/property-settings/rates-discounts/discounts' },
   { id: 'availability', label: 'Availability', href: '/property-settings/rates-discounts/availability' },
@@ -159,7 +160,7 @@ export default function AllRatePlansPage() {
     setEditingRatePlan(null);
   };
 
-  const handleSaveRatePlan = async (formData: Omit<RatePlan, 'id' | 'propertyId' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
+  const handleSaveRatePlan = async (formData: any) => {
     if (!property?.id || !user?.id || !canManage) {
       console.error('Validation failed:', { propertyId: property?.id, userId: user?.id, canManage });
       toast({ title: "Error", description: "Permission denied or property/user not identified.", variant: "destructive" });
@@ -175,6 +176,7 @@ export default function AllRatePlansPage() {
 
       // Generate a UUID for new rate plans
       const planId = editingRatePlan?.id || crypto.randomUUID();
+      const { _saveAdjustments, ...cleanFormData } = formData;
 
       console.log('Sending rate plan to API:', { propertyId: property.id, userId: user.id, action: editingRatePlan ? 'update' : 'create' });
 
@@ -190,7 +192,7 @@ export default function AllRatePlansPage() {
           ratePlanId: editingRatePlan?.id,
           ratePlan: {
             id: planId,
-            ...formData,
+            ...cleanFormData,
           },
         }),
       });
@@ -198,6 +200,24 @@ export default function AllRatePlansPage() {
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save rate plan');
+      }
+
+      const ratePlanResponse = await response.json();
+      const savedPlanId = ratePlanResponse.data?.id || planId;
+
+      // If this is a derived rate plan, save the adjustment rules
+      if (_saveAdjustments && typeof _saveAdjustments === 'function') {
+        try {
+          await _saveAdjustments(savedPlanId);
+          console.log('[RatesPage] Adjustment rules saved successfully');
+        } catch (adjustmentError) {
+          console.error('[RatesPage] Failed to save adjustment rules:', adjustmentError);
+          toast({ 
+            title: 'Warning', 
+            description: 'Rate plan saved but adjustment rules failed to save. Please try again.', 
+            variant: 'destructive' 
+          });
+        }
       }
 
       toast({

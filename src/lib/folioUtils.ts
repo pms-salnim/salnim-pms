@@ -274,7 +274,10 @@ export function createRefundEntry(
     taxBreakdown: originalCharge.taxBreakdown,
     createdAt: new Date(),
     createdBy: userId,
-    postingDate: new Date().toISOString().split('T')[0],
+    postingDate: (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })(),
     referenceId: originalCharge.id, // Link back to original charge
     immutable: true,
   };

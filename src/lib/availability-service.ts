@@ -7,7 +7,7 @@
  * - Supabase Edge Function directly (future)
  */
 
-type AvailabilityStatus = 'available' | 'unavailable' | 'blocked' | 'not_available' | 'closed_to_arrival' | 'closed_to_departure'
+type AvailabilityStatus = 'available' | 'not_available' | 'closed_to_arrival' | 'closed_to_departure' | 'on_request'
 type AppliedAtLevel = 'room' | 'room_type' | 'property'
 
 export interface AvailabilityUpdateInput {
@@ -294,11 +294,10 @@ export function validateAvailabilityRequest(request: SaveAvailabilityRequest): s
 export function getStatusInfo(status: AvailabilityStatus) {
   const statusMap: Record<AvailabilityStatus, { label: string; color: string; icon: string }> = {
     available: { label: 'Available', color: '#10b981', icon: '✓' },
-    unavailable: { label: 'Unavailable', color: '#6b7280', icon: '-' },
-    blocked: { label: 'Blocked', color: '#ef4444', icon: '🚫' },
     not_available: { label: 'Not Available', color: '#ef4444', icon: '-' },
     closed_to_arrival: { label: 'Closed to Arrival', color: '#f97316', icon: '←' },
     closed_to_departure: { label: 'Closed to Departure', color: '#8b5cf6', icon: '→' },
+    on_request: { label: 'On Request', color: '#3b82f6', icon: '?' },
   }
   return statusMap[status] || { label: status, color: '#9ca3af', icon: '?' }
 }
@@ -400,7 +399,7 @@ export const exampleStopSell = () => {
   const updates: AvailabilityUpdateInput[] = [
     {
       date: '2026-04-20',
-      status: 'blocked',
+      status: 'not_available',
       roomId: 'room-001',
       notes: 'Maintenance scheduled',
       appliedAtLevel: 'room',

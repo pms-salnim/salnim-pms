@@ -21,7 +21,7 @@ export default function AppLayout({
 
   return (
     <AuthWrapper>
-      <SidebarProvider>
+      <SidebarProvider defaultOpen={false}>
         <div className="flex min-h-screen w-full bg-background font-body text-foreground">
           {!isPropertySettings && <AppSidebar />}
 

@@ -158,7 +158,9 @@ export default function RatePlanList({ ratePlans, roomTypes, onEditRatePlan, onD
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t('list.headers.plan_name')}</TableHead>
+                      <TableHead>Pricing Method</TableHead>
                       <TableHead>{t('list.headers.pricing')}</TableHead>
+                      <TableHead>Adjustment</TableHead>
                       <TableHead>{t('list.headers.validity')}</TableHead>
                       <TableHead className="text-center">{t('list.headers.default')}</TableHead>
                       <TableHead>{t('list.headers.status')}</TableHead> 
@@ -170,10 +172,36 @@ export default function RatePlanList({ ratePlans, roomTypes, onEditRatePlan, onD
                       const status = getStatus(plan);
                       const startDate = plan.startDate ? format(plan.startDate instanceof Date ? plan.startDate : new Date(plan.startDate), 'PP') : 'N/A';
                       const endDate = plan.endDate ? format(plan.endDate instanceof Date ? plan.endDate : new Date(plan.endDate), 'PP') : 'Open';
+                      const isDerived = plan.is_derived_from_base;
+                      
+                      let adjustmentLabel = '-';
+                      if (isDerived && plan.adjustment_type && plan.adjustment_type !== 'none') {
+                        if (plan.adjustment_type === 'fixed') {
+                          adjustmentLabel = `+${currencySymbol}${(plan.adjustment_value || 0).toFixed(2)}`;
+                        } else if (plan.adjustment_type === 'percentage') {
+                          adjustmentLabel = `+${plan.adjustment_value || 0}%`;
+                        }
+                      }
+                      
                       return (
                         <TableRow key={plan.id}>
                           <TableCell className="font-medium">{plan.planName}</TableCell>
+                          <TableCell>
+                            <Badge variant={isDerived ? "default" : "outline"} className={isDerived ? "bg-blue-100 text-blue-800" : ""}>
+                              {isDerived ? "Base Rate Derived" : "Legacy"}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="max-w-xs truncate">{getPricingSummary(plan)}</TableCell>
+                          <TableCell className="text-sm">
+                            {isDerived ? (
+                              <div className="text-sm">
+                                <div className="font-medium capitalize">{plan.adjustment_type === 'fixed' ? 'Fixed' : plan.adjustment_type === 'percentage' ? 'Percentage' : 'None'}</div>
+                                <div className="text-muted-foreground">{adjustmentLabel}</div>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-sm">{startDate} - {endDate}</TableCell>
                           <TableCell className="text-center">
                             {plan.default ? <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" /> : <XCircle className="h-5 w-5 text-muted-foreground mx-auto" />}

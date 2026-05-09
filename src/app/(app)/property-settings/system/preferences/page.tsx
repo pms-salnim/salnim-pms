@@ -4,13 +4,7 @@ import { useState, useEffect } from 'react';
 import { PropertySettingsSubtabs } from '@/components/property-settings/property-settings-subtabs';
 import { PreferencesForm } from '@/components/property-settings/preferences/preferences-form';
 import { useAuth } from '@/contexts/auth-context';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
-);
+import { createClient } from '@/utils/supabase/client';
 
 const systemSubtabs = [
   { id: 'preferences', label: 'Preferences', href: '/property-settings/system/preferences' },
@@ -30,6 +24,7 @@ export default function SystemPreferencesPage() {
       }
 
       try {
+        const supabase = createClient();
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData.session) {
           console.error('Not authenticated');
@@ -66,6 +61,7 @@ export default function SystemPreferencesPage() {
       throw new Error('Property not found');
     }
 
+    const supabase = createClient();
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session) {
       throw new Error('Not authenticated');

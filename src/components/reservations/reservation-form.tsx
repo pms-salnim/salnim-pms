@@ -22,8 +22,7 @@ import { format, differenceInDays, startOfDay } from "date-fns";
 import { toDate } from '@/lib/dateUtils';
 import type { DateRange } from "react-day-picker";
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, serverTimestamp, doc, updateDoc, Timestamp, setDoc } from 'firebase/firestore';
+import { createClient } from '@/utils/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 import type { RoomType } from '@/types/roomType';
@@ -31,7 +30,6 @@ import type { Room } from '@/types/room';
 import type { Reservation, SelectedExtra, ReservationRoom } from '@/components/calendar/types';
 import type { RatePlan } from '@/types/ratePlan';
 import type { Promotion } from '@/types/promotion';
-import type { AvailabilitySetting } from '@/types/availabilityOverride';
 import type { Service } from '@/types/service';
 import type { MealPlan } from '@/types/mealPlan';
 import { useTranslation } from 'react-i18next';
@@ -67,7 +65,6 @@ export default function ReservationForm({ onClose, initialData }: ReservationFor
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [allServices, setAllServices] = useState<Service[]>([]);
   const [allMealPlans, setAllMealPlans] = useState<MealPlan[]>([]);
-  const [availabilitySettings, setAvailabilitySettings] = useState<AvailabilitySetting[]>([]);
   const [allPromotions, setAllPromotions] = useState<Promotion[]>([]);
   
   // Room selections
@@ -117,6 +114,21 @@ export default function ReservationForm({ onClose, initialData }: ReservationFor
   const currencySymbol = property?.currency || '$';
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
+
+  const getAuthHeaders = useCallback(async (): Promise<Record<string, string> | null> => {
+    const supabase = createClient();
+    let sessionData = null;
+    for (let i = 0; i < 3; i++) {
+      const result = await supabase.auth.getSession();
+      if (result.data?.session) {
+        sessionData = result.data;
+        break;
+      }
+      if (i < 2) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (!sessionData?.session) return null;
+    return { Authorization: `Bearer ${sessionData.session.access_token}` };
+  }, []);
 
   // Calculate extra total
   const calculateExtraItemTotal = useCallback((extra: SelectedExtra, nights: number, roomGuests: {adults: number, children: number}) => {
@@ -443,11 +455,11 @@ export default function ReservationForm({ onClose, initialData }: ReservationFor
           total: calculateExtraItemTotal(e, nights, {adults: s.adults, children: s.children})
         })),
       })),
-      startDate: Timestamp.fromDate(startDate),
-      endDate: Timestamp.fromDate(endDate),
+      startDate: format(startDate, 'yyyy-MM-dd'),
+      endDate: format(endDate, 'yyyy-MM-dd'),
       status: resStatus === 'pending' ? 'Pending' : resStatus === 'confirmed' ? 'Confirmed' : resStatus === 'Canceled' ? 'Canceled' : 'No-Show',
-      // Map local payStatus + refundTypeLocal into Firestore paymentStatus and refundedAmount
-      paymentStatus: payStatus === 'pending' ? 'Pending' : payStatus === 'partial' ? 'Partial' : payStatus === 'paid' ? 'Paid' : (refundTypeLocal === 'partial' ? 'Partial-Refund' : 'Refunded'),
+      // Map local payStatus into reservation.payment_status values supported by Supabase
+      paymentStatus: payStatus === 'pending' ? 'Pending' : payStatus === 'partial' ? 'Partial' : payStatus === 'paid' ? 'Paid' : 'Refunded',
       refundedAmount: payStatus === 'refunded' ? (refundTypeLocal === 'partial' ? (Number(refundedAmountLocal) || 0) : (summary.netAmount ?? summary.grandTotal ?? 0)) : null,
       source: source || 'Direct',
       totalPrice: summary.grandTotal ?? 0,
@@ -470,15 +482,28 @@ export default function ReservationForm({ onClose, initialData }: ReservationFor
     };
 
     try {
-      if (initialData?.id) {
-        const resDocRef = doc(db, "reservations", initialData.id);
-        await updateDoc(resDocRef, { ...reservationPayload, updatedAt: serverTimestamp() });
-        toast({ title: "Success", description: "Reservation updated successfully." });
-      } else {
-        const newReservationRef = doc(collection(db, 'reservations'));
-        await setDoc(newReservationRef, { ...reservationPayload, createdAt: serverTimestamp() });
-        toast({ title: "Success", description: "Reservation created successfully." });
+      const headers = await getAuthHeaders();
+      if (!headers) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/reservations/crud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: JSON.stringify({
+          action: initialData?.id ? 'updateForm' : 'create',
+          reservationId: initialData?.id,
+          ...reservationPayload,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to save reservation');
       }
+
+      toast({ title: "Success", description: initialData?.id ? "Reservation updated successfully." : "Reservation created successfully." });
       onClose();
     } catch (error) {
       toast({ 
@@ -532,8 +557,8 @@ export default function ReservationForm({ onClose, initialData }: ReservationFor
         passportOrId: initialData.guestPassportOrId || '',
       });
       
-      const startDate = initialData.startDate instanceof Date ? initialData.startDate : (initialData.startDate as Timestamp).toDate();
-      const endDate = initialData.endDate instanceof Date ? initialData.endDate : (initialData.endDate as Timestamp).toDate();
+      const startDate = toDate(initialData.startDate) as Date;
+      const endDate = toDate(initialData.endDate) as Date;
       
       setDateRange({
         from: startDate,
@@ -624,42 +649,78 @@ export default function ReservationForm({ onClose, initialData }: ReservationFor
     setRooms(recalculatedRooms);
   }, [allRatePlans, roomTypes, dateRange, nights]);
 
-  // Load data from Firestore
+  // Load data from Supabase APIs
   useEffect(() => {
     if (!propertyId) return;
 
-    const dataFetchers = [
-      { query: query(collection(db, 'roomTypes'), where('propertyId', '==', propertyId)), setter: setRoomTypes },
-      { query: query(collection(db, 'rooms'), where('propertyId', '==', propertyId)), setter: setAllPropertyRooms },
-      { query: query(collection(db, 'ratePlans'), where('propertyId', '==', propertyId)), setter: setAllRatePlans },
-      { 
-        query: query(collection(db, 'reservations'), where('propertyId', '==', propertyId)), 
-        setter: setAllReservations, 
-        process: (d: any) => ({...d, startDate: d.startDate.toDate(), endDate: d.endDate.toDate()}) 
-      },
-      { query: query(collection(db, 'services'), where('propertyId', '==', propertyId)), setter: setAllServices },
-      { query: query(collection(db, 'mealPlans'), where('propertyId', '==', propertyId)), setter: setAllMealPlans },
-      { query: query(collection(db, 'availability'), where('propertyId', '==', propertyId)), setter: setAvailabilitySettings },
-      { 
-        query: query(collection(db, 'promotions'), where('propertyId', '==', propertyId), where('active', '==', true)), 
-        setter: setAllPromotions, 
-        process: (d:any) => ({...d, startDate: d.startDate.toDate(), endDate: d.endDate ? d.endDate.toDate() : null}) 
-      },
-    ];
-    
-    const unsubscribers = dataFetchers.map(({ query: q, setter, process }) => 
-      onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(), 
-          ...(process ? process(doc.data()) : {}) 
+    let cancelled = false;
+
+    const loadData = async () => {
+      const headers = await getAuthHeaders();
+      if (!headers || cancelled) return;
+
+      const base = '/api';
+      const [roomTypesRes, roomsRes, ratePlansRes, reservationsRes, servicesRes, mealPlansRes, promotionsRes] = await Promise.all([
+        fetch(`${base}/rooms/room-types/list?propertyId=${propertyId}`, { headers }),
+        fetch(`${base}/rooms/list?propertyId=${propertyId}`, { headers }),
+        fetch(`${base}/rate-plans/list?propertyId=${propertyId}`, { headers }),
+        fetch(`${base}/reservations/list?propertyId=${propertyId}`, { headers }),
+        fetch(`${base}/services/list?propertyId=${propertyId}`, { headers }),
+        fetch(`${base}/meal-plans/list?property_id=${propertyId}`),
+        fetch(`${base}/promotions/list?propertyId=${propertyId}`, { headers }),
+      ]);
+
+      if (cancelled) return;
+
+      if (roomTypesRes.ok) {
+        const data = await roomTypesRes.json();
+        setRoomTypes(data.roomTypes || []);
+      }
+
+      if (roomsRes.ok) {
+        const data = await roomsRes.json();
+        setAllPropertyRooms(data.rooms || []);
+      }
+
+      if (ratePlansRes.ok) {
+        const data = await ratePlansRes.json();
+        setAllRatePlans(data.ratePlans || []);
+      }
+
+      if (reservationsRes.ok) {
+        const data = await reservationsRes.json();
+        const mapped = (data.reservations || []).map((r: any) => ({
+          ...r,
+          startDate: toDate(r.startDate),
+          endDate: toDate(r.endDate),
         }));
-        setter(data as any);
-      }, (err) => { console.error(`Error fetching`, err);})
-    );
-    
-    return () => unsubscribers.forEach(unsub => unsub());
-  }, [propertyId]);
+        setAllReservations(mapped);
+      }
+
+      if (servicesRes.ok) {
+        const data = await servicesRes.json();
+        setAllServices(data.services || []);
+      }
+
+      if (mealPlansRes.ok) {
+        const data = await mealPlansRes.json();
+        setAllMealPlans(Array.isArray(data) ? data : []);
+      }
+
+      if (promotionsRes.ok) {
+        const data = await promotionsRes.json();
+        setAllPromotions((data.promotions || []).filter((p: Promotion) => p.active));
+      }
+    };
+
+    loadData().catch((err) => {
+      console.error('Error loading reservation form data:', err);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId, getAuthHeaders]);
 
   const filteredRoomTypes = roomTypes.filter(rt => rt.maxGuests >= (currentRoom.adults + currentRoom.children));
   const availableRatePlans = allRatePlans.filter(rp => rp.roomTypeId === currentRoom.roomTypeId);

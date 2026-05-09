@@ -58,7 +58,11 @@ export async function POST(request: NextRequest) {
       roomTypeId, 
       name, 
       description, 
-      maxGuests, 
+      maxGuests,
+      maxAdults,
+      maxChildren,
+      adultsIncludedInBaseRate,
+      childrenIncludedInBaseRate,
       amenities // Contains: selectedAmenities, beds, numberOfRoomsAvailable, assignedRoomNumbers, thumbnailImageUrl, galleryImageUrls
     } = await request.json();
 
@@ -96,6 +100,10 @@ export async function POST(request: NextRequest) {
           name: name || 'Unnamed Room Type',
           description: description || '',
           max_guests: maxGuests || 2,
+          max_adults: maxAdults || null,
+          max_children: maxChildren || null,
+          adults_included_in_base_rate: adultsIncludedInBaseRate || null,
+          children_included_in_base_rate: childrenIncludedInBaseRate || null,
           selected_amenities: parsedAmenities.selectedAmenities || [],
           beds: parsedAmenities.beds || [],
           number_of_rooms_available: parsedAmenities.numberOfRoomsAvailable || null,
@@ -132,6 +140,10 @@ export async function POST(request: NextRequest) {
       if (name !== undefined) updatePayload.name = name;
       if (description !== undefined) updatePayload.description = description;
       if (maxGuests !== undefined) updatePayload.max_guests = maxGuests;
+      if (maxAdults !== undefined) updatePayload.max_adults = maxAdults;
+      if (maxChildren !== undefined) updatePayload.max_children = maxChildren;
+      if (adultsIncludedInBaseRate !== undefined) updatePayload.adults_included_in_base_rate = adultsIncludedInBaseRate;
+      if (childrenIncludedInBaseRate !== undefined) updatePayload.children_included_in_base_rate = childrenIncludedInBaseRate;
       
       // Update individual amenity-related fields
       if (parsedAmenities.selectedAmenities !== undefined) updatePayload.selected_amenities = parsedAmenities.selectedAmenities;
