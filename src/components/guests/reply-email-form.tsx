@@ -1,13 +1,12 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '@/contexts/auth-context';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '@/lib/firebase';
+import { emailApi } from '@/lib/communication-api';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,8 +14,6 @@ import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Icons } from '../icons';
 import { Textarea } from '@/components/ui/textarea';
-import { format, parseISO, isValid } from 'date-fns';
-import type { Email } from '@/app/(app)/guests/communication/page';
 import { Paperclip, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,24 +25,37 @@ const replySchema = z.object({
 type ReplyFormValues = z.infer<typeof replySchema>;
 
 interface ReplyEmailFormProps {
-  originalEmail: Email;
+  originalEmail: {
+    id: string;
+    from_name?: string;
+    from_email?: string;
+    from?: {
+      name?: string;
+      email?: string;
+    };
+    subject: string;
+    body_text?: string;
+    body_html?: string;
+    bodyHtml?: string;
+    date: string;
+  };
   onClose: () => void;
+  onSent?: (reply: any) => void;
 }
 
-const fileToDataUri = (file: File) => new Promise<{ filename: string; path: string }>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-        resolve({ filename: file.name, path: reader.result as string });
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-});
+type EncodedAttachment = {
+  filename: string;
+  contentType?: string;
+  content: string;
+};
 
 export default function ReplyEmailForm({ originalEmail, onClose }: ReplyEmailFormProps) {
   const { user } = useAuth();
   const { t } = useTranslation('pages/guests/communication/content');
   const [isSending, setIsSending] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const recipientEmail = String(originalEmail.from_email || originalEmail.from?.email || '').trim();
+  const senderDisplayName = String(originalEmail.from_name || originalEmail.from?.name || recipientEmail || 'Unknown sender').trim();
 
   const form = useForm<ReplyFormValues>({
     resolver: zodResolver(replySchema),
@@ -65,49 +75,66 @@ export default function ReplyEmailForm({ originalEmail, onClose }: ReplyEmailFor
     setAttachments(prev => prev.filter((_, index) => index !== indexToRemove));
   };
 
+  const encodeAttachments = async (files: File[]): Promise<EncodedAttachment[]> => {
+    const encoded = await Promise.all(
+      files.map(async (file) => {
+        const buffer = await file.arrayBuffer();
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const chunkSize = 0x8000;
 
-  const quotedBody = useMemo(() => {
-    const dateString = originalEmail.date;
-    let formattedDate = '—';
-    
-    try {
-      const parsedDate = typeof originalEmail.date === 'string' ? parseISO(originalEmail.date) : new Date(originalEmail.date);
-      if (isValid(parsedDate)) {
-        formattedDate = format(parsedDate, 'PPp');
-      }
-    } catch (error) {
-      console.warn('Invalid date in reply email:', originalEmail.date);
-    }
-    
-    const originalDate = `On ${formattedDate}, ${originalEmail.from.name} <${originalEmail.from.email}> wrote:`;
-    // A simple text-based quote. A full HTML quote is more complex.
-    const originalContent = originalEmail.body.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
-    const quotedLines = originalContent.split('\n').map(line => `> ${line}`).join('\n');
-    return `\n\n\n---\n${originalDate}\n${quotedLines}`;
-  }, [originalEmail]);
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+          const chunk = bytes.subarray(offset, offset + chunkSize);
+          binary += String.fromCharCode(...chunk);
+        }
 
+        return {
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+          content: btoa(binary),
+        };
+      })
+    );
+
+    return encoded;
+  };
   const onSubmit = async (data: ReplyFormValues) => {
-    if (!user?.propertyId || !originalEmail.from.email) {
+    if (!user?.propertyId || !recipientEmail) {
       toast({ title: "Error", description: "Cannot send reply. Missing required information.", variant: "destructive" });
       return;
     }
     setIsSending(true);
 
-    const fullBody = `${data.body}${quotedBody}`;
+    const fullBody = data.body;
 
     try {
-      const attachmentPayloads = await Promise.all(attachments.map(fileToDataUri));
-      const functions = getFunctions(app, 'europe-west1');
-      const sendReplyByEmail = httpsCallable(functions, 'sendReplyByEmail');
-      await sendReplyByEmail({
-        propertyId: user.propertyId,
-        to: originalEmail.from.email,
-        subject: data.subject,
-        htmlBody: fullBody.replace(/\n/g, '<br>'),
-        attachments: attachmentPayloads,
-      });
+      const encodedAttachments = await encodeAttachments(attachments);
+      const response = await emailApi.sendReply(
+        user.propertyId,
+        originalEmail.id,
+        recipientEmail,
+        data.subject,
+        fullBody.replace(/\n/g, '<br>'),
+        fullBody,
+        encodedAttachments
+      );
+      
+      if (!response?.success) {
+        throw new Error('Failed to send reply');
+      }
 
       toast({ title: "Success", description: "Your reply has been sent." });
+      if (typeof onSent === 'function') {
+        onSent({
+          subject: data.subject,
+          body: data.body,
+          date: new Date().toISOString(),
+          from: { name: user?.fullName || '', email: user?.email || '' },
+          to: recipientEmail,
+          attachments: attachments.map(f => ({ filename: f.name, contentType: f.type, size: f.size })),
+          isLocal: true,
+        });
+      }
       onClose();
     } catch (error: any) {
       console.error("Error sending reply:", error);
@@ -121,7 +148,7 @@ export default function ReplyEmailForm({ originalEmail, onClose }: ReplyEmailFor
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="text-sm">
-          <span className="text-muted-foreground">{t('reply_form.replying_to_label')}</span> <span className="font-semibold">{originalEmail.from.email}</span>
+          <span className="text-muted-foreground">{t('reply_form.replying_to_label')}</span> <span className="font-semibold">{recipientEmail || '—'}</span>
         </div>
         <FormField
           control={form.control}

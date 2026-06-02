@@ -14,9 +14,8 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { GuestPortalData } from './types';
-import { collection, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { format } from 'date-fns';
+import { createClient } from '@/utils/supabase/client';
 
 interface Review {
   id: string;
@@ -37,10 +36,10 @@ interface Review {
   responses?: Array<{
     text: string;
     respondedBy: string;
-    respondedAt: Date | Timestamp;
+    respondedAt: string | Date;
   }>;
-  submittedAt: string | Date | Timestamp;
-  createdAt: Date | Timestamp;
+  submittedAt: string | Date;
+  createdAt: string | Date;
 }
 
 interface ReviewsTabProps {
@@ -72,6 +71,24 @@ const ReviewsTab: React.FC<ReviewsTabProps> = ({
   const [isLoadingReviews, setIsLoadingReviews] = useState<boolean>(true);
   const [showReviewForm, setShowReviewForm] = useState<boolean>(false);
 
+  const normalizeReviewRow = (row: any): Review => ({
+    id: String(row.id),
+    propertyId: String(row.property_id || row.propertyId || ''),
+    source: String(row.source || 'guest_portal'),
+    guestName: String(row.guest_name || row.guestName || 'Anonymous'),
+    guestEmail: row.guest_email || row.guestEmail || undefined,
+    reservationId: row.reservation_id || row.reservationId || undefined,
+    reservationNumber: row.reservation_number || row.reservationNumber || undefined,
+    ratings: row.ratings || { overall: 0 },
+    reviewText: String(row.review_text || row.reviewText || ''),
+    status: String(row.status || 'pending'),
+    responses: Array.isArray(row.responses)
+      ? row.responses
+      : [],
+    submittedAt: row.submitted_at || row.submittedAt || row.created_at || row.createdAt || new Date().toISOString(),
+    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+  });
+
   // Fetch existing reviews for this reservation
   useEffect(() => {
     if (!property?.id || !reservation?.id) {
@@ -79,30 +96,28 @@ const ReviewsTab: React.FC<ReviewsTabProps> = ({
       return;
     }
 
-    const reviewsRef = collection(db, 'reviews');
-    const q = query(
-      reviewsRef,
-      where('propertyId', '==', property.id),
-      where('reservationId', '==', reservation.id)
-    );
+    const loadReviews = async () => {
+      setIsLoadingReviews(true);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('property_id', property.id)
+          .eq('reservation_id', reservation.id)
+          .order('created_at', { ascending: false });
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const reviews = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as Review));
-        setExistingReviews(reviews);
-        setIsLoadingReviews(false);
-      },
-      (error) => {
+        if (error) throw error;
+
+        setExistingReviews((data || []).map(normalizeReviewRow));
+      } catch (error) {
         console.error('Error fetching reviews:', error);
+      } finally {
         setIsLoadingReviews(false);
       }
-    );
+    };
 
-    return () => unsubscribe();
+    loadReviews();
   }, [property?.id, reservation?.id]);
 
   const handleSubmitReview = async () => {

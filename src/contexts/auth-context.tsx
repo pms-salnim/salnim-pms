@@ -12,12 +12,14 @@ import type { Property } from '@/types/property';
 import { toast } from '@/hooks/use-toast';
 import i18n from '@/lib/i18n';
 import { createClient } from '@/utils/supabase/client';
+import { emailApi } from '@/lib/communication-api';
 
 // Initialize Supabase client
 const supabase = createClient();
 
 // This type is used across the app, so it's defined here for broader access.
 export interface Email {
+  id?: string;
   uid: number;
   from: { name: string; email: string };
   subject: string;
@@ -25,6 +27,7 @@ export interface Email {
   snippet: string;
   body: string;
   bodyText?: string;
+  bodyHtml?: string;
   unread: boolean;
   starred?: boolean;
   archived?: boolean;
@@ -64,7 +67,7 @@ interface AuthContextType {
   emails: Email[];
   unreadEmailCount: number;
   isLoadingEmails: boolean;
-  refetchEmails: () => void;
+  refetchEmails: (isPolling?: boolean, forceRefresh?: boolean) => void;
   lastEmailSyncAt: number | null;
   isSyncingEmails: boolean;
   unreadMessageCount: number; // For internal team chat
@@ -114,12 +117,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  const refetchEmails = useCallback(async (isPolling = false) => {
+  const refetchEmails = useCallback(async (isPolling = false, forceRefresh = false) => {
     try {
-      // ✅ Strict IMAP configuration check - don't fetch if not configured
-      if (!user || !property || !property.imapConfiguration) {
+      // Only require an authenticated user and property id; API validates IMAP settings.
+      if (!user?.propertyId) {
         if (!isPolling) {
-          console.debug('Email fetch skipped: IMAP not configured');
+          console.debug('Email fetch skipped: property not available');
         }
         return;
       }
@@ -132,7 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // ✅ Enforce cooldown between sync attempts
       const now = Date.now();
-      if (lastEmailSyncAt && now - lastEmailSyncAt < emailSyncCooldownMs) {
+      if (!forceRefresh && lastEmailSyncAt && now - lastEmailSyncAt < emailSyncCooldownMs) {
         if (!isPolling) {
           console.debug(`Email sync cooldown active. Next sync available in ${Math.ceil((emailSyncCooldownMs - (now - lastEmailSyncAt)) / 1000)}s`);
         }
@@ -143,38 +146,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!isPolling) setIsLoadingEmails(true);
 
       try {
-        const idToken = await auth.currentUser?.getIdToken();
-        if (!idToken) {
-          throw new Error("Unauthenticated: could not retrieve ID token");
+        const result = await emailApi.syncEmails(user.propertyId, { maxNew: 200 });
+        if (!result?.success || !Array.isArray(result.emails)) {
+          throw new Error('Failed to fetch emails');
         }
 
-        // Use the Cloud Run function URL for Gen2 HTTP functions
-        const endpoint = 'https://europe-west1-protrack-hub.cloudfunctions.net/fetchEmailsHttp';
-
-        const resp = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`,
+        const newEmails: Email[] = result.emails.map((row: any) => ({
+          id: row.id ? String(row.id) : undefined,
+          uid: Number(row.uid || 0),
+          from: {
+            name: row.from_name || row.from_email || 'Unknown',
+            email: row.from_email || 'unknown@example.com',
           },
-          body: JSON.stringify({ mode: 'sync', maxNew: 200 }),
-        }).catch(err => {
-          console.error('Fetch error:', err);
-          throw new Error('Network error: Unable to connect to email server');
-        });
+          subject: row.subject || '(No Subject)',
+          date: row.date || new Date().toISOString(),
+          snippet: row.snippet || '',
+          body: row.body_text || row.body_html || '',
+          bodyText: row.body_text || '',
+          bodyHtml: row.body_html || '',
+          unread: !!row.is_unread,
+          starred: !!row.is_starred,
+          archived: !!row.is_archived,
+          labels: Array.isArray(row.labels) ? row.labels.map((l: any) => l?.name || l?.label_id).filter(Boolean) : [],
+          attachments: Array.isArray(row.attachments)
+            ? row.attachments.map((a: any) => ({
+                filename: a.file_name,
+                contentType: a.content_type,
+                size: a.file_size || 0,
+              }))
+            : [],
+        }));
 
-        if (!resp.ok) {
-          let message = 'Failed to fetch emails';
-          try {
-            const err = await resp.json();
-            message = err?.message || message;
-          } catch (_) {
-            message = `Server error: ${resp.status} ${resp.statusText}`;
-          }
-          throw new Error(message);
-        }
-
-        const newEmails: Email[] = await resp.json();
         setEmails(currentEmails => {
           if (isPolling) {
             const currentUids = new Set(currentEmails.map(e => e.uid));
@@ -191,7 +193,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       } catch (fetchError: any) {
         // ✅ Only show errors for user-initiated fetches, not background polling
-        if (!isPolling && property?.imapConfiguration) {
+        if (!isPolling) {
           toast({ title: "Error Fetching Emails", description: fetchError.message || "Could not retrieve emails.", variant: "destructive" });
           console.error("Email fetch failed:", fetchError);
         } else if (isPolling) {
@@ -209,7 +211,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!isPolling) setIsLoadingEmails(false);
       setInitialEmailFetchDone(true);
     }
-  }, [user, property, lastEmailSyncAt, isSyncingEmails]);
+  }, [user?.propertyId, lastEmailSyncAt, isSyncingEmails]);
 
 
   const fetchAndSetUser = async (userId: string, accessToken?: string, retries = 3, delayMs = 500) => {

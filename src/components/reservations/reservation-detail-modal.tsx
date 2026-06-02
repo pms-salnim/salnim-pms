@@ -96,6 +96,7 @@ interface ReservationDetailModalProps {
   onCheckIn?: (reservationId: string) => void;
   onCheckOut?: (reservation: Reservation) => void;
   canManage?: boolean;
+  displayMode?: 'fullscreen' | 'sidepanel';
 }
 
 const DetailSection = ({ icon: Icon, title, children }: { icon: React.ElementType, title: string, children: React.ReactNode }) => (
@@ -180,7 +181,7 @@ const RoomCard = ({
   );
 };
 
-export default function ReservationDetailModal({ isOpen, onClose, initialData, propertySettings, onEdit, canManage, onCheckIn, onCheckOut }: ReservationDetailModalProps) {
+export default function ReservationDetailModal({ isOpen, onClose, initialData, propertySettings, onEdit, canManage, onCheckIn, onCheckOut, displayMode = 'fullscreen' }: ReservationDetailModalProps) {
   // Safe date formatter
   const formatDateSafe = (dateValue: any): string => {
     if (!dateValue) return 'N/A';
@@ -2245,22 +2246,22 @@ export default function ReservationDetailModal({ isOpen, onClose, initialData, p
       {/* Background Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/20 z-[999]"
+          className={cn(
+            'fixed inset-0 z-[999] transition-opacity',
+            displayMode === 'sidepanel' ? 'bg-black/10' : 'bg-black/20'
+          )}
           onClick={onClose}
         />
       )}
       {/* FULL PAGE MODAL */}
       {isOpen && (
         <div 
-          className="fixed inset-0 flex flex-col bg-white z-[9999] overflow-hidden"
-          style={{
-            top: '0',
-            left: '0',
-            right: '0',
-            bottom: '0',
-            width: '100vw',
-            height: '100vh',
-          }}
+          className={cn(
+            'fixed z-[9999] flex flex-col overflow-hidden bg-white',
+            displayMode === 'sidepanel'
+              ? 'inset-y-0 right-0 h-screen w-[min(1100px,96vw)] animate-in slide-in-from-right-8 duration-200'
+              : 'inset-0 h-screen w-screen'
+          )}
         >
           {/* HEADER - TOP ROW */}
           <div className="bg-white border-b border-slate-200 px-8 py-4 z-[9998] flex-shrink-0">

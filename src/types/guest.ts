@@ -49,4 +49,8 @@ export interface Guest {
   birthdate?: string | Date; // For form input, store as string or convert
   address?: string;
   internalNotes?: string;
+  roomPreferences?: string;
+  dietaryRestrictions?: string;
+  specialOccasion?: string;
+  communicationPreference?: string;
 }

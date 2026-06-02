@@ -61,10 +61,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { deleteDoc } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { sendGuestMessage, deleteGuest, updateGuestNotes, updateGuestPreferences } from '@/lib/guestHelpers';
 import ReservationDetailModal from '@/components/reservations/reservation-detail-modal';
+import { createClient } from '@/utils/supabase/client';
 
 
 interface GuestProfileProps {
@@ -86,6 +86,10 @@ const formatDateField = (dateField?: string | Date | Timestamp): string => {
         return format((dateField as Timestamp).toDate(), 'PPP');
     }
     return 'N/A';
+};
+
+const normalizePhone = (value?: string | null): string => {
+  return String(value || '').replace(/\D/g, '');
 };
 
 
@@ -148,6 +152,22 @@ export default function GuestProfile({ guest, allReservations, onGuestDeleted, o
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [isAdjustingPoints, setIsAdjustingPoints] = useState(false);
 
+  useEffect(() => {
+    setSyncedGuest(guest);
+    setInternalNotes(guest.internalNotes || '');
+    setRoomPreferences(guest.roomPreferences || '');
+    setDietaryRestrictions(guest.dietaryRestrictions || '');
+    setSpecialOccasion(guest.specialOccasion || '');
+    setCommunicationPreference(guest.communicationPreference || '');
+    setFullName(guest.fullName || '');
+    setEmail(guest.email || '');
+    setPhone(guest.phone || '');
+    setNationality(guest.nationality || guest.country || '');
+    setCountry(guest.nationality || guest.country || '');
+    setGender(guest.gender || '');
+    setPassportOrId(guest.passportOrId || '');
+  }, [guest]);
+
   const customTiers = property?.loyaltyProgramSettings?.tiers || defaultLoyaltyTiers;
   const guestTier = useMemo(
     () => getLoyaltyTier(syncedGuest.totalPointsEarned || 0, customTiers),
@@ -156,16 +176,29 @@ export default function GuestProfile({ guest, allReservations, onGuestDeleted, o
   
   const guestReservations = useMemo(() => {
     if (!allReservations || !syncedGuest) return [];
+    const guestEmail = String(syncedGuest.email || '').trim().toLowerCase();
+    const guestPhone = normalizePhone(syncedGuest.phone);
+    const guestName = String(syncedGuest.fullName || '').trim().toLowerCase();
+
     return allReservations.filter(res => {
       // Match by guestId (primary)
       if (res.guestId === syncedGuest.id) return true;
+
       // Match by email (fallback)
-      if (res.guestEmail && syncedGuest.email && res.guestEmail.toLowerCase() === syncedGuest.email.toLowerCase()) return true;
+      const reservationEmail = String(res.guestEmail || '').trim().toLowerCase();
+      if (reservationEmail && guestEmail && reservationEmail === guestEmail) return true;
+
+      // Match by phone (fallback)
+      const reservationPhone = normalizePhone(res.guestPhone);
+      if (reservationPhone && guestPhone && reservationPhone === guestPhone) return true;
+
       // Match by guestName if email isn't available
-      if (res.guestName && syncedGuest.fullName && res.guestName.toLowerCase() === syncedGuest.fullName.toLowerCase()) return true;
+      const reservationGuestName = String(res.guestName || '').trim().toLowerCase();
+      if (reservationGuestName && guestName && reservationGuestName === guestName) return true;
+
       return false;
     });
-  }, [allReservations, guest]);
+  }, [allReservations, syncedGuest]);
 
   const guestStats = useMemo(() => {
     // Include all reservations for financial metrics, not just completed ones
@@ -220,22 +253,6 @@ export default function GuestProfile({ guest, allReservations, onGuestDeleted, o
     }
   }, [syncedGuest.id, syncedGuest.loyaltyStatus]);
 
-  // Real-time sync of guest data to keep loyalty points and tier always up-to-date
-  useEffect(() => {
-    if (!syncedGuest.id) return;
-    
-    const guestRef = doc(db, "guests", syncedGuest.id);
-    const unsubGuest = onSnapshot(guestRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setSyncedGuest({ id: snapshot.id, ...snapshot.data() } as Guest);
-      }
-    }, (error) => {
-      console.error("Error syncing guest data:", error);
-    });
-    
-    return () => unsubGuest();
-  }, [syncedGuest.id]);
-  
   const handleAdjustLoyaltyPoints = async () => {
     if (!syncedGuest.id || !adjustmentPoints) {
       toast({ title: 'Error', description: 'Please enter a points amount', variant: "destructive" });
@@ -414,22 +431,33 @@ export default function GuestProfile({ guest, allReservations, onGuestDeleted, o
     if (!syncedGuest.id) return;
     setIsSavingPersonalInfo(true);
     try {
-      await updateGuestPreferences({
-        guestId: guest.id,
-      });
-      
-      // Update via separate function for personal info fields
-      const guestRef = doc(db, "guests", syncedGuest.id);
-      await updateDoc(guestRef, {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('guests')
+        .update({
+          first_name: fullName.trim().split(/\s+/)[0] || fullName,
+          last_name: fullName.trim().split(/\s+/).slice(1).join(' '),
+          email,
+          phone,
+          country,
+          nationality: nationality || country,
+          gender,
+          passport_id: passportOrId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', syncedGuest.id);
+
+      if (error) throw error;
+
+      setSyncedGuest(current => ({
+        ...current,
         fullName,
         email,
         phone,
-        phoneCode,
         country,
-        gender,
+        nationality: nationality || country,
         passportOrId,
-        updatedAt: serverTimestamp()
-      });
+      }));
       
       toast({ title: 'Success', description: 'Personal information saved successfully' });
     } catch (error) {

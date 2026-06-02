@@ -5,25 +5,37 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Icons } from '@/components/icons';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageSquare, RefreshCw, Paperclip, Send, ExternalLink, Smile, Bot, Search, Filter, Clock, X, Plus, Pin, PinOff, Trash } from 'lucide-react';
-import { collection, query as firestoreQuery, orderBy, limit as firestoreLimit, getDocs, where } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
-import { auth, db } from '@/lib/firebase';
-import { doc as firestoreDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '@/contexts/auth-context';
 import { format, isToday, isYesterday } from 'date-fns';
 import { GuestPortalConversation, GuestPortalMessage } from './types';
+import { createClient } from '@/utils/supabase/client';
 
 const fetchApi = async (payload: any) => {
-  if (!auth.currentUser) return null;
   try {
-    const res = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalChat', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, authToken: await auth.currentUser.getIdToken() })
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      console.warn('fetchApi: No session available');
+      return null;
+    }
+
+    const res = await fetch('/api/communication/guest-portal', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify(payload)
     });
+
     if (!res.ok) {
       const text = await res.text().catch(() => null);
       console.warn('fetchApi non-ok response', { status: res.status, statusText: res.statusText, body: text });
       return null;
     }
+
     try {
       return await res.json();
     } catch (err) {
@@ -175,11 +187,11 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
   const sortConversationsByRecent = (convs: any[] = []) => {
     return convs.slice().sort((a: any, b: any) => {
       // Pinned first
-      const pa = a?.pinned ? 1 : 0;
-      const pb = b?.pinned ? 1 : 0;
+      const pa = (a?.is_pinned || a?.pinned) ? 1 : 0;
+      const pb = (b?.is_pinned || b?.pinned) ? 1 : 0;
       if (pa !== pb) return pb - pa;
-      const ta = Number(a?.lastMessageTimestampMs ?? a?.lastMessage?.timestampMs ?? (a?.lastMessage ? convertTimestamp(a.lastMessage.timestamp).getTime() : (a?.updatedAt ? convertTimestamp(a.updatedAt).getTime() : (a?.createdAt ? convertTimestamp(a.createdAt).getTime() : 0))));
-      const tb = Number(b?.lastMessageTimestampMs ?? b?.lastMessage?.timestampMs ?? (b?.lastMessage ? convertTimestamp(b.lastMessage.timestamp).getTime() : (b?.updatedAt ? convertTimestamp(b.updatedAt).getTime() : (b?.createdAt ? convertTimestamp(b.createdAt).getTime() : 0))));
+      const ta = Number(a?.last_message_timestamp ? new Date(a.last_message_timestamp).getTime() : (a?.updated_at ? new Date(a.updated_at).getTime() : (a?.created_at ? new Date(a.created_at).getTime() : 0)));
+      const tb = Number(b?.last_message_timestamp ? new Date(b.last_message_timestamp).getTime() : (b?.updated_at ? new Date(b.updated_at).getTime() : (b?.created_at ? new Date(b.created_at).getTime() : 0)));
       if (ta === tb) {
         const ia = String(a?.id || '');
         const ib = String(b?.id || '');
@@ -194,25 +206,12 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
   const loadConversations = useCallback(async () => {
     if (!user || !property) return;
     setIsLoading(true);
-    const result = await fetchApi({ action: 'getConversations', data: { propertyId: property.id } });
+    const result = await fetchApi({ 
+      action: 'listConversations', 
+      data: { propertyId: property.id } 
+    });
     const fetchedConversations = result?.conversations || [];
-    // Enrich conversations with reservationNumber where possible
-    const enrich = async (convs: any[]) => {
-      return await Promise.all(convs.map(async (c: any) => {
-        try {
-          if (c.reservationId) {
-            const info = await getReservationInfo(c.reservationId);
-            return { ...c, reservationNumber: info.reservationNumber || c.reservationNumber, reservationStatus: info.reservationStatus || c.reservationStatus };
-          }
-        } catch (err) {
-          console.warn('Failed to load reservation for conversation', c.id, err);
-        }
-        return { ...c };
-      }));
-    };
-
-    const enriched = await enrich(fetchedConversations);
-    setConversations(sortConversationsByRecent(enriched));
+    setConversations(sortConversationsByRecent(fetchedConversations));
     
     // Load last message for each conversation for preview
     const messageMap: {[key: string]: GuestPortalMessage[]} = {};
@@ -220,7 +219,7 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
       try {
         const messagesResult = await fetchApi({ 
           action: 'getMessages', 
-          data: { conversationId: conv.id, propertyId: property.id, limit: 1 } 
+          data: { conversationId: conv.id, propertyId: property.id, pageSize: 1 } 
         });
         if (messagesResult?.messages?.length > 0) {
           messageMap[conv.id] = messagesResult.messages;
@@ -257,39 +256,18 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
     try {
       // Check for updated conversations (which includes unread counts)
       const result = await fetchApi({ 
-        action: 'getConversations', 
+        action: 'listConversations', 
         data: { propertyId: property.id } 
       });
       
       if (result?.conversations) {
-        let updatedConversations = result.conversations;
-        // Enrich updated conversations with reservationNumber
-        try {
-          updatedConversations = await Promise.all((updatedConversations || []).map(async (c: any) => {
-                try {
-                  if (c.reservationId) {
-                    const info = await getReservationInfo(c.reservationId);
-                    return { ...c, reservationNumber: info.reservationNumber || c.reservationNumber, reservationStatus: info.reservationStatus || c.reservationStatus };
-                  }
-                } catch (err) {
-                  console.warn('Failed to enrich conversation reservation', c.id, err);
-                }
-            return { ...c };
-          }));
-        } catch (err) {
-          console.warn('Failed to enrich updated conversations', err);
-        }
+        const updatedConversations = result.conversations;
         
-        // Merge updatedConversations with current state to avoid overwriting live reservationStatus
+        // Merge updatedConversations with current state
         setConversations(prev => {
           const merged = (updatedConversations || []).map((uc: any) => {
             const existing = prev.find(p => p.id === uc.id) || {};
-            return {
-              ...existing,
-              ...uc,
-              reservationNumber: uc.reservationNumber || existing.reservationNumber,
-              reservationStatus: uc.reservationStatus || existing.reservationStatus,
-            };
+            return { ...existing, ...uc };
           });
           const sorted = sortConversationsByRecent(merged);
           const hasChanges = JSON.stringify(prev) !== JSON.stringify(sorted);
@@ -304,117 +282,111 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
         if (selectedConversation) {
           const updatedConv = updatedConversations.find((c: any) => c.id === selectedConversation.id);
           if (updatedConv) {
-            // Check if there might be new messages by comparing timestamps or counts
-            const shouldRefreshMessages = true; // Always refresh for now to ensure real-time updates
+            const messagesResult = await fetchApi({ 
+              action: 'getMessages', 
+              data: { conversationId: selectedConversation.id, propertyId: property.id } 
+            });
             
-            if (shouldRefreshMessages) {
-              const messagesResult = await fetchApi({ 
-                action: 'getMessages', 
-                data: { conversationId: selectedConversation.id, propertyId: property.id } 
-              });
+            if (messagesResult?.messages) {
+              const newMessages = sortMessages(messagesResult.messages);
               
-              if (messagesResult?.messages) {
-                const newMessages = sortMessages(messagesResult.messages);
-                
-                // Check current scroll position before updating messages
-                let currentIsAtBottom = isAtBottom;
-                if (scrollAreaRef.current) {
-                  const scrollArea = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-                  if (scrollArea) {
-                    const threshold = 100;
-                    const distanceFromBottom = scrollArea.scrollHeight - scrollArea.scrollTop - scrollArea.clientHeight;
-                    currentIsAtBottom = distanceFromBottom <= threshold;
-                    console.log('🔍 Polling scroll check:', { distanceFromBottom, currentIsAtBottom, threshold });
-                  }
+              // Check current scroll position before updating messages
+              let currentIsAtBottom = isAtBottom;
+              if (scrollAreaRef.current) {
+                const scrollArea = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+                if (scrollArea) {
+                  const threshold = 100;
+                  const distanceFromBottom = scrollArea.scrollHeight - scrollArea.scrollTop - scrollArea.clientHeight;
+                  currentIsAtBottom = distanceFromBottom <= threshold;
+                  console.log('🔍 Polling scroll check:', { distanceFromBottom, currentIsAtBottom, threshold });
                 }
+              }
+              
+              setMessages(prev => {
+                // Compare arrays to detect any changes
+                const messagesChanged = JSON.stringify(prev) !== JSON.stringify(newMessages);
+                const lengthIncreased = newMessages.length > prev.length;
+                const newMessageCount = newMessages.length - prev.length;
                 
-                setMessages(prev => {
-                  // Compare arrays to detect any changes
-                  const messagesChanged = JSON.stringify(prev) !== JSON.stringify(newMessages);
-                  const lengthIncreased = newMessages.length > prev.length;
-                  const newMessageCount = newMessages.length - prev.length;
+                console.log('📱 Real message polling check:', {
+                  messagesChanged,
+                  lengthIncreased,
+                  prevLength: prev.length,
+                  newLength: newMessages.length,
+                  newMessageCount,
+                  currentIsAtBottom,
+                  isConversationJustOpened
+                });
+                
+                if (messagesChanged) {
+                  console.log('🔄 Real messages changed - updating conversation view');
                   
-                  console.log('📱 Real message polling check:', {
-                    messagesChanged,
-                    lengthIncreased,
-                    prevLength: prev.length,
-                    newLength: newMessages.length,
-                    newMessageCount,
-                    currentIsAtBottom,
-                    isConversationJustOpened
-                  });
-                  
-                  if (messagesChanged) {
-                    console.log('🔄 Real messages changed - updating conversation view');
-                    
-                    // Determine how many truly new messages arrived since lastSeen
-                    let realNewMessageCount = 0;
-                    const lastSeenId = lastSeenMessageIdRef.current;
-                    if (lengthIncreased) {
-                      // If length increased, compute difference based on lastSeenId if available
-                      if (lastSeenId) {
-                        const lastIndex = newMessages.findIndex(m => m.id === lastSeenId);
-                        if (lastIndex >= 0) {
-                          realNewMessageCount = newMessages.length - (lastIndex + 1);
-                        } else {
-                          // fallback to length diff
-                          realNewMessageCount = newMessageCount;
-                        }
+                  // Determine how many truly new messages arrived since lastSeen
+                  let realNewMessageCount = 0;
+                  const lastSeenId = lastSeenMessageIdRef.current;
+                  if (lengthIncreased) {
+                    // If length increased, compute difference based on lastSeenId if available
+                    if (lastSeenId) {
+                      const lastIndex = newMessages.findIndex(m => m.id === lastSeenId);
+                      if (lastIndex >= 0) {
+                        realNewMessageCount = newMessages.length - (lastIndex + 1);
                       } else {
+                        // fallback to length diff
                         realNewMessageCount = newMessageCount;
                       }
-                      console.log('📈 Length increased - computed new messages:', realNewMessageCount);
-                    } else if (newMessages.length === prev.length && newMessages.length > 0) {
-                      // Same length but content changed - check if the last message id changed
-                      const lastOld = prev[prev.length - 1];
-                      const lastNew = newMessages[newMessages.length - 1];
-                      if (lastOld?.id !== lastNew?.id) {
-                        realNewMessageCount = 1;
-                        console.log('🆕 Last message ID changed - treating as new message');
-                      }
+                    } else {
+                      realNewMessageCount = newMessageCount;
                     }
+                    console.log('📈 Length increased - computed new messages:', realNewMessageCount);
+                  } else if (newMessages.length === prev.length && newMessages.length > 0) {
+                    // Same length but content changed - check if the last message id changed
+                    const lastOld = prev[prev.length - 1];
+                    const lastNew = newMessages[newMessages.length - 1];
+                    if (lastOld?.id !== lastNew?.id) {
+                      realNewMessageCount = 1;
+                      console.log('🆕 Last message ID changed - treating as new message');
+                    }
+                  }
 
-                    if (realNewMessageCount > 0) {
-                      console.log('🔥 REAL NEW MESSAGES DETECTED:', realNewMessageCount);
-                      // Use the current scroll position we just checked
-                      if (!currentIsAtBottom && !isConversationJustOpened) {
-                        console.log('✅ Real messages + user scrolled up - incrementing unseen count by:', realNewMessageCount);
-                        setUnseenMessageCount(count => {
-                          const newCount = count + realNewMessageCount;
-                          console.log('📈 Real messages - Unseen count updated from', count, 'to', newCount);
-                          return newCount;
-                        });
-                      } else {
-                        console.log('⬇️ Real messages + user at bottom - not incrementing unseen count');
-                        // If user at bottom, update lastSeen to newest
-                        const lastNew = newMessages[newMessages.length - 1];
-                        if (lastNew?.id) lastSeenMessageIdRef.current = lastNew.id;
-                      }
+                  if (realNewMessageCount > 0) {
+                    console.log('🔥 REAL NEW MESSAGES DETECTED:', realNewMessageCount);
+                    // Use the current scroll position we just checked
+                    if (!currentIsAtBottom && !isConversationJustOpened) {
+                      console.log('✅ Real messages + user scrolled up - incrementing unseen count by:', realNewMessageCount);
+                      setUnseenMessageCount(count => {
+                        const newCount = count + realNewMessageCount;
+                        console.log('📈 Real messages - Unseen count updated from', count, 'to', newCount);
+                        return newCount;
+                      });
+                    } else {
+                      console.log('⬇️ Real messages + user at bottom - not incrementing unseen count');
+                      // If user at bottom, update lastSeen to newest
+                      const lastNew = newMessages[newMessages.length - 1];
+                      if (lastNew?.id) lastSeenMessageIdRef.current = lastNew.id;
                     }
-                    
-                    return newMessages;
                   }
                   
-                  return prev;
-                });
-              }
+                  return newMessages;
+                }
+                
+                return prev;
+              });
             }
           }
         }
         
-        // Also update conversation-specific messages for previews (fetch latest message for each updated conversation)
+        // Also update conversation-specific messages for previews
         const messageMap: {[key: string]: any[]} = {};
         for (const conv of updatedConversations) {
           try {
             const messagesResult = await fetchApi({ 
               action: 'getMessages', 
-              data: { conversationId: conv.id, propertyId: property.id, limit: 1 } 
+              data: { conversationId: conv.id, propertyId: property.id, pageSize: 1 } 
             });
             if (messagesResult?.messages?.length > 0) {
               messageMap[conv.id] = messagesResult.messages;
             }
           } catch (error) {
-            // Silently continue if individual conversation fails
             console.warn(`Failed to load messages for conversation ${conv.id}:`, error);
           }
         }
@@ -425,8 +397,6 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
         });
       }
     } catch (error) {
-      // Silently handle errors to avoid spamming console
-      // Only log if it's not a "Request failed" error (which might be expected)
       if (error instanceof Error && !error.message.includes('Request failed')) {
         console.warn('Failed to check for new messages:', error);
       }
@@ -455,12 +425,13 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
     setUnseenMessageCount(0);
     
     // Mark conversation as read if it has unread messages
-    if (conversation.unreadCount > 0) {
+    const unreadCount = (conversation as any).unread_count || (conversation as any).unreadCount;
+    if (unreadCount > 0) {
       // Update local state immediately for better UX
       setConversations(prev => 
         prev.map(c => 
           c.id === conversation.id 
-            ? { ...c, unreadCount: 0 }
+            ? { ...c, unread_count: 0, unreadCount: 0 }
             : c
         )
       );
@@ -529,23 +500,27 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
     let convId = selectedConversation.id;
     if (typeof convId === 'string' && convId.startsWith('local-')) {
       try {
-        const res = await fetchApi({ action: 'startConversation', data: { propertyId: property?.id, reservationId: selectedConversation.reservationId, source: 'communication' } });
+        const res = await fetchApi({ 
+          action: 'startConversation', 
+          data: { 
+            propertyId: property?.id, 
+            reservationId: (selectedConversation as any).reservation_id || (selectedConversation as any).reservationId,
+            initialMessage: `Starting conversation for ${(selectedConversation as any).guest_name || 'Guest'}`
+          } 
+        });
         const conv = res?.conversation;
         if (conv) {
-          // enrich and replace local conversation in state
-          const info = await getReservationInfo(selectedConversation.reservationId);
-          const final = { ...conv, reservationNumber: info.reservationNumber || selectedConversation.reservationNumber, reservationStatus: info.reservationStatus || selectedConversation.reservationStatus };
-          setConversations(prev => [final, ...prev.filter(p => p.id !== final.id && p.id !== selectedConversation.id)]);
-          setSelectedConversation(final);
-          convId = final.id;
+          // Replace local conversation in state with server conversation
+          setConversations(prev => [conv, ...prev.filter(p => p.id !== conv.id && p.id !== selectedConversation.id)]);
+          setSelectedConversation(conv);
+          convId = conv.id;
         } else {
           // couldn't create on server - add a local pending message and bail
           const pending = {
             id: `local-msg-${Date.now()}`,
             message: newMessage.trim(),
-            senderType: 'property',
-            timestamp: new Date(),
-            timestampMs: Date.now(),
+            sender_type: 'property',
+            created_at: new Date().toISOString(),
             pending: true
           } as any;
           setMessages(m => sortMessages([...m, pending]));
@@ -562,7 +537,14 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
 
     // Now send message if we have a server conversation id
     if (convId && !String(convId).startsWith('local-')) {
-      const result = await fetchApi({ action: 'sendMessage', data: { conversationId: convId, message: newMessage.trim(), propertyId: property?.id } });
+      const result = await fetchApi({ 
+        action: 'sendMessage', 
+        data: { 
+          conversationId: convId, 
+          message: newMessage.trim(), 
+          propertyId: property?.id 
+        } 
+      });
       if (result?.message) {
         setMessages((m) => sortMessages([...m, result.message]));
         setNewMessage('');
@@ -636,49 +618,12 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
     return str.replace(/[_\s]+/g, '-');
   };
 
-  // Cache for reservation info (number + status) to avoid repeated Firestore reads
-  const reservationCacheRef = useRef<Map<string, { reservationNumber: string | null; reservationStatus: string | null }>>(new Map());
-
-  const getReservationInfo = async (reservationId?: string) => {
-    if (!reservationId) return { reservationNumber: null, reservationStatus: null };
-    const cache = reservationCacheRef.current;
-    if (cache.has(reservationId)) return cache.get(reservationId) || { reservationNumber: null, reservationStatus: null };
-    try {
-      const rDoc = await getDoc(firestoreDoc(db, 'reservations', reservationId));
-      if (rDoc.exists()) {
-        const data: any = rDoc.data();
-        const num = data?.reservationNumber || data?.reservationId || reservationId;
-        const status = data?.status || data?.reservationStatus || null;
-        const info = { reservationNumber: num, reservationStatus: status };
-        cache.set(reservationId, info);
-        return info;
-      }
-    } catch (err) {
-      console.warn('Failed to fetch reservation', reservationId, err);
-    }
-    const empty = { reservationNumber: null, reservationStatus: null };
-    cache.set(reservationId, empty);
-    return empty;
-  };
-
-  const fetchRecentReservations = useCallback(async () => {
-    if (!property) return;
-    try {
-      const c = collection(db, 'reservations');
-      const q = firestoreQuery(c, where('propertyId', '==', property.id), orderBy('createdAt', 'desc'), firestoreLimit(10));
-      const snap = await getDocs(q);
-      const items: any[] = [];
-      snap.forEach(d => items.push({ id: d.id, ...d.data() }));
-      setRecentReservations(items);
-    } catch (err) {
-      console.warn('Failed to fetch recent reservations', err);
-      setRecentReservations([]);
-    }
-  }, [property]);
-
   useEffect(() => {
-    if (isNewModalOpen) fetchRecentReservations();
-  }, [isNewModalOpen, fetchRecentReservations]);
+    if (isNewModalOpen) {
+      // For now, recentReservations is not fetched via Supabase
+      // This functionality can be added later if needed
+    }
+  }, [isNewModalOpen]);
 
   useEffect(() => {
     setConversationPage(1);
@@ -693,65 +638,75 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
 
   const handleStartConversation = async (reservation: any) => {
     if (!property) return;
+    
     // If a conversation already exists for this reservation, open it instead
-    const existingConv = conversations.find(c => c.reservationId === reservation.id || (reservation.reservationNumber && c.reservationNumber === reservation.reservationNumber));
+    const existingConv = conversations.find(c => c.reservation_id === reservation.id);
     if (existingConv) {
       setSelectedConversation(existingConv);
       setIsNewModalOpen(false);
-      // Load messages for existing conversation if it has a server id
-      try { if (existingConv.id) await loadMessages(existingConv.id); } catch (err) { /* ignore */ }
+      try { 
+        if (existingConv.id) await loadMessages(existingConv.id); 
+      } catch (err) { 
+        /* ignore */ 
+      }
       return;
     }
 
     try {
-      // Attempt to start conversation on server; include source so backend knows origin
-      const res = await fetchApi({ action: 'startConversation', data: { propertyId: property.id, reservationId: reservation.id, source: 'communication' } });
+      // Attempt to start conversation on server
+      const res = await fetchApi({ 
+        action: 'startConversation', 
+        data: { 
+          propertyId: property.id, 
+          reservationId: reservation.id, 
+          initialMessage: `Started conversation for ${reservation.guestFullName || reservation.guestName || 'Guest'}`
+        } 
+      });
+      
       const conv = res?.conversation;
       if (conv) {
         // If server returned a conversation that matches an existing local one, open the local one
-        const already = conversations.find(c => c.id === conv.id || c.reservationId === conv.reservationId || (conv.reservationNumber && c.reservationNumber === conv.reservationNumber));
+        const already = conversations.find(c => c.id === conv.id || c.reservation_id === conv.reservation_id);
         if (already) {
           setSelectedConversation(already);
           setIsNewModalOpen(false);
-          try { if (already.id) await loadMessages(already.id); } catch (err) { /* ignore */ }
+          try { 
+            if (already.id) await loadMessages(already.id); 
+          } catch (err) { 
+            /* ignore */ 
+          }
           return;
         }
-        // enrich with known reservation info
-        const info = await getReservationInfo(reservation.id);
-        const final = { ...conv, reservationNumber: info.reservationNumber || reservation.reservationNumber, reservationStatus: info.reservationStatus || reservation.status || reservation.reservationStatus };
-        setConversations(prev => [final, ...prev.filter(p => p.id !== final.id)]);
-        setSelectedConversation(final);
+        
+        // Add new conversation to state
+        setConversations(prev => [conv, ...prev.filter(p => p.id !== conv.id)]);
+        setSelectedConversation(conv);
         setIsNewModalOpen(false);
         // load messages for new conversation
-        if (final.id) loadMessages(final.id);
+        if (conv.id) loadMessages(conv.id);
         return;
       }
     } catch (err) {
-      console.warn('Failed to create conversation via API, falling back to local open', err);
+      console.warn('Failed to create conversation via API', err);
+      toast({ title: 'Error', description: 'Could not start conversation', variant: 'destructive' });
     }
-
-    // Fallback: open a local conversation object (server may create later)
-    const localConv = {
-      id: `local-${reservation.id}`,
-      guestName: reservation.guestFullName || reservation.guestName || `${reservation.guestFirstName || ''} ${reservation.guestLastName || ''}`.trim() || 'Guest',
-      reservationId: reservation.id,
-      reservationNumber: reservation.reservationNumber || null,
-      reservationStatus: reservation.status || reservation.reservationStatus || null,
-      roomName: reservation.roomNumber || reservation.roomName || '',
-      roomType: reservation.roomType || '',
-      unreadCount: 0,
-    };
-    setConversations(prev => [localConv, ...prev.filter(p => p.id !== localConv.id)]);
-    setSelectedConversation(localConv);
-    setIsNewModalOpen(false);
   };
 
   const handleTogglePinned = async (conv: any) => {
     try {
-      const desired = !conv.pinned;
-      const res = await fetchApi({ action: 'setPinned', data: { conversationId: conv.id, propertyId: property?.id, pinned: desired } });
+      const desired = !(conv.is_pinned || conv.pinned);
+      const res = await fetchApi({ 
+        action: 'setPinned', 
+        data: { 
+          conversationId: conv.id, 
+          propertyId: property?.id, 
+          pinned: desired 
+        } 
+      });
       if (res && res.success !== false) {
-        setConversations(prev => sortConversationsByRecent(prev.map(c => c.id === conv.id ? { ...c, pinned: desired } : c)));
+        setConversations(prev => sortConversationsByRecent(
+          prev.map(c => c.id === conv.id ? { ...c, is_pinned: desired, pinned: desired } : c)
+        ));
       } else {
         toast({ title: 'Failed to update pin', variant: 'destructive' });
       }
@@ -765,7 +720,13 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
       if (!property?.id) return;
       const confirmed = window.confirm('Delete this conversation? This will archive it.');
       if (!confirmed) return;
-      const res = await fetchApi({ action: 'deleteConversation', data: { conversationId: conv.id, propertyId: property.id } });
+      const res = await fetchApi({ 
+        action: 'deleteConversation', 
+        data: { 
+          conversationId: conv.id, 
+          propertyId: property.id 
+        } 
+      });
       if (res && res.success !== false) {
         setConversations(prev => prev.filter(c => c.id !== conv.id));
         if (selectedConversation?.id === conv.id) setSelectedConversation(null);
@@ -777,40 +738,7 @@ export default function GuestPortalChatView({ statusFilter = 'all' }: { statusFi
     }
   };
 
-  // Real-time listeners for reservation docs referenced by conversations
-  useEffect(() => {
-    // Build a unique list of reservationIds currently present in conversations
-    const ids = Array.from(new Set(conversations.map(c => c.reservationId).filter(Boolean)));
-    if (ids.length === 0) return;
-
-    const unsubscribes: Array<() => void> = [];
-
-        ids.forEach((id) => {
-      try {
-        const ref = firestoreDoc(db, 'reservations', id as string);
-        const unsub = onSnapshot(ref, (snap) => {
-          if (!snap.exists()) return;
-          const data: any = snap.data();
-          const num = data?.reservationNumber || data?.reservationId || id;
-          const status = data?.status || data?.reservationStatus || null;
-
-          // update cache with both number and status
-          reservationCacheRef.current.set(id as string, { reservationNumber: num, reservationStatus: status });
-
-          // update conversations in state to reflect latest reservation info
-          setConversations(prev => prev.map(c => c.reservationId === id ? { ...c, reservationNumber: num, reservationStatus: status || c.reservationStatus } : c));
-        }, (err) => {
-          console.warn('Reservation listener error', id, err);
-        });
-
-        unsubscribes.push(unsub);
-      } catch (err) {
-        console.warn('Failed to subscribe to reservation', id, err);
-      }
-    });
-
-    return () => unsubscribes.forEach(u => u());
-  }, [JSON.stringify(conversations.map(c => c.reservationId).filter(Boolean).sort())]);
+  // Supabase stores reservation info directly in conversations, so no need for real-time listeners
 
   // Ensure lists don't contain duplicate items with the same id (defensive)
   const uniqueConversations = conversations.filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i);

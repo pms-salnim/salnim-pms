@@ -5,8 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Icons } from '@/components/icons';
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, Timestamp, deleteDoc } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -63,6 +61,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { createClient } from '@/utils/supabase/client';
 
 // Review interface
 interface Review {
@@ -87,11 +86,11 @@ interface Review {
   responses?: Array<{
     text: string;
     respondedBy: string;
-    respondedAt: Date | Timestamp;
+    respondedAt: string | Date;
   }>;
-  submittedAt: string | Date | Timestamp;
-  createdAt: Date | Timestamp;
-  updatedAt: Date | Timestamp;
+  submittedAt: string | Date;
+  createdAt: string | Date;
+  updatedAt: string | Date;
   externalId?: string; // For reviews from external platforms
   externalUrl?: string; // Link to review on external platform
 }
@@ -99,6 +98,43 @@ interface Review {
 type ReviewSource = 'all' | 'guest_portal' | 'google' | 'booking' | 'airbnb' | 'expedia' | 'other';
 type ReviewStatus = 'all' | 'pending' | 'approved' | 'rejected' | 'responded';
 type DateRange = '7days' | '30days' | 'thisMonth' | 'allTime';
+
+const toDate = (value: string | Date | null | undefined): Date => {
+  if (!value) return new Date(0);
+  if (value instanceof Date) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date(0) : date;
+};
+
+const normalizeReviewRow = (row: any): Review => {
+  const responses = Array.isArray(row.responses)
+    ? row.responses.map((response: any) => ({
+        text: String(response?.text || ''),
+        respondedBy: String(response?.respondedBy || response?.responded_by || 'Unknown'),
+        respondedAt: response?.respondedAt || response?.responded_at || new Date().toISOString(),
+      }))
+    : [];
+
+  return {
+    id: String(row.id),
+    propertyId: String(row.property_id || row.propertyId || ''),
+    source: (row.source || 'other') as Review['source'],
+    guestName: String(row.guest_name || row.guestName || 'Anonymous'),
+    guestEmail: row.guest_email || row.guestEmail || undefined,
+    reservationId: row.reservation_id || row.reservationId || undefined,
+    reservationNumber: row.reservation_number || row.reservationNumber || undefined,
+    ratings: row.ratings || { overall: 0 },
+    reviewText: String(row.review_text || row.reviewText || ''),
+    status: (row.status || 'pending') as Review['status'],
+    isPublic: Boolean(row.is_public ?? row.isPublic ?? false),
+    responses,
+    submittedAt: row.submitted_at || row.submittedAt || row.created_at || row.createdAt || new Date().toISOString(),
+    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+    updatedAt: row.updated_at || row.updatedAt || row.created_at || row.createdAt || new Date().toISOString(),
+    externalId: row.external_id || row.externalId || undefined,
+    externalUrl: row.external_url || row.externalUrl || undefined,
+  };
+};
 
 export default function ReputationManagementPage() {
   const { user, isLoadingAuth } = useAuth();
@@ -123,8 +159,7 @@ export default function ReputationManagementPage() {
   // Check permissions
   const canManageReviews = user?.permissions?.guests || false;
 
-  // Fetch reviews from Firestore
-  useEffect(() => {
+  const loadReviews = useCallback(async () => {
     if (!user?.propertyId) {
       setReviews([]);
       setIsLoading(false);
@@ -132,43 +167,36 @@ export default function ReputationManagementPage() {
     }
 
     setIsLoading(true);
-    const reviewsRef = collection(db, 'reviews');
-    const q = query(
-      reviewsRef,
-      where('propertyId', '==', user.propertyId),
-      orderBy('createdAt', 'desc'),
-      limit(500)
-    );
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedReviews = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            submittedAt: data.submittedAt,
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-          } as Review;
-        });
-        setReviews(fetchedReviews);
-        setIsLoading(false);
-      },
-      (error) => {
-        console.error('Error fetching reviews:', error);
-        toast({ 
-          title: 'Error', 
-          description: 'Failed to load reviews', 
-          variant: 'destructive' 
-        });
-        setIsLoading(false);
-      }
-    );
+      if (error) throw error;
 
-    return () => unsubscribe();
+      const fetchedReviews = (data || [])
+        .map(normalizeReviewRow)
+        .filter((review) => review.propertyId === user.propertyId);
+
+      setReviews(fetchedReviews);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load reviews',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }, [user?.propertyId]);
+
+  useEffect(() => {
+    loadReviews();
+  }, [loadReviews]);
 
   // Filter reviews
   const filteredReviews = useMemo(() => {
@@ -205,9 +233,7 @@ export default function ReputationManagementPage() {
 
     if (startDate) {
       filtered = filtered.filter(r => {
-        const reviewDate = r.createdAt instanceof Timestamp 
-          ? r.createdAt.toDate() 
-          : new Date(r.createdAt);
+        const reviewDate = toDate(r.createdAt);
         return reviewDate >= startDate!;
       });
     }
@@ -281,10 +307,18 @@ export default function ReputationManagementPage() {
     }
 
     try {
-      await updateDoc(doc(db, 'reviews', reviewId), {
-        status: newStatus,
-        updatedAt: Timestamp.now(),
-      });
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('reviews')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', reviewId);
+
+      if (error) throw error;
+
+      await loadReviews();
       toast({ title: 'Success', description: 'Review status updated' });
     } catch (error) {
       console.error('Error updating review status:', error);
@@ -300,14 +334,22 @@ export default function ReputationManagementPage() {
       const newResponse = {
         text: responseText.trim(),
         respondedBy: user?.id || 'Unknown',
-        respondedAt: Timestamp.now(),
+        respondedAt: new Date().toISOString(),
       };
 
-      await updateDoc(doc(db, 'reviews', selectedReview.id), {
-        responses: [...(selectedReview.responses || []), newResponse],
-        status: 'responded',
-        updatedAt: Timestamp.now(),
-      });
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('reviews')
+        .update({
+          responses: [...(selectedReview.responses || []), newResponse],
+          status: 'responded',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedReview.id);
+
+      if (error) throw error;
+
+      await loadReviews();
       
       toast({ title: 'Success', description: 'Response submitted successfully' });
       setIsRespondModalOpen(false);
@@ -344,10 +386,15 @@ export default function ReputationManagementPage() {
 
     setIsDeletingBulk(true);
     try {
-      const deletePromises = Array.from(selectedReviews).map(reviewId =>
-        deleteDoc(doc(db, 'reviews', reviewId))
-      );
-      await Promise.all(deletePromises);
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('reviews')
+        .delete()
+        .in('id', Array.from(selectedReviews));
+
+      if (error) throw error;
+
+      await loadReviews();
       
       toast({ 
         title: 'Success', 

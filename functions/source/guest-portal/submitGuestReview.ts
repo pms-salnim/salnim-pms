@@ -1,7 +1,6 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import * as logger from 'firebase-functions/logger';
-import { db } from '../firebase';
-import { FieldValue } from 'firebase-admin/firestore';
+import { createClient } from '@supabase/supabase-js';
 
 const allowedOrigins = ['https://app.salnimpms.com', 'http://localhost:3000'];
 
@@ -9,6 +8,15 @@ const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  throw new Error('Missing Supabase configuration for guest review submissions');
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 export const submitGuestReview = onRequest(
   { 
@@ -73,38 +81,52 @@ export const submitGuestReview = onRequest(
       logger.info(`Review submission from IP: ${clientIp}`);
 
       // Verify property exists
-      const propertyDoc = await db.collection('properties').doc(propertyId).get();
-      if (!propertyDoc.exists) {
+      const { data: property, error: propertyError } = await supabase
+        .from('properties')
+        .select('id')
+        .eq('id', propertyId)
+        .single();
+
+      if (propertyError || !property) {
         res.status(404).json({ success: false, error: 'Property not found' });
         return;
       }
 
-      // Create review document
+      // Create review record
       const reviewData = {
-        propertyId,
-        source: 'guest_portal', // Source of the review
-        reservationId: reservationId || null,
-        reservationNumber: reservationNumber || null,
-        guestName: guestName || 'Anonymous',
-        guestEmail: guestEmail || null,
+        property_id: propertyId,
+        source: 'guest_portal',
+        reservation_id: reservationId || null,
+        reservation_number: reservationNumber || null,
+        guest_name: guestName || 'Anonymous',
+        guest_email: guestEmail || null,
         ratings: {
           overall: ratings.overall || 0,
           cleanliness: ratings.cleanliness || 0,
           service: ratings.service || 0,
           amenities: ratings.amenities || 0,
         },
-        reviewText: reviewText.trim(),
-        status: 'pending', // Can be 'pending', 'approved', 'rejected', 'responded'
-        isPublic: false, // Will be set to true after staff approval
-        submittedAt: submittedAt || new Date().toISOString(),
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
+        review_text: reviewText.trim(),
+        status: 'pending',
+        is_public: false,
+        responses: [],
+        submitted_at: submittedAt || new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
-      // Save review to Firestore
-      const reviewRef = await db.collection('reviews').add(reviewData);
+      // Save review to Supabase
+      const { data: insertedReview, error: reviewError } = await supabase
+        .from('reviews')
+        .insert(reviewData)
+        .select('id')
+        .single();
 
-      logger.info(`Guest review submitted: ${reviewRef.id} for property ${propertyId}`);
+      if (reviewError || !insertedReview) {
+        throw reviewError || new Error('Failed to create review');
+      }
+
+      logger.info(`Guest review submitted: ${insertedReview.id} for property ${propertyId}`);
 
       // Optionally: Send notification to property staff
       // This could be done via email or push notification
@@ -113,7 +135,7 @@ export const submitGuestReview = onRequest(
       res.status(200).json({ 
         success: true, 
         message: 'Review submitted successfully',
-        reviewId: reviewRef.id,
+        reviewId: insertedReview.id,
       });
 
     } catch (error: any) {

@@ -6,6 +6,8 @@
  *   - update      : update dates / room / pricing (drag-drop / resize)
  *   - checkIn     : mark reservation as Checked-in
  *   - checkOut    : mark reservation as Completed, set room Dirty, create housekeeping task
+ *   - delete      : permanently remove a reservation
+ *   - updateStatus: update reservation status in bulk flows
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -52,6 +54,138 @@ async function generateReservationNumber(): Promise<string> {
   }
 
   return String(Date.now()).slice(-9);
+}
+
+function splitGuestName(fullName?: string): { firstName: string; lastName: string } {
+  const trimmed = String(fullName || '').trim();
+  if (!trimmed) {
+    return { firstName: 'Guest', lastName: 'Unknown' };
+  }
+
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: '.' };
+  }
+
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+async function ensureGuestProfileForReservation(params: {
+  propertyId: string;
+  explicitGuestId?: string | null;
+  guestName?: string;
+  guestEmail?: string | null;
+  guestPhone?: string | null;
+  guestCountry?: string | null;
+  guestPassportOrId?: string | null;
+}): Promise<string | null> {
+  const {
+    propertyId,
+    explicitGuestId,
+    guestName,
+    guestEmail,
+    guestPhone,
+    guestCountry,
+    guestPassportOrId,
+  } = params;
+
+  if (explicitGuestId) {
+    return explicitGuestId;
+  }
+
+  const normalizedEmail = typeof guestEmail === 'string' ? guestEmail.trim().toLowerCase() : '';
+  const normalizedPhone = typeof guestPhone === 'string' ? guestPhone.trim() : '';
+
+  if (!normalizedEmail && !normalizedPhone) {
+    return null;
+  }
+
+  let existingGuest: any = null;
+
+  if (normalizedEmail) {
+    const { data } = await supabaseAdmin
+      .from('guests')
+      .select('*')
+      .eq('property_id', propertyId)
+      .ilike('email', normalizedEmail)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      existingGuest = data;
+    }
+  }
+
+  if (!existingGuest && normalizedPhone) {
+    const { data } = await supabaseAdmin
+      .from('guests')
+      .select('*')
+      .eq('property_id', propertyId)
+      .eq('phone', normalizedPhone)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      existingGuest = data;
+    }
+  }
+
+  const { firstName, lastName } = splitGuestName(guestName);
+
+  if (existingGuest?.id) {
+    const patch: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (!existingGuest.first_name && firstName) patch.first_name = firstName;
+    if (!existingGuest.last_name && lastName) patch.last_name = lastName;
+    if (!existingGuest.email && normalizedEmail) patch.email = normalizedEmail;
+    if (!existingGuest.phone && normalizedPhone) patch.phone = normalizedPhone;
+    if (!existingGuest.country && guestCountry) patch.country = guestCountry;
+    if (!existingGuest.id_number && guestPassportOrId) patch.id_number = guestPassportOrId;
+
+    if (Object.keys(patch).length > 1) {
+      await supabaseAdmin
+        .from('guests')
+        .update(patch)
+        .eq('id', existingGuest.id)
+        .eq('property_id', propertyId);
+    }
+
+    return existingGuest.id;
+  }
+
+  const newGuestId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const { data: createdGuest, error: createGuestError } = await supabaseAdmin
+    .from('guests')
+    .insert({
+      id: newGuestId,
+      property_id: propertyId,
+      first_name: firstName,
+      last_name: lastName,
+      email: normalizedEmail || null,
+      phone: normalizedPhone || null,
+      country: guestCountry || null,
+      id_number: guestPassportOrId || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+
+  if (createGuestError) {
+    throw createGuestError;
+  }
+
+  return createdGuest?.id || null;
 }
 
 function isMissingColumnError(error: any, columnName: string): boolean {
@@ -290,6 +424,43 @@ export async function POST(request: NextRequest) {
     await verifyUserProperty(user.id, propertyId);
 
     // ----------------------------------------------------------------
+    // ACTION: inboxQuickUpdate
+    // Lightweight reservation update from inbox side panel.
+    // ----------------------------------------------------------------
+    if (action === 'inboxQuickUpdate') {
+      const { status, notes } = body;
+
+      const patch: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (typeof status === 'string' && status.trim()) {
+        patch.status = status.trim();
+      }
+
+      if (typeof notes === 'string') {
+        patch.notes = notes;
+      }
+
+      if (Object.keys(patch).length === 1) {
+        return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+      }
+
+      const { error } = await supabaseAdmin
+        .from('reservations')
+        .update(patch)
+        .eq('id', reservationId)
+        .eq('property_id', propertyId);
+
+      if (error) {
+        console.error('[reservations/crud] inboxQuickUpdate error:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // ----------------------------------------------------------------
     // ACTION: create (reservation form)
     // ----------------------------------------------------------------
     if (action === 'create') {
@@ -373,10 +544,28 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      let linkedGuestId: string | null = null;
+      try {
+        linkedGuestId = await ensureGuestProfileForReservation({
+          propertyId,
+          explicitGuestId: guestId || null,
+          guestName,
+          guestEmail: guestEmail || null,
+          guestPhone: guestPhone || null,
+          guestCountry: guestCountry || null,
+          guestPassportOrId: guestPassportOrId || null,
+        });
+      } catch (guestError: any) {
+        return NextResponse.json(
+          { error: guestError?.message || 'Failed to create or link guest profile.' },
+          { status: 500 }
+        );
+      }
+
       const insertPayload: any = {
         id: body.id || `res_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         property_id: propertyId,
-        guest_id: guestId || null,
+        guest_id: linkedGuestId,
         guest_name: guestName,
         guest_email: guestEmail || null,
         guest_phone: guestPhone || null,
@@ -445,8 +634,26 @@ export async function POST(request: NextRequest) {
         promotionApplied,
       } = body;
 
+      let linkedGuestId: string | null = null;
+      try {
+        linkedGuestId = await ensureGuestProfileForReservation({
+          propertyId,
+          explicitGuestId: guestId || null,
+          guestName,
+          guestEmail: guestEmail || null,
+          guestPhone: guestPhone || null,
+          guestCountry: guestCountry || null,
+          guestPassportOrId: guestPassportOrId || null,
+        });
+      } catch (guestError: any) {
+        return NextResponse.json(
+          { error: guestError?.message || 'Failed to create or link guest profile.' },
+          { status: 500 }
+        );
+      }
+
       const updatePayload: any = {
-        guest_id: guestId || null,
+        guest_id: linkedGuestId,
         guest_name: guestName || null,
         guest_email: guestEmail || null,
         guest_phone: guestPhone || null,
@@ -521,6 +728,51 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error('[reservations/crud] update error:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // ----------------------------------------------------------------
+    // ACTION: delete
+    // ----------------------------------------------------------------
+    if (action === 'delete') {
+      const { error } = await supabaseAdmin
+        .from('reservations')
+        .delete()
+        .eq('id', reservationId)
+        .eq('property_id', propertyId);
+
+      if (error) {
+        console.error('[reservations/crud] delete error:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // ----------------------------------------------------------------
+    // ACTION: updateStatus
+    // ----------------------------------------------------------------
+    if (action === 'updateStatus') {
+      const { status } = body;
+
+      if (!status) {
+        return NextResponse.json({ error: 'status is required' }, { status: 400 });
+      }
+
+      const { error } = await supabaseAdmin
+        .from('reservations')
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', reservationId)
+        .eq('property_id', propertyId);
+
+      if (error) {
+        console.error('[reservations/crud] updateStatus error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 

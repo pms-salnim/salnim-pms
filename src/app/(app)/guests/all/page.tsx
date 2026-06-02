@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/icons";
@@ -14,6 +14,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -24,10 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
-import type { FirestoreUser } from '@/types/firestoreUser';
 import type { Guest } from '@/types/guest';
 import { getLoyaltyTier } from '@/types/loyalty';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -47,6 +51,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from 'date-fns';
+import { createClient } from '@/utils/supabase/client';
 
 const GuestForm = dynamic(() => import('@/components/guests/guest-form'), {
   loading: () => <div className="h-48 flex items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
@@ -59,12 +64,23 @@ const GuestProfile = dynamic(() => import('@/components/guests/guest-profile'), 
 
 type GuestTypeFilter = 'all' | 'repeat' | 'onetime' | 'vip';
 
+const normalizeEmail = (value?: string | null): string => String(value || '').trim().toLowerCase();
+const normalizePhone = (value?: string | null): string => String(value || '').replace(/\D/g, '');
+
+const isReservationCancelledStatus = (status?: string | null): boolean => {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  return normalizedStatus === 'canceled'
+    || normalizedStatus === 'cancelled'
+    || normalizedStatus === 'no-show'
+    || normalizedStatus === 'noshow';
+};
+
 export default function AllGuestsPage() {
   const { user, isLoadingAuth, property } = useAuth();
   const [guests, setGuests] = useState<Guest[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoadingGuests, setIsLoadingGuests] = useState(true);
-  const [currentUserPropertyId, setCurrentUserPropertyId] = useState<string | null>(null);
+  const [currentUserPropertyId, setCurrentUserPropertyId] = useState<string | null>(property?.id || user?.propertyId || null);
 
   const [isAddGuestModalOpen, setIsAddGuestModalOpen] = useState(false);
   const [isEditGuestModalOpen, setIsEditGuestModalOpen] = useState(false);
@@ -81,19 +97,162 @@ export default function AllGuestsPage() {
 
   const canManage = user?.permissions?.guests;
 
-  // Load property ID
-  useEffect(() => {
-    if (user?.id) {
-      const staffDocRef = doc(db, "staff", user.id);
-      const unsub = onSnapshot(staffDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const staffData = docSnap.data() as FirestoreUser;
-          setCurrentUserPropertyId(staffData.propertyId);
-        }
-      });
-      return () => unsub();
+  const getAuthHeaders = useCallback(async () => {
+    const supabase = createClient();
+    let sessionData: Awaited<ReturnType<typeof supabase.auth.getSession>>['data'] | null = null;
+
+    for (let attempts = 0; attempts < 3; attempts++) {
+      const result = await supabase.auth.getSession();
+      if (result.data?.session) {
+        sessionData = result.data;
+        break;
+      }
+      if (attempts < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
     }
-  }, [user?.id]);
+
+    if (!sessionData?.session) return null;
+
+    return {
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+      'Content-Type': 'application/json',
+    };
+  }, []);
+
+  const normalizeGuest = useCallback((guestRow: any): Guest => ({
+    id: guestRow.id,
+    propertyId: guestRow.property_id ?? guestRow.propertyId,
+    fullName: guestRow.full_name ?? guestRow.fullName ?? [guestRow.first_name ?? guestRow.firstName, guestRow.last_name ?? guestRow.lastName].filter(Boolean).join(' ').trim(),
+    firstName: guestRow.first_name ?? guestRow.firstName,
+    lastName: guestRow.last_name ?? guestRow.lastName,
+    email: guestRow.email ?? '',
+    phone: guestRow.phone ?? '',
+    nationality: guestRow.nationality ?? guestRow.country ?? '',
+    country: guestRow.country ?? guestRow.nationality ?? '',
+    passportOrId: guestRow.passport_id ?? guestRow.passport_or_id ?? guestRow.passportOrId,
+    lastStayDate: guestRow.last_stay_date ?? guestRow.lastStayDate,
+    totalNights: guestRow.total_nights ?? guestRow.totalNights,
+    totalSpent: guestRow.total_spent ?? guestRow.totalSpent,
+    tags: guestRow.tags ?? [],
+    createdAt: guestRow.created_at ?? guestRow.createdAt,
+    updatedAt: guestRow.updated_at ?? guestRow.updatedAt,
+    loyaltyStatus: guestRow.loyalty_status ?? guestRow.loyaltyStatus ?? 'not-enrolled',
+    loyaltyPoints: guestRow.loyalty_points ?? guestRow.loyaltyPoints,
+    spendForNextPoint: guestRow.spend_for_next_point ?? guestRow.spendForNextPoint,
+    totalPointsEarned: guestRow.total_points_earned ?? guestRow.totalPointsEarned,
+    totalPointsRedeemed: guestRow.total_points_redeemed ?? guestRow.totalPointsRedeemed,
+    gender: guestRow.gender,
+    birthdate: guestRow.birthdate,
+    address: guestRow.address,
+    internalNotes: guestRow.notes ?? guestRow.internal_notes ?? guestRow.internalNotes,
+    roomPreferences: guestRow.room_preferences ?? guestRow.roomPreferences,
+    dietaryRestrictions: guestRow.dietary_restrictions ?? guestRow.dietaryRestrictions,
+    specialOccasion: guestRow.special_occasion ?? guestRow.specialOccasion,
+    communicationPreference: guestRow.communication_preference ?? guestRow.communicationPreference,
+  } as Guest), []);
+
+  const normalizeReservation = useCallback((reservationRow: any): Reservation => ({
+    id: reservationRow.id,
+    propertyId: reservationRow.propertyId ?? reservationRow.property_id,
+    guestId: reservationRow.guestId ?? reservationRow.guest_id ?? null,
+    guestName: reservationRow.guestName ?? reservationRow.guest_name,
+    guestEmail: reservationRow.guestEmail ?? reservationRow.guest_email,
+    guestPhone: reservationRow.guestPhone ?? reservationRow.guest_phone,
+    source: reservationRow.source,
+    startDate: reservationRow.startDate ? new Date(reservationRow.startDate) : reservationRow.start_date ? new Date(reservationRow.start_date) : new Date(),
+    endDate: reservationRow.endDate ? new Date(reservationRow.endDate) : reservationRow.end_date ? new Date(reservationRow.end_date) : new Date(),
+    status: reservationRow.status,
+    reservationNumber: reservationRow.reservationNumber ?? reservationRow.reservation_number,
+    totalPrice: reservationRow.totalPrice ?? reservationRow.total_price,
+    priceBeforeDiscount: reservationRow.priceBeforeDiscount ?? reservationRow.price_before_discount,
+    notes: reservationRow.notes,
+    paymentStatus: reservationRow.paymentStatus ?? reservationRow.payment_status,
+    partialPaymentAmount: reservationRow.partialPaymentAmount ?? reservationRow.partial_payment_amount,
+    paidWithPoints: reservationRow.paidWithPoints ?? reservationRow.paid_with_points,
+    createdAt: reservationRow.createdAt ? new Date(reservationRow.createdAt) : reservationRow.created_at ? new Date(reservationRow.created_at) : undefined,
+    updatedAt: reservationRow.updatedAt ? new Date(reservationRow.updatedAt) : reservationRow.updated_at ? new Date(reservationRow.updated_at) : undefined,
+    actualCheckInTime: reservationRow.actualCheckInTime ?? reservationRow.actual_check_in_time,
+    actualCheckOutTime: reservationRow.actualCheckOutTime ?? reservationRow.actual_check_out_time,
+    isCheckedOut: reservationRow.isCheckedOut ?? reservationRow.is_checked_out ?? false,
+    selectedExtras: reservationRow.selectedExtras ?? reservationRow.selected_extras,
+    promotionApplied: reservationRow.promotionApplied ?? reservationRow.promotion_applied,
+    packageInfo: reservationRow.packageInfo ?? reservationRow.package_info,
+    color: reservationRow.color,
+    rooms: reservationRow.rooms ?? reservationRow.rooms_data ?? [],
+    roomsTotal: reservationRow.roomsTotal ?? reservationRow.rooms_total,
+    extrasTotal: reservationRow.extrasTotal ?? reservationRow.extras_total,
+    subtotal: reservationRow.subtotal,
+    discountAmount: reservationRow.discountAmount ?? reservationRow.discount_amount,
+    netAmount: reservationRow.netAmount ?? reservationRow.net_amount,
+    taxAmount: reservationRow.taxAmount ?? reservationRow.tax_amount,
+    groupBooking: reservationRow.groupBooking ?? reservationRow.group_booking,
+    groupName: reservationRow.groupName ?? reservationRow.group_name,
+    companyName: reservationRow.companyName ?? reservationRow.company_name,
+  } as Reservation), []);
+
+  const postGuestCrud = useCallback(async (payload: Record<string, any>) => {
+    const headers = await getAuthHeaders();
+    if (!headers) throw new Error('Missing authorization');
+
+    const response = await fetch('/api/guests/crud', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Guest operation failed');
+    return data;
+  }, [getAuthHeaders]);
+
+  const loadGuests = useCallback(async (propertyId: string) => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('guests')
+      .select('*')
+      .eq('property_id', propertyId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data || []).map(normalizeGuest);
+  }, [normalizeGuest]);
+
+  const loadReservations = useCallback(async (propertyId: string) => {
+    const headers = await getAuthHeaders();
+    if (!headers) throw new Error('Missing authorization');
+
+    const response = await fetch(`/api/reservations/list?propertyId=${encodeURIComponent(propertyId)}`, { headers });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to load reservations');
+    return (data.reservations || []).map(normalizeReservation);
+  }, [getAuthHeaders, normalizeReservation]);
+
+  const refreshAllData = useCallback(async (propertyId: string) => {
+    setIsLoadingGuests(true);
+    try {
+      const [guestRows, reservationRows] = await Promise.all([
+        loadGuests(propertyId),
+        loadReservations(propertyId),
+      ]);
+
+      setGuests(guestRows);
+      setReservations(reservationRows);
+      setLastSyncTime(new Date());
+    } finally {
+      setIsLoadingGuests(false);
+    }
+  }, [loadGuests, loadReservations]);
+
+  useEffect(() => {
+    const nextPropertyId = property?.id || user?.propertyId || null;
+    setCurrentUserPropertyId(nextPropertyId);
+    if (!nextPropertyId) {
+      setGuests([]);
+      setReservations([]);
+      setIsLoadingGuests(false);
+    }
+  }, [user?.propertyId, property?.id]);
 
   // Load guests and reservations
   useEffect(() => {
@@ -104,48 +263,12 @@ export default function AllGuestsPage() {
       return;
     }
 
-    setIsLoadingGuests(true);
-    let listeners = 2;
-    const doneLoading = () => {
-      listeners--;
-      if (listeners === 0) {
-        setIsLoadingGuests(false);
-        setLastSyncTime(new Date());
-      }
-    };
-
-    const guestQuery = query(collection(db, 'guests'), where('propertyId', '==', currentUserPropertyId));
-    const unsubGuests = onSnapshot(guestQuery, (snapshot) => {
-      const fetchedGuests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Guest));
-      setGuests(fetchedGuests);
-      setLastSyncTime(new Date());
-      doneLoading();
-    }, (error) => {
-      console.error('Error listening to guests:', error);
-      doneLoading();
+    refreshAllData(currentUserPropertyId).catch((error) => {
+      console.error('Error loading guests and reservations:', error);
+      toast({ title: 'Error', description: 'Failed to load guests', variant: 'destructive' });
+      setIsLoadingGuests(false);
     });
-
-    const reservationsQuery = query(collection(db, 'reservations'), where('propertyId', '==', currentUserPropertyId));
-    const unsubReservations = onSnapshot(reservationsQuery, (snapshot) => {
-      const fetchedReservations = snapshot.docs.map(d => ({
-        id: d.id,
-        ...d.data(),
-        startDate: (d.data().startDate as Timestamp)?.toDate(),
-        endDate: (d.data().endDate as Timestamp)?.toDate(),
-      } as Reservation));
-      setReservations(fetchedReservations);
-      setLastSyncTime(new Date());
-      doneLoading();
-    }, (error) => {
-      console.error('Error listening to reservations:', error);
-      doneLoading();
-    });
-
-    return () => {
-      unsubGuests();
-      unsubReservations();
-    };
-  }, [currentUserPropertyId]);
+  }, [currentUserPropertyId, refreshAllData]);
 
   // Check if user returned from booking with new reservation and sync guest data
   useEffect(() => {
@@ -168,11 +291,26 @@ export default function AllGuestsPage() {
 
   // Get guest details
   const getGuestDetails = (guest: Guest) => {
-    const guestReservations = reservations.filter(r => r.guestId === guest.id && r.status !== 'Canceled' && r.status !== 'No-Show');
+    const guestEmail = normalizeEmail(guest.email);
+    const guestPhone = normalizePhone(guest.phone);
+
+    const guestReservations = reservations.filter((reservation) => {
+      if (isReservationCancelledStatus(reservation.status)) return false;
+      if (reservation.guestId && reservation.guestId === guest.id) return true;
+
+      const reservationEmail = normalizeEmail(reservation.guestEmail);
+      if (reservationEmail && guestEmail && reservationEmail === guestEmail) return true;
+
+      const reservationPhone = normalizePhone(reservation.guestPhone);
+      if (reservationPhone && guestPhone && reservationPhone === guestPhone) return true;
+
+      return false;
+    });
+
     const visits = guestReservations.length;
     const lastStayDate = guestReservations.length > 0
       ? new Date(Math.max(...guestReservations.map(r => {
-          const endDate = r.endDate instanceof Date ? r.endDate : (r.endDate as Timestamp).toDate();
+          const endDate = r.endDate instanceof Date ? r.endDate : new Date(r.endDate as any);
           return endDate.getTime();
         })))
       : null;
@@ -252,26 +390,8 @@ export default function AllGuestsPage() {
   const handleRefreshData = async () => {
     setIsRefreshing(true);
     try {
-      // Trigger a manual refresh - Firestore real-time listeners will handle the update
       if (currentUserPropertyId) {
-        const guestQuery = query(collection(db, 'guests'), where('propertyId', '==', currentUserPropertyId));
-        const reservationsQuery = query(collection(db, 'reservations'), where('propertyId', '==', currentUserPropertyId));
-        
-        await Promise.all([
-          new Promise(resolve => {
-            const unsub = onSnapshot(guestQuery, () => {
-              unsub();
-              resolve(null);
-            });
-          }),
-          new Promise(resolve => {
-            const unsub = onSnapshot(reservationsQuery, () => {
-              unsub();
-              resolve(null);
-            });
-          })
-        ]);
-        
+        await refreshAllData(currentUserPropertyId);
         toast({ title: 'Data Refreshed', description: 'Guest and reservation data synced' });
       }
     } catch (error) {
@@ -326,10 +446,13 @@ export default function AllGuestsPage() {
   const handleEnrollLoyalty = async (guest: Guest) => {
     if (!currentUserPropertyId) return;
     try {
-      await updateDoc(doc(db, 'guests', guest.id), {
-        loyaltyStatus: 'enrolled',
-        updatedAt: Timestamp.now()
+      await postGuestCrud({
+        action: 'enroll',
+        propertyId: currentUserPropertyId,
+        guestId: guest.id,
       });
+
+      setGuests(current => current.map(item => item.id === guest.id ? { ...item, loyaltyStatus: 'enrolled' } : item));
       toast({ title: 'Success', description: `${guest.firstName} enrolled in loyalty program` });
     } catch (error) {
       console.error('Error enrolling guest:', error);
@@ -340,16 +463,16 @@ export default function AllGuestsPage() {
   const handleBulkEnrollLoyalty = async () => {
     if (selectedRowIds.size === 0) return;
     try {
-      const guestsToUpdate = guests.filter(g => selectedRowIds.has(g.id));
-      const updatePromises = guestsToUpdate.map(guest =>
-        updateDoc(doc(db, 'guests', guest.id), {
-          loyaltyStatus: 'enrolled',
-          updatedAt: Timestamp.now()
-        })
-      );
-      await Promise.all(updatePromises);
+      const ids = Array.from(selectedRowIds);
+      await postGuestCrud({
+        action: 'bulkEnroll',
+        propertyId: currentUserPropertyId,
+        ids,
+      });
+
+      setGuests(current => current.map(item => selectedRowIds.has(item.id) ? { ...item, loyaltyStatus: 'enrolled' } : item));
       setSelectedRowIds(new Set());
-      toast({ title: 'Success', description: `${guestsToUpdate.length} guest(s) enrolled in loyalty program` });
+      toast({ title: 'Success', description: `${ids.length} guest(s) enrolled in loyalty program` });
     } catch (error) {
       console.error('Error bulk enrolling guests:', error);
       toast({ title: 'Error', description: 'Failed to enroll guests', variant: 'destructive' });
@@ -387,13 +510,17 @@ export default function AllGuestsPage() {
   const confirmBulkDelete = async () => {
     if (selectedRowIds.size === 0) return;
     try {
-      const deletePromises = Array.from(selectedRowIds).map(guestId =>
-        deleteDoc(doc(db, 'guests', guestId))
-      );
-      await Promise.all(deletePromises);
+      const ids = Array.from(selectedRowIds);
+      await postGuestCrud({
+        action: 'bulkDelete',
+        propertyId: currentUserPropertyId,
+        ids,
+      });
+
+      setGuests(current => current.filter(guest => !selectedRowIds.has(guest.id)));
       setSelectedRowIds(new Set());
       setIsBulkDeleteDialogOpen(false);
-      toast({ title: 'Success', description: `${selectedRowIds.size} guest(s) deleted successfully` });
+      toast({ title: 'Success', description: `${ids.length} guest(s) deleted successfully` });
     } catch (error) {
       console.error('Error bulk deleting guests:', error);
       toast({ title: 'Error', description: 'Failed to delete guests', variant: 'destructive' });
@@ -403,7 +530,13 @@ export default function AllGuestsPage() {
   const confirmDelete = async () => {
     if (!selectedGuest) return;
     try {
-      await deleteDoc(doc(db, 'guests', selectedGuest.id));
+      await postGuestCrud({
+        action: 'delete',
+        propertyId: currentUserPropertyId,
+        guestId: selectedGuest.id,
+      });
+
+      setGuests(current => current.filter(guest => guest.id !== selectedGuest.id));
       setSelectedGuest(null);
       setIsBulkDeleteDialogOpen(false);
       toast({ title: 'Success', description: 'Guest deleted successfully' });
@@ -416,15 +549,66 @@ export default function AllGuestsPage() {
   const handleSaveGuest = async (guestData: Partial<Guest>) => {
     if (!currentUserPropertyId) return;
     try {
+      const firstName = guestData.firstName ?? guestData.fullName?.trim().split(/\s+/)[0] ?? '';
+      const lastName = guestData.lastName ?? guestData.fullName?.trim().split(/\s+/).slice(1).join(' ') ?? '';
+      const notes = guestData.internalNotes ?? '';
+      const country = guestData.country ?? guestData.nationality;
+      const nationality = guestData.nationality ?? guestData.country;
+      const payload = {
+        first_name: firstName,
+        last_name: lastName,
+        email: guestData.email,
+        phone: guestData.phone,
+        gender: guestData.gender,
+        birthdate: guestData.birthdate || null,
+        country,
+        nationality,
+        address: guestData.address,
+        passport_id: guestData.passportOrId,
+        notes,
+        loyalty_status: guestData.loyaltyStatus ?? 'not-enrolled',
+        loyalty_points: guestData.loyaltyPoints ?? 0,
+        updated_at: new Date().toISOString(),
+      };
+
       if (selectedGuest) {
-        await updateDoc(doc(db, 'guests', selectedGuest.id), guestData);
+        await postGuestCrud({
+          action: 'update',
+          propertyId: currentUserPropertyId,
+          guestId: selectedGuest.id,
+          guest: payload,
+        });
+
+        setGuests(current => current.map(guest => guest.id === selectedGuest.id ? {
+          ...guest,
+          fullName: guestData.fullName ?? [firstName, lastName].filter(Boolean).join(' ').trim(),
+          firstName,
+          lastName,
+          email: guestData.email ?? guest.email,
+          phone: guestData.phone ?? guest.phone,
+          gender: guestData.gender ?? guest.gender,
+          birthdate: guestData.birthdate ?? guest.birthdate,
+          country: country ?? guest.country,
+          nationality: nationality ?? guest.nationality,
+          address: guestData.address ?? guest.address,
+          passportOrId: guestData.passportOrId ?? guest.passportOrId,
+          internalNotes: notes,
+          loyaltyStatus: guestData.loyaltyStatus ?? guest.loyaltyStatus,
+        } as Guest : guest));
         setIsEditGuestModalOpen(false);
       } else {
-        await addDoc(collection(db, 'guests'), {
-          ...guestData,
+        const result = await postGuestCrud({
+          action: 'create',
           propertyId: currentUserPropertyId,
-          createdAt: new Date(),
+          guest: {
+            ...payload,
+            created_at: new Date().toISOString(),
+          },
         });
+
+        if (result?.guest) {
+          setGuests(current => [normalizeGuest(result.guest), ...current]);
+        }
         setIsAddGuestModalOpen(false);
       }
       setSelectedGuest(null);
@@ -439,22 +623,18 @@ export default function AllGuestsPage() {
     // Refresh guest data when a reservation is created with matching email
     if (guestEmail && currentUserPropertyId) {
       try {
-        // Find the guest with matching email
-        const guestQuery = query(
-          collection(db, 'guests'),
-          where('email', '==', guestEmail),
-          where('propertyId', '==', currentUserPropertyId)
-        );
-        
-        const snapshot = await new Promise<any>((resolve) => {
-          const unsub = onSnapshot(guestQuery, (snap) => {
-            unsub();
-            resolve(snap);
-          });
-        });
-        
-        if (snapshot.docs.length > 0) {
-          const updatedGuest = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Guest;
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('guests')
+          .select('*')
+          .eq('email', guestEmail)
+          .eq('property_id', currentUserPropertyId)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (data) {
+          const updatedGuest = normalizeGuest(data);
           // Update selected guest with fresh data
           setSelectedGuest(updatedGuest);
           
@@ -975,32 +1155,32 @@ export default function AllGuestsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* View Profile Modal */}
-      <Dialog open={isViewProfileModalOpen} onOpenChange={setIsViewProfileModalOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedGuest ? selectedGuest.fullName : 'Guest Profile'}
-            </DialogTitle>
-            <DialogDescription>
-              Detailed guest information
-            </DialogDescription>
-          </DialogHeader>
-          {selectedGuest && (
-            <GuestProfile 
-              guest={selectedGuest} 
-              allReservations={reservations}
-              onGuestDeleted={() => {
-                setIsViewProfileModalOpen(false);
-                setSelectedGuest(null);
-                // Refresh the guests list
-                window.location.reload();
-              }}
-              onReservationCreated={handleReservationCreated}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* View Profile Panel */}
+      <Sheet open={isViewProfileModalOpen} onOpenChange={setIsViewProfileModalOpen}>
+        <SheetContent side="right" className="w-[min(1100px,96vw)] sm:max-w-none p-0">
+          <div className="flex h-full flex-col">
+            <SheetHeader className="border-b border-slate-200 px-6 py-4 pr-12 text-left">
+              <SheetTitle>{selectedGuest ? selectedGuest.fullName : 'Guest Profile'}</SheetTitle>
+              <SheetDescription>Detailed guest information</SheetDescription>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {selectedGuest && (
+                <GuestProfile
+                  guest={selectedGuest}
+                  allReservations={reservations}
+                  onGuestDeleted={() => {
+                    setIsViewProfileModalOpen(false);
+                    setSelectedGuest(null);
+                    // Refresh the guests list
+                    window.location.reload();
+                  }}
+                  onReservationCreated={handleReservationCreated}
+                />
+              )}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>

@@ -36,8 +36,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from '@/contexts/auth-context';
-import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, Timestamp, doc, getDoc, updateDoc, orderBy, deleteDoc, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import type { ReservationStatus, Reservation, ReservationDisplayStatus } from '@/types/reservation';
 import type { FirestoreUser } from '@/types/firestoreUser';
@@ -50,6 +48,7 @@ import { useTranslation } from 'react-i18next';
 import { Label } from '@/components/ui/label';
 import type { Payment, Invoice } from '@/app/(app)/payments/page';
 import type { ManualPaymentData } from '@/components/payments/payment-form';
+import { createClient } from '@/utils/supabase/client';
 
 const ReservationForm = dynamic(() => import('@/components/reservations/reservation-form'), {
   loading: () => <div className="h-48 flex items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
@@ -109,6 +108,78 @@ export default function GroupsAndCorporateReservationsPage() {
   // Permission check
   const canManageReservations = user?.permissions?.reservations || false;
 
+  const getAuthHeaders = useCallback(async () => {
+    const supabase = createClient();
+
+    let sessionData: Awaited<ReturnType<typeof supabase.auth.getSession>>['data'] | null = null;
+    for (let attempts = 0; attempts < 3; attempts++) {
+      const result = await supabase.auth.getSession();
+      if (result.data?.session) {
+        sessionData = result.data;
+        break;
+      }
+      if (attempts < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    if (!sessionData?.session) {
+      return null;
+    }
+
+    return {
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+      'Content-Type': 'application/json',
+    };
+  }, []);
+
+  const normalizeReservation = useCallback((reservation: any): Reservation => ({
+    ...reservation,
+    startDate: reservation.startDate ? new Date(reservation.startDate) : reservation.start_date ? new Date(reservation.start_date) : reservation.startDate,
+    endDate: reservation.endDate ? new Date(reservation.endDate) : reservation.end_date ? new Date(reservation.end_date) : reservation.endDate,
+  }), []);
+
+  const normalizeRoomType = useCallback((roomType: any): RoomType => ({
+    id: roomType.id,
+    name: roomType.name,
+    maxGuests: roomType.max_guests ?? roomType.maxGuests ?? 0,
+    maxAdults: roomType.max_adults ?? roomType.maxAdults ?? null,
+    maxChildren: roomType.max_children ?? roomType.maxChildren ?? null,
+    adultsIncludedInBaseRate: roomType.adults_included_in_base_rate ?? roomType.adultsIncludedInBaseRate ?? null,
+    childrenIncludedInBaseRate: roomType.children_included_in_base_rate ?? roomType.childrenIncludedInBaseRate ?? null,
+    baseRate: roomType.base_rate ?? roomType.baseRate ?? 0,
+    description: roomType.description,
+    propertyId: roomType.property_id ?? roomType.propertyId,
+    numberOfRoomsAvailable: roomType.number_of_rooms_available ?? roomType.numberOfRoomsAvailable ?? null,
+    assignedRoomNumbers: roomType.assigned_room_numbers ?? roomType.assignedRoomNumbers ?? [],
+    selectedAmenities: roomType.selected_amenities ?? roomType.selectedAmenities ?? [],
+    thumbnailImageUrl: roomType.thumbnail_image_url ?? roomType.thumbnailImageUrl,
+    galleryImageUrls: roomType.gallery_image_urls ?? roomType.galleryImageUrls ?? [],
+    beds: roomType.beds ?? [],
+    sizeSqMeters: roomType.size_sq_meters ?? roomType.sizeSqMeters,
+    createdAt: roomType.created_at ?? roomType.createdAt,
+    updatedAt: roomType.updated_at ?? roomType.updatedAt,
+  }), []);
+
+  const normalizePayment = useCallback((payment: any): Payment => ({
+    id: payment.id,
+    propertyId: payment.property_id ?? payment.propertyId,
+    paymentNumber: payment.payment_number ?? payment.paymentNumber,
+    transactionId: payment.transaction_id ?? payment.transactionId,
+    date: payment.date,
+    guestName: payment.guest_name ?? payment.guestName,
+    guestId: payment.guest_id ?? payment.guestId,
+    reservationId: payment.reservation_id ?? payment.reservationId,
+    reservationNumber: payment.reservation_number ?? payment.reservationNumber,
+    invoiceId: payment.invoice_id ?? payment.invoiceId,
+    amountPaid: payment.amount_paid ?? payment.amountPaid ?? 0,
+    paymentMethod: payment.payment_method ?? payment.paymentMethod,
+    status: payment.status,
+    notes: payment.notes,
+    isRefund: payment.is_refund ?? payment.isRefund,
+    originalPaymentId: payment.original_payment_id ?? payment.originalPaymentId,
+  }), []);
+
   // Fetch property settings
   useEffect(() => {
     if (!user?.propertyId) {
@@ -119,10 +190,18 @@ export default function GroupsAndCorporateReservationsPage() {
 
     const fetchPropertySettings = async () => {
       try {
-        const docSnap = await getDoc(doc(db, 'properties', user.propertyId));
-        if (docSnap.exists()) {
-          setPropertySettings(docSnap.data() as Property);
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('properties')
+          .select('*')
+          .eq('id', user.propertyId)
+          .single();
+
+        if (error) {
+          throw error;
         }
+
+        setPropertySettings(data as Property);
       } catch (error) {
         console.error('Error fetching property settings:', error);
       }
@@ -139,88 +218,172 @@ export default function GroupsAndCorporateReservationsPage() {
       return;
     }
 
-    setIsLoading(true);
-    const reservationsRef = collection(db, 'reservations');
-    const q = query(
-      reservationsRef,
-      where('propertyId', '==', user.propertyId),
-      where('groupBooking', '==', true),
-      orderBy('startDate', 'desc')
-    );
+    let cancelled = false;
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedReservations = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as Reservation));
-        setReservations(fetchedReservations);
-        setIsLoading(false);
-      },
-      (error) => {
+    const loadReservations = async () => {
+      setIsLoading(true);
+      try {
+        const headers = await getAuthHeaders();
+        if (!headers) {
+          if (!cancelled) {
+            setReservations([]);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        const response = await fetch(`/api/reservations/list?propertyId=${encodeURIComponent(user.propertyId)}`, {
+          headers,
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to load group reservations');
+        }
+
+        const fetchedReservations = (data.reservations || [])
+          .filter((reservation: Reservation) => reservation.groupBooking === true)
+          .map((reservation: Reservation) => normalizeReservation(reservation))
+          .sort((left: Reservation, right: Reservation) => {
+            const leftDate = left.startDate ? new Date(left.startDate as any).getTime() : 0;
+            const rightDate = right.startDate ? new Date(right.startDate as any).getTime() : 0;
+            return rightDate - leftDate;
+          });
+
+        if (!cancelled) {
+          setReservations(fetchedReservations);
+        }
+      } catch (error) {
         console.error('Error fetching reservations:', error);
-        toast({ title: 'Error', description: 'Failed to load group reservations', variant: 'destructive' });
-        setIsLoading(false);
+        if (!cancelled) {
+          toast({ title: 'Error', description: 'Failed to load group reservations', variant: 'destructive' });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
-    );
+    };
 
-    return () => unsubscribe();
-  }, [user?.propertyId]);
+    loadReservations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.propertyId, getAuthHeaders, normalizeReservation]);
 
   // Fetch rooms
   useEffect(() => {
     if (!propertyId) return;
 
-    const roomsRef = collection(db, 'rooms');
-    const q = query(roomsRef, where('propertyId', '==', propertyId));
+    let cancelled = false;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedRooms = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Room));
-      setAllRooms(fetchedRooms);
-    });
+    const loadRooms = async () => {
+      try {
+        const headers = await getAuthHeaders();
+        if (!headers) return;
 
-    return () => unsubscribe();
-  }, [propertyId]);
+        const response = await fetch(`/api/rooms/list?propertyId=${encodeURIComponent(propertyId)}`, {
+          headers,
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to load rooms');
+        }
+
+        const fetchedRooms = (data.rooms || []).map((room: Room) => ({
+          ...room,
+          createdAt: room.createdAt ? new Date(room.createdAt as any) : room.createdAt,
+          updatedAt: room.updatedAt ? new Date(room.updatedAt as any) : room.updatedAt,
+        }));
+
+        if (!cancelled) {
+          setAllRooms(fetchedRooms);
+        }
+      } catch (error) {
+        console.error('Error fetching rooms:', error);
+      }
+    };
+
+    loadRooms();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId, getAuthHeaders]);
 
   // Fetch room types
   useEffect(() => {
     if (!propertyId) return;
 
-    const roomTypesRef = collection(db, 'roomTypes');
-    const q = query(roomTypesRef, where('propertyId', '==', propertyId));
+    let cancelled = false;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedRoomTypes = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as RoomType));
-      setRoomTypes(fetchedRoomTypes);
-    });
+    const loadRoomTypes = async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('room_types')
+          .select('*')
+          .eq('property_id', propertyId)
+          .order('created_at', { ascending: false });
 
-    return () => unsubscribe();
-  }, [propertyId]);
+        if (error) {
+          throw error;
+        }
+
+        const fetchedRoomTypes = (data || []).map((roomType) => normalizeRoomType(roomType));
+
+        if (!cancelled) {
+          setRoomTypes(fetchedRoomTypes);
+        }
+      } catch (error) {
+        console.error('Error fetching room types:', error);
+      }
+    };
+
+    loadRoomTypes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId, normalizeRoomType]);
 
   // Fetch payments
   useEffect(() => {
     if (!propertyId) return;
 
-    const paymentsRef = collection(db, 'payments');
-    const q = query(paymentsRef, where('propertyId', '==', propertyId));
+    let cancelled = false;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedPayments = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Payment));
-      setPayments(fetchedPayments);
-    });
+    const loadPayments = async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('property_id', propertyId)
+          .order('date', { ascending: false });
 
-    return () => unsubscribe();
-  }, [propertyId]);
+        if (error) {
+          throw error;
+        }
+
+        const fetchedPayments = (data || []).map((payment) => normalizePayment(payment));
+
+        if (!cancelled) {
+          setPayments(fetchedPayments);
+        }
+      } catch (error) {
+        console.error('Error fetching payments:', error);
+      }
+    };
+
+    loadPayments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId, normalizePayment]);
 
   // Filter and search logic
   const filteredReservations = useMemo(() => {
@@ -234,7 +397,7 @@ export default function GroupsAndCorporateReservationsPage() {
     // Filter by date range
     if (dateRange?.from && dateRange?.to) {
       filtered = filtered.filter(r => {
-        const startDate = r.startDate instanceof Timestamp ? r.startDate.toDate() : new Date(r.startDate);
+        const startDate = r.startDate instanceof Date ? r.startDate : new Date(r.startDate as any);
         return isWithinInterval(startDate, { start: dateRange.from, end: dateRange.to });
       });
     }
@@ -297,48 +460,109 @@ export default function GroupsAndCorporateReservationsPage() {
     if (!confirm("Are you sure you want to permanently delete this group reservation? This action cannot be undone.")) return;
 
     try {
-      await deleteDoc(doc(db, 'reservations', reservationId));
+      const headers = await getAuthHeaders();
+      if (!headers) {
+        throw new Error('Missing authorization');
+      }
+
+      const response = await fetch('/api/reservations/crud', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          action: 'delete',
+          propertyId,
+          reservationId,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to delete group reservation');
+      }
+
+      setReservations((currentReservations) => currentReservations.filter((reservation) => reservation.id !== reservationId));
       toast({ title: 'Success', description: 'Group reservation deleted successfully' });
     } catch (error) {
       console.error('Error deleting reservation:', error);
       toast({ title: 'Error', description: 'Failed to delete group reservation', variant: 'destructive' });
     }
-  }, [propertyId]);
+  }, [propertyId, getAuthHeaders]);
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedReservationIds.size === 0) return;
 
     try {
-      const batch = writeBatch(db);
-      selectedReservationIds.forEach(id => {
-        batch.delete(doc(db, 'reservations', id));
-      });
-      await batch.commit();
+      const headers = await getAuthHeaders();
+      if (!headers) {
+        throw new Error('Missing authorization');
+      }
+
+      await Promise.all(Array.from(selectedReservationIds).map(async (reservationId) => {
+        const response = await fetch('/api/reservations/crud', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            action: 'delete',
+            propertyId,
+            reservationId,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result?.error || `Failed to delete reservation ${reservationId}`);
+        }
+      }));
+
       setSelectedReservationIds(new Set());
       setIsDeleteConfirmOpen(false);
+      setReservations((currentReservations) => currentReservations.filter((reservation) => !selectedReservationIds.has(reservation.id)));
       toast({ title: 'Success', description: `${selectedReservationIds.size} group reservations deleted` });
     } catch (error) {
       console.error('Error bulk deleting:', error);
       toast({ title: 'Error', description: 'Failed to delete reservations', variant: 'destructive' });
     }
-  }, [selectedReservationIds]);
+  }, [selectedReservationIds, propertyId, getAuthHeaders]);
 
   const handleBulkStatusChange = useCallback(async (newStatus: ReservationStatus) => {
     if (selectedReservationIds.size === 0) return;
 
     try {
-      const batch = writeBatch(db);
-      selectedReservationIds.forEach(id => {
-        batch.update(doc(db, 'reservations', id), { status: newStatus, updatedAt: serverTimestamp() });
-      });
-      await batch.commit();
+      const headers = await getAuthHeaders();
+      if (!headers) {
+        throw new Error('Missing authorization');
+      }
+
+      await Promise.all(Array.from(selectedReservationIds).map(async (reservationId) => {
+        const response = await fetch('/api/reservations/crud', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            action: 'updateStatus',
+            propertyId,
+            reservationId,
+            status: newStatus,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result?.error || `Failed to update reservation ${reservationId}`);
+        }
+      }));
+
+      setReservations((currentReservations) => currentReservations.map((reservation) => (
+        selectedReservationIds.has(reservation.id)
+          ? { ...reservation, status: newStatus, updatedAt: new Date().toISOString() }
+          : reservation
+      )));
       setSelectedReservationIds(new Set());
       toast({ title: 'Success', description: `${selectedReservationIds.size} reservations updated` });
     } catch (error) {
       console.error('Error bulk updating:', error);
       toast({ title: 'Error', description: 'Failed to update reservations', variant: 'destructive' });
     }
-  }, [selectedReservationIds]);
+  }, [selectedReservationIds, propertyId, getAuthHeaders]);
 
   if (isLoadingAuth || isLoading) {
     return (

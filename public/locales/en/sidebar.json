@@ -3,6 +3,8 @@
     "dashboard": "Dashboard",
     "calendar": "Calendar & Availability",
     "reservations": "Reservations",
+    "groups_corporate": "Groups & Corporate",
+    "crm": "CRM",
     "team_workspace": "Team Workspace",
     "rooms": "Rooms",
     "rate_plans": "Rate Plans & Promotions",
@@ -58,7 +60,8 @@
       "attendant_worksheets": "Attendant Worksheets",
       "maintenance_engineering": "Maintenance & Engineering",
       "inventory_management": "Linen & Inventory",
-      "lost_found": "Lost & Found"
+      "lost_found": "Lost & Found",
+      "inbox": "Inbox"
     }
   },
   "loading_property": "Loading property...",

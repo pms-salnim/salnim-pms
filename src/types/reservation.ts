@@ -86,4 +86,7 @@ export interface Reservation {
   roomTypeName?: string;
   adults?: number;
   children?: number;
+  groupBooking?: boolean;
+  groupName?: string;
+  companyName?: string;
 }

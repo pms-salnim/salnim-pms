@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { db, auth } from '@/lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { createClient } from '@/utils/supabase/client';
 import { useAuth } from '@/contexts/auth-context';
+import { whatsappApi } from '@/lib/communication-api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,29 +24,25 @@ import { Label } from '@/components/ui/label';
 
 interface WhatsAppMessage {
   id: string;
-  messageId: string;
-  from: string;
-  to?: string;
-  timestamp: Date;
-  type: string;
-  text: string;
-  mediaUrl?: string;
-  caption?: string;
-  status: 'sent' | 'delivered' | 'read' | 'received' | 'failed';
-  propertyId: string;
-  guestId?: string;
-  guestName?: string;
-  receivedAt?: Date;
-  direction?: 'incoming' | 'outgoing';
+  conversation_id: string;
+  sender_type: 'guest' | 'property';
+  sender_id: string;
+  sender_name: string;
+  message: string;
+  message_status: 'sent' | 'delivered' | 'read';
+  is_read: boolean;
+  created_at: string;
 }
 
 interface WhatsAppConversation {
-  phoneNumber: string;
-  guestName?: string;
-  guestId?: string;
-  lastMessage: string;
-  lastMessageTime: Date;
-  unreadCount: number;
+  id: string;
+  guest_name: string;
+  guest_phone: string;
+  guest_email?: string;
+  last_message_text?: string;
+  last_message_timestamp?: string;
+  unread_count: number;
+  is_active: boolean;
   messages: WhatsAppMessage[];
 }
 
@@ -64,84 +60,44 @@ export default function WhatsAppChatView() {
   const [composePhoneNumber, setComposePhoneNumber] = useState('');
   const [composeMessage, setComposeMessage] = useState('');
 
-  // Fetch WhatsApp messages and group into conversations
+  // Load conversations and set up polling
   useEffect(() => {
     if (!user?.propertyId) return;
 
-    const messagesRef = collection(db, 'properties', user.propertyId, 'whatsappMessages');
-    const q = query(messagesRef, orderBy('timestamp', 'desc'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const messages: WhatsAppMessage[] = [];
-      
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        messages.push({
-          id: doc.id,
-          messageId: data.messageId,
-          from: data.from,
-          to: data.to,
-          timestamp: data.timestamp?.toDate() || new Date(),
-          type: data.type,
-          text: data.text || '',
-          mediaUrl: data.mediaUrl,
-          caption: data.caption,
-          status: data.status,
-          propertyId: data.propertyId,
-          guestId: data.guestId,
-          guestName: data.guestName,
-          receivedAt: data.receivedAt?.toDate(),
-          direction: data.direction || (data.status === 'received' ? 'incoming' : 'outgoing')
-        });
-      });
-
-      // Group messages by phone number
-      const conversationsMap = new Map<string, WhatsAppConversation>();
-      
-      messages.forEach(msg => {
-        const phoneNumber = msg.from;
-        
-        if (!conversationsMap.has(phoneNumber)) {
-          conversationsMap.set(phoneNumber, {
-            phoneNumber,
-            guestName: msg.guestName,
-            guestId: msg.guestId,
-            lastMessage: msg.text || msg.caption || `${msg.type} message`,
-            lastMessageTime: msg.timestamp,
-            unreadCount: msg.direction === 'incoming' && msg.status === 'received' ? 1 : 0,
-            messages: [msg]
-          });
-        } else {
-          const conv = conversationsMap.get(phoneNumber)!;
-          conv.messages.push(msg);
-          
-          // Update last message if this one is more recent
-          if (msg.timestamp > conv.lastMessageTime) {
-            conv.lastMessage = msg.text || msg.caption || `${msg.type} message`;
-            conv.lastMessageTime = msg.timestamp;
-          }
-          
-          // Count unread messages
-          if (msg.direction === 'incoming' && msg.status === 'received') {
-            conv.unreadCount++;
-          }
+    const loadConversations = async () => {
+      try {
+        // Get conversations
+        const conversationsResult = await whatsappApi.listConversations(user.propertyId);
+        if (!conversationsResult?.conversations) {
+          setIsLoading(false);
+          return;
         }
-      });
 
-      // Sort messages within each conversation by timestamp
-      conversationsMap.forEach(conv => {
-        conv.messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-      });
+        // For each conversation, fetch messages
+        const convsWithMessages = await Promise.all(
+          conversationsResult.conversations.map(async (conv: any) => {
+            const messagesResult = await whatsappApi.getMessages(user.propertyId, conv.id);
+            return {
+              ...conv,
+              messages: messagesResult?.messages || []
+            };
+          })
+        );
 
-      // Convert to array and sort by last message time
-      const conversationsArray = Array.from(conversationsMap.values())
-        .sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+        setConversations(convsWithMessages);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading conversations:', error);
+        setIsLoading(false);
+      }
+    };
 
-      setConversations(conversationsArray);
-      setIsLoading(false);
-    });
+    loadConversations();
 
-    return () => unsubscribe();
+    // Set up polling every 3 seconds
+    const interval = setInterval(loadConversations, 3000);
+
+    return () => clearInterval(interval);
   }, [user?.propertyId]);
 
   // Auto-scroll to bottom when new messages arrive
@@ -154,19 +110,12 @@ export default function WhatsAppChatView() {
   const handleSelectConversation = async (conversation: WhatsAppConversation) => {
     setSelectedConversation(conversation);
     
-    // Mark messages as read (update status in Firestore)
-    if (conversation.unreadCount > 0 && user?.propertyId) {
-      const unreadMessages = conversation.messages.filter(
-        msg => msg.direction === 'incoming' && msg.status === 'received'
-      );
-      
-      for (const msg of unreadMessages) {
-        try {
-          const messageRef = doc(db, 'properties', user.propertyId, 'whatsappMessages', msg.id);
-          await updateDoc(messageRef, { status: 'read' });
-        } catch (error) {
-          console.error('Failed to mark message as read:', error);
-        }
+    // Mark conversation as read via API
+    if (conversation.unread_count > 0 && user?.propertyId) {
+      try {
+        await whatsappApi.markAsRead(user.propertyId, conversation.id);
+      } catch (error) {
+        console.error('Failed to mark conversation as read:', error);
       }
     }
   };
@@ -177,35 +126,24 @@ export default function WhatsAppChatView() {
     setIsSending(true);
     
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
+      const response = await whatsappApi.sendMessage(
+        user.propertyId,
+        selectedConversation.id,
+        messageInput
+      );
 
-      const response = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/sendWhatsAppMessage', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          data: {
-            propertyId: user.propertyId,
-            to: selectedConversation.phoneNumber,
-            templateName: 'text_message', // You may need to create a generic text template
-            templateLanguage: 'en',
-            parameters: [messageInput]
-          }
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
+      if (response?.success) {
         setMessageInput('');
         toast({ title: 'Message Sent', description: 'Your message has been sent successfully.' });
+        
+        // Refresh conversation messages
+        const messagesResult = await whatsappApi.getMessages(user.propertyId, selectedConversation.id);
+        setSelectedConversation({
+          ...selectedConversation,
+          messages: messagesResult?.messages || []
+        });
       } else {
-        throw new Error(result.message || 'Failed to send message');
+        throw new Error('Failed to send message');
       }
     } catch (error: any) {
       toast({
@@ -231,31 +169,15 @@ export default function WhatsAppChatView() {
     setIsSending(true);
     
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
+      const response = await whatsappApi.startConversation(
+        user.propertyId,
+        composePhoneNumber,
+        undefined,
+        undefined,
+        composeMessage
+      );
 
-      const response = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/sendWhatsAppMessage', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          data: {
-            propertyId: user.propertyId,
-            to: composePhoneNumber,
-            templateName: 'text_message',
-            templateLanguage: 'en',
-            parameters: [composeMessage]
-          }
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
+      if (response?.success) {
         setComposePhoneNumber('');
         setComposeMessage('');
         setIsComposeOpen(false);
@@ -263,8 +185,23 @@ export default function WhatsAppChatView() {
           title: 'Message Sent', 
           description: `Message sent to ${composePhoneNumber}` 
         });
+        
+        // Refresh conversations list
+        const conversationsResult = await whatsappApi.listConversations(user.propertyId);
+        if (conversationsResult?.conversations) {
+          const convsWithMessages = await Promise.all(
+            conversationsResult.conversations.map(async (conv: any) => {
+              const messagesResult = await whatsappApi.getMessages(user.propertyId, conv.id);
+              return {
+                ...conv,
+                messages: messagesResult?.messages || []
+              };
+            })
+          );
+          setConversations(convsWithMessages);
+        }
       } else {
-        throw new Error(result.message || 'Failed to send message');
+        throw new Error('Failed to send message');
       }
     } catch (error: any) {
       toast({
@@ -373,34 +310,34 @@ export default function WhatsAppChatView() {
             {conversations.length > 0 ? (
               conversations.map((conv) => (
                 <div
-                  key={conv.phoneNumber}
+                  key={conv.id}
                   onClick={() => handleSelectConversation(conv)}
                   className={`p-4 cursor-pointer hover:bg-slate-50 transition-colors ${
-                    selectedConversation?.phoneNumber === conv.phoneNumber ? 'bg-slate-50' : ''
+                    selectedConversation?.id === conv.id ? 'bg-slate-50' : ''
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <Avatar className="h-10 w-10">
                       <AvatarFallback className="bg-emerald-100 text-emerald-700">
-                        {conv.guestName ? conv.guestName.charAt(0).toUpperCase() : <Phone className="h-5 w-5" />}
+                        {conv.guest_name ? conv.guest_name.charAt(0).toUpperCase() : <Phone className="h-5 w-5" />}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold text-sm truncate">
-                          {conv.guestName || conv.phoneNumber}
+                          {conv.guest_name || conv.guest_phone}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {format(conv.lastMessageTime, 'HH:mm')}
+                          {conv.last_message_timestamp ? format(new Date(conv.last_message_timestamp), 'HH:mm') : ''}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground truncate">
-                          {conv.lastMessage}
+                          {conv.last_message_text || 'No messages yet'}
                         </p>
-                        {conv.unreadCount > 0 && (
+                        {conv.unread_count > 0 && (
                           <span className="ml-2 bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full">
-                            {conv.unreadCount}
+                            {conv.unread_count}
                           </span>
                         )}
                       </div>
@@ -427,17 +364,17 @@ export default function WhatsAppChatView() {
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
                 <AvatarFallback className="bg-emerald-100 text-emerald-700">
-                  {selectedConversation.guestName
-                    ? selectedConversation.guestName.charAt(0).toUpperCase()
+                  {selectedConversation.guest_name
+                    ? selectedConversation.guest_name.charAt(0).toUpperCase()
                     : <Phone className="h-5 w-5" />}
                 </AvatarFallback>
               </Avatar>
               <div>
                 <h3 className="font-semibold">
-                  {selectedConversation.guestName || selectedConversation.phoneNumber}
+                  {selectedConversation.guest_name || selectedConversation.guest_phone}
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  {!selectedConversation.guestName && selectedConversation.phoneNumber}
+                  {!selectedConversation.guest_name && selectedConversation.guest_phone}
                 </p>
               </div>
             </div>
@@ -446,8 +383,8 @@ export default function WhatsAppChatView() {
           {/* Messages */}
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
-              {selectedConversation.messages.map((msg, index) => {
-                const isOutgoing = msg.direction === 'outgoing' || msg.status !== 'received';
+              {selectedConversation.messages.map((msg) => {
+                const isOutgoing = msg.sender_type === 'property';
                 
                 return (
                   <div
@@ -461,26 +398,18 @@ export default function WhatsAppChatView() {
                           : 'bg-white border border-slate-200'
                       }`}
                     >
-                      {msg.mediaUrl && (
-                        <img
-                          src={msg.mediaUrl}
-                          alt={msg.caption || 'Media'}
-                          className="rounded mb-2 max-w-full"
-                        />
-                      )}
                       <p className="text-sm whitespace-pre-wrap">
-                        {msg.text || msg.caption}
+                        {msg.message}
                       </p>
                       <div className={`flex items-center justify-end gap-1 mt-1 text-xs ${
                         isOutgoing ? 'text-emerald-100' : 'text-muted-foreground'
                       }`}>
-                        <span>{format(msg.timestamp, 'HH:mm')}</span>
+                        <span>{format(new Date(msg.created_at), 'HH:mm')}</span>
                         {isOutgoing && (
                           <span>
-                            {msg.status === 'sent' && '✓'}
-                            {msg.status === 'delivered' && '✓✓'}
-                            {msg.status === 'read' && '✓✓'}
-                            {msg.status === 'failed' && '✗'}
+                            {msg.message_status === 'sent' && '✓'}
+                            {msg.message_status === 'delivered' && '✓✓'}
+                            {msg.message_status === 'read' && '✓✓'}
                           </span>
                         )}
                       </div>

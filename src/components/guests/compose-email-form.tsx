@@ -6,8 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '@/contexts/auth-context';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '@/lib/firebase';
+import { emailApi } from '@/lib/communication-api';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,14 +56,11 @@ interface ComposeEmailFormProps {
   initialBody?: string;
 }
 
-const fileToDataUri = (file: File) => new Promise<{ filename: string; path: string }>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-        resolve({ filename: file.name, path: reader.result as string });
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-});
+type EncodedAttachment = {
+  filename: string;
+  contentType?: string;
+  content: string;
+};
 
 
 export default function ComposeEmailForm({ onClose, initialTo, initialSubject, initialBody }: ComposeEmailFormProps) {
@@ -99,6 +95,30 @@ export default function ComposeEmailForm({ onClose, initialTo, initialSubject, i
     setAttachments(prev => prev.filter((_, index) => index !== indexToRemove));
   };
 
+  const encodeAttachments = async (files: File[]): Promise<EncodedAttachment[]> => {
+    const encoded = await Promise.all(
+      files.map(async (file) => {
+        const buffer = await file.arrayBuffer();
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const chunkSize = 0x8000;
+
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+          const chunk = bytes.subarray(offset, offset + chunkSize);
+          binary += String.fromCharCode(...chunk);
+        }
+
+        return {
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+          content: btoa(binary),
+        };
+      })
+    );
+
+    return encoded;
+  };
+
   const onSubmit = async (data: EmailFormValues) => {
     if (!user?.propertyId) {
       toast({ title: "Error", description: "Property information is missing.", variant: "destructive" });
@@ -107,18 +127,21 @@ export default function ComposeEmailForm({ onClose, initialTo, initialSubject, i
     setIsSending(true);
 
     try {
-      const attachmentPayloads = await Promise.all(attachments.map(fileToDataUri));
-      const functions = getFunctions(app, 'europe-west1');
-      const sendComposedEmail = httpsCallable(functions, 'sendComposedEmail');
-      await sendComposedEmail({
-        propertyId: user.propertyId,
-        to: data.to,
-        cc: data.cc,
-        bcc: data.bcc,
-        subject: data.subject,
-        htmlBody: data.body.replace(/\n/g, '<br>'),
-        attachments: attachmentPayloads,
-      });
+      const encodedAttachments = await encodeAttachments(attachments);
+      const response = await emailApi.sendComposed(
+        user.propertyId,
+        data.to,
+        data.subject,
+        data.body.replace(/\n/g, '<br>'),
+        data.body,
+        encodedAttachments,
+        data.cc,
+        data.bcc
+      );
+      
+      if (!response?.success) {
+        throw new Error('Failed to send email');
+      }
 
       toast({ 
         title: "Sent!", 

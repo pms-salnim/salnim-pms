@@ -16,8 +16,9 @@ import { toast } from '@/hooks/use-toast';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth } from '@/lib/firebase';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, isValid } from 'date-fns';
+import { format, isValid, isToday, isYesterday } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import type { Property } from '@/types/property';
 import {
   Dialog,
@@ -27,16 +28,16 @@ import {
   DialogDescription,
   DialogTrigger
 } from '@/components/ui/dialog';
-import ComposeEmailForm from '@/components/guests/compose-email-form';
 import ReplyEmailForm from '@/components/guests/reply-email-form';
 import type { Email } from '@/contexts/auth-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTranslation } from 'react-i18next';
 import SMTPConfigurationForm from '@/components/guests/communication/SMTPConfigurationForm';
 import IMAPConfigurationForm from '@/components/guests/communication/IMAPConfigurationForm';
-import EmailListItem from '@/components/guests/communication/EmailListItem';
-import EmailDetailView from '@/components/guests/communication/EmailDetailView';
+import EmailDetailView from '../../../../components/guests/communication/EmailDetailView';
 import LabelManager from '@/components/guests/communication/LabelManager';
+import { emailApi } from '@/lib/communication-api';
+import NewConversationDialog, { type ConversationChannel, type ConversationSearchResult } from '@/components/guests/communication/NewConversationDialog';
 
 type ActiveView = 
     | 'inbox_all' 
@@ -57,6 +58,17 @@ type ActiveView =
   | 'settings_email'
     | 'settings_autoresponse'
     | 'settings_integrations';
+
+type EmailConversation = {
+  key: string;
+  contactName: string;
+  contactEmail: string;
+  latestEmail: Email;
+  messages: Email[];
+  unreadCount: number;
+};
+
+type ThreadChannel = 'all' | ConversationChannel;
 
 const NavLink = ({ active, onClick, children, collapsed }: { active: boolean; onClick: () => void; children: React.ReactNode; collapsed?: boolean }) => (
   <Button
@@ -94,10 +106,17 @@ export default function CommunicationHubPage() {
   
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
-  const [isComposeModalOpen, setIsComposeModalOpen] = useState(false);
+  const [isNewConversationOpen, setIsNewConversationOpen] = useState(false);
   
   const [isTestingImap, setIsTestingImap] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [selectedThreadChannel, setSelectedThreadChannel] = useState<ThreadChannel>('all');
+  const [isSelectedThreadNewConversation, setIsSelectedThreadNewConversation] = useState(false);
+  const [shouldPromptSubjectForSelectedThread, setShouldPromptSubjectForSelectedThread] = useState(false);
+  const [selectedThreadContactPhone, setSelectedThreadContactPhone] = useState('');
+  const [manualConversationKeys, setManualConversationKeys] = useState<string[]>([]);
+  const [conversationDisplayNames, setConversationDisplayNames] = useState<Record<string, string>>({});
+  const [optimisticallyReadEmailKeys, setOptimisticallyReadEmailKeys] = useState<string[]>([]);
 
   const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
   const [replyingToEmail, setReplyingToEmail] = useState<Email | null>(null);
@@ -114,21 +133,113 @@ export default function CommunicationHubPage() {
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
+
+  const getOptimisticEmailKey = (email: Email) => {
+    if (email.id) return `id:${email.id}`;
+    return `uid:${email.uid}-${email.date}-${email.from?.email || 'unknown'}`;
+  };
+
+  const getEmailIdentity = (email: Email) => {
+    if (email.id) return email.id;
+    return `${email.uid}-${email.date}-${email.from?.email || 'unknown'}`;
+  };
+
+  const getConversationKey = (email: Email) => {
+    const senderEmail = String(email.from?.email || '').trim().toLowerCase();
+    if (senderEmail) return `email:${senderEmail}`;
+    const senderName = String(email.from?.name || '').trim().toLowerCase();
+    if (senderName) return `name:${senderName}`;
+    return `fallback:${getEmailIdentity(email)}`;
+  };
+
+  const getConversationChannels = (conversation: EmailConversation) => {
+    const detected = new Set<string>();
+
+    conversation.messages.forEach((message) => {
+      const rawChannel = String((message as any)?.source || '').trim().toLowerCase();
+      if (rawChannel === 'guest_portal') {
+        detected.add('Guest Portal');
+      } else if (rawChannel === 'whatsapp') {
+        detected.add('WhatsApp');
+      } else if (rawChannel === 'sms') {
+        detected.add('SMS');
+      } else {
+        detected.add('Email');
+      }
+    });
+
+    return Array.from(detected);
+  };
+
+  const getChannelBadgeClassName = (channel: string) => {
+    switch (channel) {
+      case 'Email':
+        return 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50';
+      case 'WhatsApp':
+        return 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50';
+      case 'Guest Portal':
+        return 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50';
+      case 'SMS':
+        return 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-100';
+      default:
+        return 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-50';
+    }
+  };
+
+  const getStatusBadgeClassName = (email: Email) => {
+    return isSentEmail(email)
+      ? 'border-emerald-200 bg-emerald-600 text-white hover:bg-emerald-600'
+      : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-100';
+  };
+
+  const getLastMessageStatus = (email: Email) => (isSentEmail(email) ? 'replied' : 'not replied');
+
+  const isSentEmail = useCallback((email: Email) => {
+    // DB-persisted outgoing emails are stored with null uid and are mapped to uid 0 in client state.
+    if (!email.uid || Number(email.uid) <= 0) return true;
+
+    const fromEmail = String(email.from?.email || '').trim().toLowerCase();
+    const userEmail = String(user?.email || '').trim().toLowerCase();
+    const smtpUser = String((property as any)?.emailConfiguration?.smtpUser || '').trim().toLowerCase();
+
+    return !!fromEmail && (fromEmail === userEmail || (smtpUser && fromEmail === smtpUser));
+  }, [property, user?.email]);
   
   useEffect(() => {
     setCurrentPage(1);
   }, [activeView]);
 
-  const { currentList, totalPages } = useMemo<{ currentList: Email[]; totalPages: number }>(() => {
-    let sourceList: Email[] = [];
-    if (activeView === 'inbox_all' || activeView === 'channel_email') {
-        sourceList = emails;
-    } else if (activeView === 'inbox_unread') {
-        sourceList = emails.filter(e => e.unread);
-    }
-    
+  // Track optimistic sent emails
+  const [optimisticSentEmails, setOptimisticSentEmails] = useState<Email[]>([]);
+
+  const displayEmails = useMemo(() => {
+    // Merge optimistic sent emails (not yet in backend) with fetched emails
+    let merged = [...emails];
+    // Only add optimistic sent emails not already present (by id or by subject/date/from)
+    optimisticSentEmails.forEach(sent => {
+      const exists = merged.some(e =>
+        (e.id && sent.id && e.id === sent.id) ||
+        (e.subject === sent.subject && e.date === sent.date && e.from?.email === sent.from?.email)
+      );
+      if (!exists) merged.unshift(sent);
+    });
+
+    if (optimisticallyReadEmailKeys.length === 0) return merged;
+
+    const readKeySet = new Set(optimisticallyReadEmailKeys);
+    return merged.map((email) => {
+      const optimisticKey = getOptimisticEmailKey(email);
+      if (!readKeySet.has(optimisticKey)) return email;
+      return { ...email, unread: false };
+    });
+  }, [emails, optimisticallyReadEmailKeys, optimisticSentEmails]);
+
+  const { currentList, totalPages } = useMemo<{ currentList: EmailConversation[]; totalPages: number }>(() => {
+    // Always show all conversations by default (inbound + outbound).
+    let sourceList: Email[] = [...displayEmails];
+
     // Apply mailbox filters (only for email views)
-    const isMailboxView = activeView === 'inbox_all' || activeView === 'inbox_unread' || activeView === 'channel_email';
+    const isMailboxView = activeView === 'inbox_all' || activeView === 'inbox_unread' || activeView === 'channel_email' || activeView === 'sent';
     if (isMailboxView) {
       // Search filter
       if (searchQuery.trim()) {
@@ -140,7 +251,6 @@ export default function CommunicationHubPage() {
           e.snippet.toLowerCase().includes(query)
         );
       }
-      
       // Advanced filters
       if (filterUnread) {
         sourceList = sourceList.filter(e => e.unread);
@@ -151,36 +261,132 @@ export default function CommunicationHubPage() {
       if (filterAttachments) {
         sourceList = sourceList.filter(e => e.attachments && e.attachments.length > 0);
       }
+
+      sourceList = [...sourceList].sort((a, b) => {
+        const aDate = new Date(a.date).getTime();
+        const bDate = new Date(b.date).getTime();
+        return bDate - aDate;
+      });
     }
+
+    const conversationMap = new Map<string, Email[]>();
+    sourceList.forEach((email) => {
+      const key = getConversationKey(email);
+      const current = conversationMap.get(key) || [];
+      current.push(email);
+      conversationMap.set(key, current);
+    });
+
+    const conversations: EmailConversation[] = Array.from(conversationMap.entries()).map(([key, messages]) => {
+      const sortedMessages = [...messages].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const latestEmail = sortedMessages[0];
+      return {
+        key,
+        contactName: conversationDisplayNames[key] || latestEmail.from?.name || latestEmail.from?.email || 'Unknown sender',
+        contactEmail: latestEmail.from?.email || 'unknown@example.com',
+        latestEmail,
+        messages: sortedMessages,
+        unreadCount: sortedMessages.filter((item) => item.unread).length,
+      };
+    }).sort((a, b) => new Date(b.latestEmail.date).getTime() - new Date(a.latestEmail.date).getTime());
     
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     
     return {
-        currentList: sourceList.slice(startIndex, endIndex),
-        totalPages: Math.ceil(sourceList.length / itemsPerPage) || 1
+      currentList: conversations.slice(startIndex, endIndex),
+      totalPages: Math.ceil(conversations.length / itemsPerPage) || 1
     };
-  }, [activeView, emails, currentPage, itemsPerPage, searchQuery, filterUnread, filterStarred, filterAttachments]);
+  }, [conversationDisplayNames, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, itemsPerPage, searchQuery]);
+
+  const groupedConversations = useMemo(() => {
+    const groups: { label: string; items: EmailConversation[] }[] = [];
+
+    currentList.forEach((conversation) => {
+      const emailDate = new Date(conversation.latestEmail.date);
+      let label = 'Unknown date';
+
+      if (isValid(emailDate)) {
+        if (isToday(emailDate)) {
+          label = 'Today';
+        } else if (isYesterday(emailDate)) {
+          label = 'Yesterday';
+        } else {
+          label = format(emailDate, 'EEEE, MMM d');
+        }
+      }
+
+      const existingGroup = groups.find((group) => group.label === label);
+      if (existingGroup) {
+        existingGroup.items.push(conversation);
+      } else {
+        groups.push({ label, items: [conversation] });
+      }
+    });
+
+    return groups;
+  }, [currentList]);
+
+  const conversationHistoryByKey = useMemo(() => {
+    const map = new Map<string, Email[]>();
+
+    displayEmails.forEach((email) => {
+      const key = getConversationKey(email);
+      const current = map.get(key) || [];
+      current.push(email);
+      map.set(key, current);
+    });
+
+    map.forEach((messages, key) => {
+      map.set(key, [...messages].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    });
+
+    return map;
+  }, [displayEmails]);
+
+  const selectedConversationHistory = useMemo(() => {
+    if (!selectedEmail) return [] as Email[];
+    // Always include optimistic sent emails in the thread if they match the conversation
+    const key = getConversationKey(selectedEmail);
+    const thread = conversationHistoryByKey.get(key) || [selectedEmail];
+    const optimisticInThread = optimisticSentEmails.filter(e => getConversationKey(e) === key);
+    // Merge, dedupe by stable message identity, and sort by date desc.
+    const dedupedByIdentity = new Map<string, Email>();
+    [...thread, ...optimisticInThread].forEach((message) => {
+      dedupedByIdentity.set(getEmailIdentity(message), message);
+    });
+    return Array.from(dedupedByIdentity.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [conversationHistoryByKey, selectedEmail, optimisticSentEmails]);
+
+  const safeRefetchEmails = useCallback(() => {
+    if (user?.propertyId) {
+      refetchEmails();
+    }
+  }, [user?.propertyId, refetchEmails]);
+
+  const forceRefetchEmails = useCallback(() => {
+    if (user?.propertyId) {
+      refetchEmails(false, true);
+    }
+  }, [user?.propertyId, refetchEmails]);
 
   useEffect(() => {
-    // This effect runs once when the component mounts.
-    // Just track when IMAP configuration is available
-    if (!initialFetchDone && user?.propertyId && property?.imapConfiguration) {
+    if (!initialFetchDone && user?.propertyId) {
       setInitialFetchDone(true);
+      forceRefetchEmails();
     }
-  }, [user, property, initialFetchDone]);
+  }, [initialFetchDone, user?.propertyId, forceRefetchEmails]);
+
+  useEffect(() => {
+    const isEmailView = activeView === 'inbox_all' || activeView === 'inbox_unread' || activeView === 'channel_email' || activeView === 'sent';
+    if (isEmailView && user?.propertyId) {
+      forceRefetchEmails();
+    }
+  }, [activeView, user?.propertyId, forceRefetchEmails]);
 
   const emailSyncCooldownMs = 2 * 60 * 1000;
   const isEmailSyncOnCooldown = lastEmailSyncAt ? (Date.now() - lastEmailSyncAt) < emailSyncCooldownMs : false;
   const lastSyncLabel = lastEmailSyncAt ? format(new Date(lastEmailSyncAt), 'PPp') : 'Never';
-
-  // ✅ Safe wrapper for refetchEmails - only calls if IMAP configured
-  const safeRefetchEmails = useCallback(() => {
-    if (property?.imapConfiguration) {
-      refetchEmails();
-    }
-  }, [property?.imapConfiguration, refetchEmails]);
-
 
   const handleTestSmtpConnection = async (settingsToTest: any) => {
     if (!settingsToTest.smtpHost || !settingsToTest.smtpPort || !settingsToTest.smtpUser || !settingsToTest.smtpPass) {
@@ -300,6 +506,26 @@ export default function CommunicationHubPage() {
     setReplyingToEmail(email);
     setIsReplyModalOpen(true);
   };
+
+  const handleChannelChangeFromThread = (channel: 'all' | 'email' | 'whatsapp' | 'sms' | 'guest_portal') => {
+    if (channel === 'all') {
+      setActiveView('inbox_all');
+      return;
+    }
+    if (channel === 'email') {
+      setActiveView('inbox_all');
+      return;
+    }
+    if (channel === 'whatsapp') {
+      setActiveView('whatsapp');
+      return;
+    }
+    if (channel === 'guest_portal') {
+      setActiveView('channel_guest_portal');
+      return;
+    }
+    toast({ title: 'SMS channel', description: 'SMS channel view will be available soon.' });
+  };
   
   // Email action handlers
   const handleStar = async (email: Email) => {
@@ -345,29 +571,137 @@ export default function CommunicationHubPage() {
     }
   };
   
-  const handleSelectEmail = async (emailToSelect: Email) => {
-    setSelectedEmail(emailToSelect);
+  const handleSelectEmail = async (
+    emailToSelect: Email,
+    initialChannel: ThreadChannel = 'all',
+    options?: { promptSubjectForEmail?: boolean }
+  ) => {
+    const readOptimistically = { ...emailToSelect, unread: false };
+    setSelectedEmail(readOptimistically);
+    setSelectedThreadChannel(initialChannel);
+    setIsSelectedThreadNewConversation(false);
+    setShouldPromptSubjectForSelectedThread(Boolean(options?.promptSubjectForEmail));
+    setSelectedThreadContactPhone('');
 
     if (emailToSelect.unread) {
+      const optimisticKey = getOptimisticEmailKey(emailToSelect);
+      setOptimisticallyReadEmailKeys(prev => prev.includes(optimisticKey) ? prev : [...prev, optimisticKey]);
         try {
+        if (user?.propertyId) {
+          const markReadResult = await emailApi.markRead(
+            user.propertyId,
+            emailToSelect.id ? [emailToSelect.id] : [],
+            Number.isFinite(emailToSelect.uid) ? [Number(emailToSelect.uid)] : []
+          );
+          if (!markReadResult?.success) {
+            throw new Error('Failed to mark email as read in communication API');
+          }
+        }
+
+        // Best effort: keep external mailbox flags in sync for other mail apps.
         const token = await auth.currentUser?.getIdToken();
-        await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/markEmailAsRead', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ messageUid: emailToSelect.uid })
-        });
+        if (token) {
+          await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/markEmailAsRead', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ messageUid: emailToSelect.uid })
+          });
+        }
             safeRefetchEmails();
         } catch (error: any) {
             console.error("Failed to mark email as read on server:", error);
+            setOptimisticallyReadEmailKeys(prev => prev.filter(key => key !== getOptimisticEmailKey(emailToSelect)));
+            setSelectedEmail(emailToSelect);
             toast({
                 title: t('toasts.mark_read_error_title'),
                 description: t('toasts.mark_read_error_description'),
                 variant: "destructive"
             });
         }
+    }
+  };
+
+  const handleStartConversation = async (result: ConversationSearchResult, channel: ConversationChannel) => {
+    const resultEmail = String(result.email || '').trim().toLowerCase();
+    const existing = resultEmail
+      ? displayEmails.find((email) => String(email.from?.email || '').trim().toLowerCase() === resultEmail)
+      : undefined;
+
+    setIsNewConversationOpen(false);
+    setActiveView('inbox_all');
+
+    if (existing) {
+      const existingKey = getConversationKey(existing);
+      const resolvedDisplayName = String(result.guestName || '').trim();
+      if (resolvedDisplayName) {
+        setConversationDisplayNames((prev) => ({ ...prev, [existingKey]: resolvedDisplayName }));
+      }
+      await handleSelectEmail(existing, channel, {
+        promptSubjectForEmail: channel === 'email',
+      });
+      return;
+    }
+
+    const synthetic: Email = {
+      uid: 0,
+      from: {
+        name: result.guestName || 'Guest',
+        email: resultEmail || `guest-${Date.now()}@unknown.local`,
+      },
+      subject: result.reservationNumber
+        ? `Reservation ${result.reservationNumber}`
+        : 'New conversation',
+      date: new Date().toISOString(),
+      snippet: '',
+      body: '',
+      unread: false,
+      starred: false,
+      archived: false,
+      labels: [],
+      attachments: [],
+    };
+
+    const manualKey = getConversationKey(synthetic);
+    const resolvedDisplayName = String(result.guestName || '').trim();
+    if (resolvedDisplayName) {
+      setConversationDisplayNames((prev) => ({ ...prev, [manualKey]: resolvedDisplayName }));
+    }
+    setManualConversationKeys((prev) => (prev.includes(manualKey) ? prev : [...prev, manualKey]));
+    setOptimisticSentEmails((prev) => {
+      const exists = prev.some((item) => getEmailIdentity(item) === getEmailIdentity(synthetic));
+      return exists ? prev : [synthetic, ...prev];
+    });
+
+    setSelectedEmail(synthetic);
+    setSelectedThreadChannel(channel);
+    setIsSelectedThreadNewConversation(true);
+    setShouldPromptSubjectForSelectedThread(channel === 'email');
+    setSelectedThreadContactPhone(String(result.phone || '').trim());
+  };
+
+  const handleThreadEmailSent = (sentEmail: Email, options?: { isFirstMessage?: boolean }) => {
+    const manualKey = getConversationKey(sentEmail);
+    setManualConversationKeys((prev) => (prev.includes(manualKey) ? prev : [...prev, manualKey]));
+    setConversationDisplayNames((prev) => {
+      if (prev[manualKey]) return prev;
+      const fallbackName = String(selectedEmail?.from?.name || sentEmail.from?.name || '').trim();
+      if (!fallbackName) return prev;
+      return { ...prev, [manualKey]: fallbackName };
+    });
+
+    setOptimisticSentEmails((prev) => {
+      const exists = prev.some((item) => getEmailIdentity(item) === getEmailIdentity(sentEmail));
+      if (exists) return prev;
+      return [sentEmail, ...prev];
+    });
+
+    if (options?.isFirstMessage) {
+      setIsSelectedThreadNewConversation(false);
+      setShouldPromptSubjectForSelectedThread(false);
+      setSelectedEmail(sentEmail);
     }
   };
 
@@ -389,458 +723,216 @@ export default function CommunicationHubPage() {
     );
   }
 
-  const renderContent = () => {
-    const isInboxView = activeView === 'inbox_all' || activeView === 'inbox_unread' || activeView === 'channel_email';
-    let sourceList: Email[] = [];
-    if (activeView === 'inbox_all' || activeView === 'channel_email') sourceList = emails;
-    if (activeView === 'inbox_unread') sourceList = emails.filter(e => e.unread);
-
-    if (isInboxView) {
-        if (selectedEmail) {
-            return (
-                <EmailDetailView 
-                    email={selectedEmail} 
-                    onBack={() => setSelectedEmail(null)} 
-                    onReply={handleReply}
-                    onForward={handleForward}
-                    onStar={handleStar}
-                    onArchive={handleArchive}
-                    onDelete={handleDelete}
-                    onMarkUnread={handleMarkUnread}
-                    onAddLabel={handleAddLabel}
-                />
-            );
-        }
-        
-        let title = t('views.inbox_all_title');
-        if (activeView === 'inbox_unread') title = t('views.inbox_unread_title');
-        if (activeView === 'channel_email') title = t('views.inbox_channel_email_title');
-
-        return (
-            <div className="flex flex-col h-full overflow-hidden">
-                <div className="p-4 border-b flex justify-between items-center bg-white z-20 flex-shrink-0">
-                    <h3 className="font-semibold">{title}</h3>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground">Last sync: {lastSyncLabel}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => safeRefetchEmails()}
-                      disabled={isLoadingEmails || isSyncingEmails || isEmailSyncOnCooldown}
-                    >
-                      {(isLoadingEmails || isSyncingEmails) ? <Icons.Spinner className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-                {isLoadingEmails && emails.length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>
-                ) : sourceList.length > 0 ? (
-                    <>
-                    <div className="flex-1 overflow-hidden">
-                        <ScrollArea className="h-full">
-                            <div className="divide-y">
-                          {(() => {
-                            const displayEmails: Email[] = (currentList as Email[]);
-                                  return displayEmails.map((email: Email) => (
-                                    <EmailListItem 
-                                        key={(email as any).uid} 
-                                        email={email} 
-                                        onSelect={() => handleSelectEmail(email)} 
-                                        isSelected={(selectedEmail as any)?.uid === (email as any).uid}
-                                        onStar={handleStar}
-                                        onArchive={handleArchive}
-                                        onDelete={handleDelete}
-                                    />
-                            ));
-                          })()}
-                            </div>
-                        </ScrollArea>
-                    </div>
-                    {totalPages > 1 && (
-                        <CardFooter className="flex items-center justify-end space-x-6 p-2 border-t flex-shrink-0">
-                            <div className="flex items-center space-x-2">
-                                <p className="text-sm font-medium">{t('pagination.rows_per_page')}</p>
-                                <Select
-                                    value={`${itemsPerPage}`}
-                                    onValueChange={(value) => {
-                                        setItemsPerPage(Number(value));
-                                        setCurrentPage(1);
-                                    }}
-                                >
-                                    <SelectTrigger className="h-8 w-[70px]">
-                                        <SelectValue placeholder={`${itemsPerPage}`} />
-                                    </SelectTrigger>
-                                    <SelectContent side="top">
-                                      {[15, 50, 10, 150].map((pageSize) => (
-                                            <SelectItem key={pageSize} value={`${pageSize}`}>
-                                                {pageSize}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <span className="text-sm text-muted-foreground">
-                                {t('pagination.page_of', { currentPage, totalPages })}
-                            </span>
-                            <div className="flex items-center space-x-2">
-                                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>{t('pagination.previous_button')}</Button>
-                                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>{t('pagination.next_button')}</Button>
-                            </div>
-                        </CardFooter>
-                    )}
-                    </>
-                ) : (
-                     <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                        <p className="text-muted-foreground">
-                            {activeView === 'inbox_all' || activeView === 'channel_email' ? t('views.inbox_empty') : t('views.inbox_unread_empty')}
-                        </p>
-                        {(activeView === 'inbox_all' || activeView === 'channel_email') && <Button variant="link" onClick={() => safeRefetchEmails()}>{t('views.fetch_now_button')}</Button>}
-                     </div>
-                )}
-            </div>
-        );
-    }
-    
-    switch(activeView) {
-        case 'whatsapp':
-            return <WhatsAppChatView />;
-        case 'inbox_archived':
-            return <ViewPlaceholder title={t('views.archived_title')} description={t('views.archived_description')} icon={<Archive className="w-16 h-16" data-ai-hint="archive box" />} />;
-        case 'channel_chatbot':
-            return <ViewPlaceholder title={t('views.chatbot_title')} description={t('views.chatbot_description')} icon={<Bot className="w-16 h-16" data-ai-hint="robot chatbot" />} />;
-        case 'channel_guest_portal':
-          return <GuestPortalChatView statusFilter="all" />;
-        case 'portal_checked_in':
-          return <GuestPortalChatView statusFilter="checked-in" />;
-        case 'portal_confirmed':
-          return <GuestPortalChatView statusFilter="confirmed" />;
-        case 'portal_checked_out':
-          return <GuestPortalChatView statusFilter="checked-out" />;
-        case 'settings_autoresponse':
-            return <ViewPlaceholder title={t('views.autoresponse_title')} description={t('views.autoresponse_description')} icon={<MessageCircle className="w-16 h-16" data-ai-hint="auto reply message" />} />;
-        case 'settings_email':
-          return (
-            <ScrollArea className="flex-1 h-full">
-              <div className="p-4 space-y-6">
-                <SMTPConfigurationForm 
-                  initialSettings={property?.emailConfiguration}
-                  onSave={(smtpSettings: any) => handleSaveSettings({ smtpSettings })}
-                  isSaving={isSaving}
-                  isLoading={isLoadingAuth}
-                  onTestConnection={handleTestSmtpConnection}
-                  isTesting={isTestingSmtp}
-                />
-                 <IMAPConfigurationForm 
-                   initialSettings={property?.imapConfiguration}
-                   onSave={(imapSettings: any) => handleSaveSettings({ imapSettings })}
-                  isSaving={isSaving}
-                  isLoading={isLoadingAuth}
-                  onTestConnection={handleTestImapConnection}
-                  isTesting={isTestingImap}
-                />
-              </div>
-            </ScrollArea>
-          );
-        case 'settings_integrations':
-            return (
-                <ScrollArea className="flex-1 h-full">
-                    <div className="p-4 space-y-6">
-                        <SMTPConfigurationForm 
-                          initialSettings={property?.emailConfiguration}
-                          onSave={(smtpSettings: any) => handleSaveSettings({ smtpSettings })}
-                            isSaving={isSaving}
-                            isLoading={isLoadingAuth}
-                            onTestConnection={handleTestSmtpConnection}
-                            isTesting={isTestingSmtp}
-                        />
-                         <IMAPConfigurationForm 
-                           initialSettings={property?.imapConfiguration}
-                           onSave={(imapSettings: any) => handleSaveSettings({ imapSettings })}
-                            isSaving={isSaving}
-                            isLoading={isLoadingAuth}
-                            onTestConnection={handleTestImapConnection}
-                            isTesting={isTestingImap}
-                        />
-                    </div>
-                </ScrollArea>
-            );
-        default:
-            return <ViewPlaceholder title={t('views.select_section_title')} description={t('views.select_section_description')} icon={<Inbox className="w-16 h-16" data-ai-hint="inbox messages" />} />;
-    }
-  }
-
   return (
     <div className="overflow-hidden rounded-lg bg-white border border-slate-200" style={{ height: 'calc(96vh - var(--app-header-height))' }}>
-      <div className="flex h-full">
-        {/* LEFT SIDEBAR */}
-        <aside className={`bg-slate-50 border-r border-slate-200 flex flex-col transition-all duration-300 h-full ${sidebarCollapsed ? 'w-20' : 'w-72'}`}>
-          <div className="p-6 flex items-center justify-between border-b bg-white">
-            {!sidebarCollapsed && <h1 className="font-black text-sm tracking-tighter">{t('nav.inbox_header')}</h1>}
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarCollapsed(s => !s)}>
-                {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8"
-                onClick={() => setIsComposeModalOpen(true)}
-                title="Compose new email"
-              >
-                <MailPlus className="h-4 w-4" />
-              </Button>
+      <div className="flex h-full min-w-0">
+        <aside className="flex w-[320px] shrink-0 flex-col border-r border-slate-200 bg-slate-50">
+          <div className="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h1 className="text-sm font-semibold text-slate-900">{t('nav.inbox_header')}</h1>
+                <p className="text-[11px] text-slate-500">Conversation list</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setIsNewConversationOpen(true)}
+                  title="Start new conversation"
+                >
+                  <MailPlus className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => safeRefetchEmails()}
+                  disabled={isLoadingEmails || isSyncingEmails || isEmailSyncOnCooldown}
+                  title="Refresh"
+                >
+                  {(isLoadingEmails || isSyncingEmails) ? <Icons.Spinner className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-3">
+              <div className="relative">
+                <Icons.Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  placeholder="Search name, phone, email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-9 text-sm outline-none transition-all focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  All conversations
+                </h3>
+                <span className="text-[10px] text-slate-400">{currentList.length} threads</span>
+              </div>
             </div>
           </div>
 
           <ScrollArea className="flex-1">
-            <nav className="py-4 px-3 space-y-6">
-            <div>
-              {!sidebarCollapsed && <p className="px-3 text-[10px] font-black uppercase text-slate-400 mb-2">MailBox</p>}
-              <div className="space-y-1">
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'inbox_all'} onClick={() => setActiveView('inbox_all')}>
-                  <Inbox className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>{t('nav.inbox_all')}</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'sent'} onClick={() => setActiveView('sent')}>
-                  <Send className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>Sent</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'inbox_unread'} onClick={() => setActiveView('inbox_unread')}>
-                  <MailWarning className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>{t('nav.inbox_unread')}</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'spam'} onClick={() => setActiveView('spam')}>
-                  <AlertCircle className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>Spam</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'trash'} onClick={() => setActiveView('trash')}>
-                  <Trash2 className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>Trash</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'inbox_archived'} onClick={() => setActiveView('inbox_archived')}>
-                  <Archive className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>{t('nav.inbox_archived')}</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'contacts'} onClick={() => setActiveView('contacts')}>
-                  <Users className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>Contacts</span>
-                </NavLink>
-              </div>
-            </div>
+            <div className="divide-y divide-slate-100 bg-white">
+              {currentList.length > 0 ? (
+                groupedConversations.map((group) => (
+                  <section key={group.label} className="px-2 py-2">
+                    <h4 className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{group.label}</h4>
+                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                      {group.items.map((conversation) => {
+                        const email = conversation.latestEmail;
+                        const latestThreadEmail = conversationHistoryByKey.get(conversation.key)?.[0] || email;
+                        const emailDate = new Date(latestThreadEmail.date);
+                        const formattedDate = isValid(emailDate) ? format(emailDate, 'p') : '—';
+                        const isSelected = selectedEmail && getConversationKey(selectedEmail) === conversation.key;
 
-            <div>
-              {!sidebarCollapsed && <p className="px-3 text-[10px] font-black uppercase text-slate-400 mb-2">Guest Portal</p>}
-              <div className="space-y-1">
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'channel_guest_portal'} onClick={() => setActiveView('channel_guest_portal')}>
-                  <MessageSquare className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>All Portal Msgs</span>
-                  {!sidebarCollapsed && guestPortalUnreadCount > 0 && (
-                    <span className="ml-auto bg-[#ea580c] text-white text-[10px] px-1.5 py-0.5 rounded-full">{guestPortalUnreadCount}</span>
-                  )}
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'portal_checked_in'} onClick={() => setActiveView('portal_checked_in')}>
-                  <UserCheck className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>Checked-in</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'portal_confirmed'} onClick={() => setActiveView('portal_confirmed')}>
-                  <CalendarClock className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>Confirmed</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'portal_checked_out'} onClick={() => setActiveView('portal_checked_out')}>
-                  <LogOut className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>Checked-out</span>
-                </NavLink>
-              </div>
+                        return (
+                          <button
+                            key={conversation.key}
+                            type="button"
+                            onClick={() => handleSelectEmail(email)}
+                            className={cn(
+                              'block w-full border-b border-slate-100 px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50',
+                              isSelected && 'bg-slate-50',
+                              conversation.unreadCount > 0 && 'bg-blue-50/40'
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 items-center gap-2">
+                                {conversation.unreadCount > 0 && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-600" />}
+                                <span className={cn('truncate text-sm', conversation.unreadCount > 0 ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
+                                  {conversation.contactName}
+                                </span>
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {getConversationChannels(conversation).map((channel) => (
+                                    <Badge key={channel} variant="outline" className={cn('h-5 rounded-full px-2 text-[10px] font-medium', getChannelBadgeClassName(channel))}>
+                                      {channel}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 flex-col items-end gap-1">
+                                <span className="text-[11px] font-medium text-slate-400">{formattedDate}</span>
+                                <Badge
+                                  variant="outline"
+                                  className={cn('h-5 rounded-full px-2 text-[10px] font-medium', getStatusBadgeClassName(latestThreadEmail))}
+                                >
+                                  {getLastMessageStatus(latestThreadEmail)}
+                                </Badge>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))
+              ) : (
+                <div className="p-8 text-center text-sm text-muted-foreground">No conversations</div>
+              )}
             </div>
-
-            <div>
-              {!sidebarCollapsed && <p className="px-3 text-[10px] font-black uppercase text-slate-400 mb-2">Social & AI</p>}
-              <div className="space-y-1">
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'whatsapp'} onClick={() => setActiveView('whatsapp')}>
-                  <MessageSquare className="h-4 w-4 text-emerald-500" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>WhatsApp</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'channel_chatbot'} onClick={() => setActiveView('channel_chatbot')}>
-                  <Bot className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>{t('nav.channel_chatbot')}</span>
-                </NavLink>
-              </div>
-            </div>
-
-            <div>
-              {!sidebarCollapsed && <p className="px-3 text-[10px] font-black uppercase text-slate-400 mb-2">Control</p>}
-              <div className="space-y-1">
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'settings_email'} onClick={() => setActiveView('settings_email')}>
-                  <Mail className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>Email Integration</span>
-                </NavLink>
-                <NavLink collapsed={sidebarCollapsed} active={activeView === 'settings_autoresponse'} onClick={() => setActiveView('settings_autoresponse')}>
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span className={sidebarCollapsed ? 'hidden' : 'ml-2'}>Auto Reply</span>
-                </NavLink>
-              </div>
-            </div>
-            </nav>
           </ScrollArea>
         </aside>
 
-        {activeView === 'channel_guest_portal' || activeView === 'portal_checked_in' || activeView === 'portal_confirmed' || activeView === 'portal_checked_out' || activeView === 'whatsapp' ? (
-          <div className="flex-1">
-            {activeView === 'channel_guest_portal' && <GuestPortalChatView statusFilter="all" />}
-            {activeView === 'portal_checked_in' && <GuestPortalChatView statusFilter="checked-in" />}
-            {activeView === 'portal_confirmed' && <GuestPortalChatView statusFilter="confirmed" />}
-            {activeView === 'portal_checked_out' && <GuestPortalChatView statusFilter="checked-out" />}
-            {activeView === 'whatsapp' && <WhatsAppChatView />}
-          </div>
-        ) : (
-          <>
-            {/* MIDDLE: Conversation List */}
-            <div className="w-96 border-r border-slate-200 flex flex-col bg-white h-full">
-              <div className="p-4 border-b space-y-3 bg-white z-20 flex-shrink-0">
-                {/* Search Bar */}
-                <div className="relative">
-                  <Icons.Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    placeholder="Search emails..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 p-2.5 pl-10 pr-3 rounded-lg text-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100 transition-all"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+        <main className="flex-1 min-w-0 bg-white">
+          {selectedEmail ? (
+            <EmailDetailView
+              email={selectedEmail}
+              onBack={() => setSelectedEmail(null)}
+              onReply={handleReply}
+              onForward={handleForward}
+              onStar={handleStar}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
+              onMarkUnread={handleMarkUnread}
+              onAddLabel={handleAddLabel}
+              conversationHistory={isSelectedThreadNewConversation ? [] : selectedConversationHistory}
+              onChannelChange={handleChannelChangeFromThread}
+              onRefreshEmails={safeRefetchEmails}
+              initialChannel={selectedThreadChannel}
+              isNewConversation={isSelectedThreadNewConversation}
+              requireManualEmailSubject={shouldPromptSubjectForSelectedThread}
+              initialContactPhone={selectedThreadContactPhone}
+              onNewEmailSent={handleThreadEmailSent}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center bg-slate-50/30 text-center">
+              <div className="max-w-sm space-y-3 px-6">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm">
+                  <MessageSquare className="h-8 w-8 text-slate-300" />
                 </div>
-
-                {/* Filter Chips */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button
-                    variant={filterUnread ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setFilterUnread(!filterUnread)}
-                  >
-                    <MailWarning className="h-3 w-3 mr-1" />
-                    Unread
-                  </Button>
-                  <Button
-                    variant={filterStarred ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setFilterStarred(!filterStarred)}
-                  >
-                    <Icons.Star className="h-3 w-3 mr-1" />
-                    Starred
-                  </Button>
-                  <Button
-                    variant={filterAttachments ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setFilterAttachments(!filterAttachments)}
-                  >
-                    <Paperclip className="h-3 w-3 mr-1" />
-                    Has files
-                  </Button>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">
-                    {activeView === 'channel_chatbot' ? 'Chatbot Logs' : t('views.inbox_all_title')}
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400">Last sync: {lastSyncLabel}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => safeRefetchEmails()}
-                      disabled={isLoadingEmails || isSyncingEmails || isEmailSyncOnCooldown}
-                    >
-                      {(isLoadingEmails || isSyncingEmails) ? <Icons.Spinner className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-hidden">
-                <ScrollArea className="h-full">
-                  <div className="divide-y divide-slate-50">
-                {currentList.length > 0 ? currentList.map(email => {
-                  const emailDate = new Date(email.date);
-                  const formattedDate = isValid(emailDate) ? format(emailDate, 'pp') : '—';
-
-                  return (
-                  <div
-                    key={email.uid}
-                    onClick={() => { setSelectedEmail(email); handleSelectEmail(email); }}
-                    className={`p-5 cursor-pointer hover:bg-slate-50 transition-colors ${selectedEmail?.uid === email.uid ? 'bg-slate-50' : ''}`}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <span className={`text-sm font-bold ${email.unread ? 'text-slate-900' : 'text-slate-600'}`}>{email.from.name}</span>
-                      <span className="text-[10px] text-slate-400">{formattedDate}</span>
-                    </div>
-                    <p className="text-xs font-semibold text-slate-800 mb-1 truncate">{email.subject}</p>
-                    <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{email.snippet}</p>
-                  </div>
-                );
-                }) : (
-                  <div className="text-center p-8 text-muted-foreground">No conversations</div>
-                )}
-                  </div>
-                </ScrollArea>
+                <h2 className="text-xl font-bold text-slate-800">Select a conversation</h2>
+                <p className="text-sm text-slate-400">Choose a message from the left panel to view details and reply.</p>
               </div>
             </div>
-
-            {/* RIGHT: Main Workspace / Chat or Email Detail */}
-            <main className="flex-1 flex flex-col bg-slate-50/30 h-full overflow-hidden">
-              {selectedEmail ? (
-                <div className="flex-1 flex flex-col h-full overflow-hidden">
-                  <EmailDetailView 
-                    email={selectedEmail} 
-                    onBack={() => setSelectedEmail(null)} 
-                    onReply={handleReply}
-                    onForward={handleForward}
-                    onStar={handleStar}
-                    onArchive={handleArchive}
-                    onDelete={handleDelete}
-                    onMarkUnread={handleMarkUnread}
-                    onAddLabel={handleAddLabel}
-                  />
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-4">
-                  <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                    <MessageSquare className="w-10 h-10 text-slate-300" />
-                  </div>
-                  <h2 className="text-xl font-bold text-slate-800">Select a conversation</h2>
-                  <p className="text-sm text-slate-400 max-w-xs">Choose a message from the middle column to view and respond.</p>
-                </div>
-              )}
-            </main>
-          </>
-        )}
+          )}
+        </main>
       </div>
 
-      {/* Floating Compose Modal */}
-      {isComposeModalOpen && (
-        <ComposeEmailForm onClose={() => setIsComposeModalOpen(false)} />
-      )}
+      <NewConversationDialog
+        open={isNewConversationOpen}
+        onOpenChange={setIsNewConversationOpen}
+        propertyId={user?.propertyId || ''}
+        onStartConversation={handleStartConversation}
+      />
 
       {/* Reply Modal */}
       <Dialog open={isReplyModalOpen} onOpenChange={setIsReplyModalOpen}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{t('modals.reply_title', { name: replyingToEmail?.from.name })}</DialogTitle>
+            <DialogTitle>{t('modals.reply_title', { name: replyingToEmail?.from?.name || replyingToEmail?.from?.email || 'Guest' })}</DialogTitle>
             <DialogDescription>{t('modals.reply_description')}</DialogDescription>
           </DialogHeader>
           {replyingToEmail && (
             <ReplyEmailForm
-              originalEmail={replyingToEmail}
+              originalEmail={{
+                id: replyingToEmail.id || '',
+                from_name: replyingToEmail.from?.name,
+                from_email: replyingToEmail.from?.email,
+                from: replyingToEmail.from,
+                subject: replyingToEmail.subject,
+                body_text: replyingToEmail.bodyText || replyingToEmail.body || '',
+                body_html: replyingToEmail.bodyHtml || '',
+                date: replyingToEmail.date,
+              }}
               onClose={() => { setIsReplyModalOpen(false); setReplyingToEmail(null); }}
+              onSent={(sent) => {
+                // Optimistically add reply to conversation and sent mailbox
+                if (sent && selectedEmail) {
+                  const optimistic: Email = {
+                    ...sent,
+                    uid: Math.random(),
+                    id: undefined,
+                    unread: false,
+                    starred: false,
+                    archived: false,
+                    labels: [],
+                    attachments: sent.attachments || [],
+                    snippet: sent.body.slice(0, 150),
+                    date: sent.date,
+                    // Keep thread key aligned with the conversation contact.
+                    from: selectedEmail.from,
+                    body: sent.body,
+                  };
+                  setOptimisticSentEmails(prev => [optimistic, ...prev]);
+                  setSelectedEmail(optimistic);
+                  safeRefetchEmails();
+                }
+              }}
             />
           )}
         </DialogContent>

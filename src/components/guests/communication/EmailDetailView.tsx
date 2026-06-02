@@ -1,342 +1,669 @@
 "use client";
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+
+import React, { useEffect, useMemo, useState } from 'react';
 import { format, isValid } from 'date-fns';
+import { ArrowLeft, Clock3, Paperclip, Plus, Send } from 'lucide-react';
+import { useAuth } from '@/contexts/auth-context';
 import type { Email } from '@/contexts/auth-context';
-import { Icons } from '@/components/icons';
-import { 
-    ArrowLeft, 
-    Reply, 
-    Forward, 
-    Star, 
-    Archive, 
-    Trash2, 
-    Download, 
-    Eye, 
-    EyeOff, 
-    Paperclip,
-    Mail,
-    MailOpen,
-    Tag,
-    MoreVertical,
-    ChevronLeft,
-    CornerUpLeft,
-    MoreHorizontal
-} from 'lucide-react';
+import { emailApi, guestPortalApi, whatsappApi } from '@/lib/communication-api';
+import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-    DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-interface EmailDetailViewProps {
-    email: Email;
-    onBack: () => void;
-    onReply: (email: Email) => void;
-    onForward?: (email: Email) => void;
-    onStar?: (email: Email) => void;
-    onArchive?: (email: Email) => void;
-    onDelete?: (email: Email) => void;
-    onMarkUnread?: (email: Email) => void;
-    onAddLabel?: (email: Email) => void;
-}
-
-const ActionButton = ({ 
-    icon: Icon, 
-    label, 
-    onClick, 
-    danger = false,
-    active = false
-}: { 
-    icon: any; 
-    label?: string; 
-    onClick?: () => void; 
-    danger?: boolean;
-    active?: boolean;
-}) => (
-    <button 
-        onClick={onClick}
-        className={cn(
-            "p-2.5 rounded-xl transition-all font-medium text-xs flex items-center gap-2",
-            danger 
-                ? "hover:bg-red-50 text-red-600" 
-                : active
-                ? "bg-yellow-50 text-yellow-600"
-                : "hover:bg-slate-100 text-slate-600"
-        )}
-        title={label}
-    >
-        <Icon size={18} />
-        {label && <span className="hidden lg:inline">{label}</span>}
-    </button>
-);
-
-const EmailDetailView = ({ 
-    email, 
-    onBack, 
-    onReply, 
-    onForward,
-    onStar,
-    onArchive,
-    onDelete,
-    onMarkUnread,
-    onAddLabel
-}: EmailDetailViewProps) => {
-    const emailDate = new Date(email.date);
-    const formattedDate = isValid(emailDate) ? format(emailDate, 'PPpp') : '—';
-    const dateLabel = isValid(emailDate) ? format(emailDate, 'MMM d, yyyy') : '—';
-    const [viewMode, setViewMode] = useState<'formatted' | 'text'>('text');
-    const hasAttachments = email.attachments && email.attachments.length > 0;
-
-    const handleDownloadAttachment = (attachment: any) => {
-        if (attachment.dataUri) {
-            const link = document.createElement('a');
-            link.href = attachment.dataUri;
-            link.download = attachment.filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-    };
-
-    const formatFileSize = (bytes: number) => {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    };
-
-    const getAttachmentIcon = (contentType: string) => {
-        if (contentType.startsWith('image/')) return '🖼️';
-        if (contentType.startsWith('application/pdf')) return '📄';
-        if (contentType.startsWith('application/vnd.ms-excel') || contentType.includes('spreadsheet')) return '📊';
-        if (contentType.startsWith('application/msword') || contentType.includes('document')) return '📝';
-        if (contentType.startsWith('video/')) return '🎥';
-        if (contentType.startsWith('audio/')) return '🎵';
-        return '📎';
-    };
-
-    const plainTextBody = email.bodyText ?? email.body ?? '';
-    const richTextBody = email.bodyHtml ?? email.body ?? '';
-
-    return (
-        <div className="flex flex-col h-full bg-[#F8FAFC]">
-            {/* Action Bar */}
-            <header className="px-6 lg:px-8 py-4 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-10">
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={onBack} 
-                        className="lg:hidden p-2 text-slate-400 hover:bg-slate-100 rounded-xl mr-2"
-                    >
-                        <ChevronLeft size={20} />
-                    </button>
-                    
-                    <div className="hidden lg:flex bg-slate-100 rounded-xl p-1">
-                        <ActionButton 
-                            icon={CornerUpLeft} 
-                            label="Reply" 
-                            onClick={() => onReply(email)}
-                        />
-                        {onForward && (
-                            <ActionButton 
-                                icon={Forward} 
-                                label="Forward" 
-                                onClick={() => onForward(email)}
-                            />
-                        )}
-                    </div>
-                    
-                    <div className="h-6 w-[1px] bg-slate-200 mx-2 hidden lg:block" />
-                    
-                    {onStar && (
-                        <ActionButton 
-                            icon={Star} 
-                            onClick={() => onStar(email)}
-                            active={email.starred}
-                        />
-                    )}
-                    {onArchive && (
-                        <ActionButton 
-                            icon={Archive} 
-                            onClick={() => onArchive(email)}
-                        />
-                    )}
-                    {onDelete && (
-                        <ActionButton 
-                            icon={Trash2} 
-                            onClick={() => onDelete(email)}
-                            danger
-                        />
-                    )}
-                </div>
-                
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={() => setViewMode(v => v === 'text' ? 'formatted' : 'text')}
-                        className={cn(
-                            "flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                            viewMode === 'formatted' 
-                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
-                                : 'bg-white border border-slate-200 text-slate-600'
-                        )}
-                    >
-                        {viewMode === 'formatted' ? <Eye size={14} /> : <EyeOff size={14} />}
-                        <span className="hidden sm:inline">{viewMode === 'formatted' ? 'Rich View' : 'Raw Text'}</span>
-                    </button>
-                    
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <button className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-600">
-                                <MoreHorizontal size={18} />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {onMarkUnread && (
-                                <DropdownMenuItem onClick={() => onMarkUnread(email)}>
-                                    <Mail className="h-4 w-4 mr-2" />
-                                    Mark as unread
-                                </DropdownMenuItem>
-                            )}
-                            {onAddLabel && (
-                                <DropdownMenuItem onClick={() => onAddLabel(email)}>
-                                    <Tag className="h-4 w-4 mr-2" />
-                                    Add label
-                                </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem>Print</DropdownMenuItem>
-                            <DropdownMenuItem>Show original</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </header>
-
-            {/* Email Body Area */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-10">
-                <div className="max-w-4xl mx-auto">
-                    {/* Meta Header */}
-                    <div className="mb-10">
-                        <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 leading-tight mb-6 lg:mb-8">
-                            {email.subject}
-                        </h1>
-                        
-                        {email.labels && email.labels.length > 0 && (
-                            <div className="flex gap-2 mb-6">
-                                {email.labels.map(label => (
-                                    <Badge key={label} variant="secondary" className="text-xs">
-                                        {label}
-                                    </Badge>
-                                ))}
-                            </div>
-                        )}
-                        
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 lg:p-4 bg-white rounded-2xl shadow-sm border border-slate-100">
-                            <div className="flex items-center gap-3 lg:gap-4">
-                                <div className="w-10 h-10 lg:w-12 lg:h-12 bg-gradient-to-br from-indigo-500 to-indigo-700 text-white rounded-2xl flex items-center justify-center font-bold text-base lg:text-lg shadow-lg shadow-indigo-100 flex-shrink-0">
-                                    {email.from.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="font-extrabold text-slate-900 truncate">{email.from.name}</div>
-                                    <div className="text-xs text-slate-400 font-medium truncate">
-                                        From: <span className="text-indigo-600">{email.from.email}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="text-left sm:text-right">
-                                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{dateLabel}</div>
-                                <div className="text-[10px] text-slate-300 font-bold mt-1">SENT VIA EMAIL</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Content Container */}
-                    <div className="bg-white rounded-3xl lg:rounded-[32px] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden mb-8">
-                        {viewMode === 'text' ? (
-                            <div className="p-6 lg:p-12 whitespace-pre-wrap text-slate-700 leading-relaxed text-base lg:text-lg font-medium">
-                                {plainTextBody}
-                            </div>
-                        ) : (
-                            <div className="w-full min-h-[400px] lg:min-h-[600px] bg-white">
-                                <iframe 
-                                    title="Email Content"
-                                    sandbox="allow-popups"
-                                    srcDoc={`
-                                        <html>
-                                            <head>
-                                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                                                <style>
-                                                    body { 
-                                                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-                                                        line-height: 1.6; 
-                                                        color: #1e293b; 
-                                                        margin: 0; 
-                                                        padding: 24px; 
-                                                    }
-                                                    @media (min-width: 1024px) {
-                                                        body { padding: 48px; }
-                                                    }
-                                                    img { max-width: 100%; border-radius: 8px; }
-                                                    a { color: #4f46e5; text-decoration: none; font-weight: 600; }
-                                                    a:hover { text-decoration: underline; }
-                                                    p { margin: 0 0 1em 0; }
-                                                </style>
-                                            </head>
-                                            <body>${richTextBody}</body>
-                                        </html>
-                                    `}
-                                    className="w-full h-full min-h-[500px] lg:min-h-[700px] border-0"
-                                />
-                            </div>
-                        )}
-
-                        {/* Attachment Bar */}
-                        {hasAttachments && (
-                            <div className="p-6 lg:p-8 bg-slate-50 border-t border-slate-100">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Secured Attachments</p>
-                                <div className="flex flex-wrap gap-3">
-                                    {email.attachments!.map((attachment, idx) => (
-                                        <div 
-                                            key={idx} 
-                                            className="flex items-center gap-3 lg:gap-4 px-4 lg:px-5 py-3 lg:py-4 bg-white rounded-2xl shadow-sm border border-slate-200 hover:border-indigo-200 transition-colors cursor-pointer group"
-                                            onClick={() => handleDownloadAttachment(attachment)}
-                                        >
-                                            <div className="w-8 h-8 lg:w-10 lg:h-10 bg-slate-100 rounded-xl flex items-center justify-center group-hover:bg-indigo-50 transition-colors flex-shrink-0">
-                                                <Paperclip size={16} className="text-slate-400 group-hover:text-indigo-600 lg:w-[18px] lg:h-[18px]" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="text-sm font-bold text-slate-800 truncate">{attachment.filename}</div>
-                                                <div className="text-[10px] font-bold text-slate-400">{formatFileSize(attachment.size)}</div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Mobile Action Buttons */}
-                    <div className="lg:hidden flex gap-2 px-4 pb-4">
-                        <Button onClick={() => onReply(email)} className="flex-1 gap-2">
-                            <Reply className="h-4 w-4" />
-                            Reply
-                        </Button>
-                        {onForward && (
-                            <Button variant="outline" onClick={() => onForward(email)} className="flex-1 gap-2">
-                                <Forward className="h-4 w-4" />
-                                Forward
-                            </Button>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+type ChannelKey = 'all' | 'email' | 'whatsapp' | 'sms' | 'guest_portal';
+type SendChannel = 'email' | 'whatsapp' | 'sms' | 'guest_portal';
+type GuestContextPayload = {
+  guest: {
+    id: string;
+    fullName: string;
+    email: string;
+    phone: string | null;
+    country: string | null;
+    city: string | null;
+  };
 };
 
-export default EmailDetailView;
+type UnifiedMessage = {
+  id: string;
+  source: 'email' | 'whatsapp' | 'guest_portal' | 'sms';
+  outgoing: boolean;
+  date: string;
+  senderName: string;
+  senderEmail?: string;
+  subject?: string;
+  text: string;
+  attachmentsCount?: number;
+};
+
+interface EmailDetailViewProps {
+  email: Email & {
+    from_name?: string;
+    from_email?: string;
+  };
+  onBack: () => void;
+  onReply: (email: Email) => void;
+  onForward?: (email: Email) => void;
+  onStar?: (email: Email) => void;
+  onArchive?: (email: Email) => void;
+  onDelete?: (email: Email) => void;
+  onMarkUnread?: (email: Email) => void;
+  onAddLabel?: (email: Email) => void;
+  conversationHistory?: Email[];
+  onChannelChange?: (channel: ChannelKey) => void;
+  onRefreshEmails?: () => void;
+  initialChannel?: ChannelKey;
+  isNewConversation?: boolean;
+  requireManualEmailSubject?: boolean;
+  initialContactPhone?: string;
+  onNewEmailSent?: (sentEmail: Email, options?: { isFirstMessage?: boolean }) => void;
+}
+
+const CHANNELS: Array<{ key: ChannelKey; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'email', label: 'Email' },
+  { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'sms', label: 'SMS' },
+  { key: 'guest_portal', label: 'Guest Portal' },
+];
+
+const stripHtml = (value: string) => value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const normalizePhone = (value?: string | null) => String(value || '').replace(/[^\d+]/g, '');
+
+const isSentMessage = (message: Email) => !message.uid || Number(message.uid) <= 0;
+
+const messageText = (message: Email) => {
+  if (message.bodyText?.trim()) return message.bodyText.trim();
+  if (message.body?.trim()) return message.body.trim();
+  if (message.bodyHtml?.trim()) return stripHtml(message.bodyHtml);
+  return '';
+};
+
+export default function EmailDetailView({
+  email,
+  onBack,
+  conversationHistory,
+  onChannelChange,
+  onRefreshEmails,
+  initialChannel,
+  isNewConversation,
+  requireManualEmailSubject,
+  initialContactPhone,
+  onNewEmailSent,
+}: EmailDetailViewProps) {
+  const { user, property } = useAuth();
+
+  const [activeChannel, setActiveChannel] = useState<ChannelKey>('all');
+  const [composerChannel, setComposerChannel] = useState<SendChannel>('email');
+  const [composerText, setComposerText] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [whatsAppConversationId, setWhatsAppConversationId] = useState<string>('');
+  const [guestPortalConversationId, setGuestPortalConversationId] = useState<string>('');
+  const [whatsAppMessages, setWhatsAppMessages] = useState<any[]>([]);
+  const [guestPortalMessages, setGuestPortalMessages] = useState<any[]>([]);
+  const [newConversationSubject, setNewConversationSubject] = useState('');
+  const [showNewConversationFields, setShowNewConversationFields] = useState(Boolean(isNewConversation));
+
+  const [guestContext, setGuestContext] = useState<GuestContextPayload | null>(null);
+  const [isLoadingContext, setIsLoadingContext] = useState(false);
+
+  const orderedHistory = useMemo(() => {
+    const source = Array.isArray(conversationHistory) && conversationHistory.length > 0
+      ? conversationHistory
+      : [email];
+
+    return [...source].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [conversationHistory, email]);
+
+  const [threadMessages, setThreadMessages] = useState<Email[]>(orderedHistory);
+
+  useEffect(() => {
+    setThreadMessages(orderedHistory);
+  }, [orderedHistory]);
+
+  useEffect(() => {
+    if (!initialChannel) return;
+    setActiveChannel(initialChannel);
+    if (initialChannel !== 'all') {
+      setComposerChannel(initialChannel as SendChannel);
+    }
+  }, [email.id, initialChannel]);
+
+  useEffect(() => {
+    setShowNewConversationFields(Boolean(isNewConversation || requireManualEmailSubject));
+    setNewConversationSubject('');
+  }, [email.id, isNewConversation, requireManualEmailSubject]);
+
+  const latestIncoming = useMemo(() => {
+    const copy = [...threadMessages].reverse();
+    return copy.find((item) => !isSentMessage(item));
+  }, [threadMessages]);
+
+  const recipientEmail = useMemo(() => {
+    return String(latestIncoming?.from?.email || email.from?.email || email.from_email || '').trim();
+  }, [latestIncoming, email]);
+
+  const recipientPhone = useMemo(() => {
+    return normalizePhone(guestContext?.guest?.phone || initialContactPhone || '');
+  }, [guestContext?.guest?.phone, initialContactPhone]);
+
+  const guestDisplayName = useMemo(() => {
+    const fromName = String(latestIncoming?.from?.name || email.from?.name || email.from_name || '').trim();
+    return String(guestContext?.guest?.fullName || fromName || recipientEmail || 'Guest').trim();
+  }, [email.from, email.from_name, guestContext?.guest?.fullName, latestIncoming, recipientEmail]);
+
+  const replyReferenceId = useMemo(() => {
+    if (latestIncoming?.id) return latestIncoming.id;
+    if (email.id) return email.id;
+    return '';
+  }, [latestIncoming, email.id]);
+
+  const contactPhone = useMemo(() => normalizePhone(guestContext?.guest?.phone), [guestContext?.guest?.phone]);
+
+  const handleSwitchChannel = (channel: ChannelKey) => {
+    setActiveChannel(channel);
+    if (channel === 'sms') {
+      toast({ title: 'SMS channel', description: 'SMS send from this workspace is coming soon.' });
+    }
+    if (channel !== 'all') {
+      setComposerChannel(channel as SendChannel);
+    }
+  };
+
+  const sendViaWhatsApp = async (body: string): Promise<string> => {
+    if (!user?.propertyId) throw new Error('Missing property context');
+    const guestPhone = recipientPhone;
+    if (!guestPhone) throw new Error('Guest phone is required for WhatsApp.');
+
+    let conversationId = whatsAppConversationId;
+
+    if (!conversationId) {
+      const listResult = await whatsappApi.listConversations(user.propertyId);
+      const list = listResult?.conversations || [];
+      const byPhone = list.find((item: any) => normalizePhone(item?.guest_phone) === guestPhone);
+      const byEmail = guestContext?.guest?.email
+        ? list.find((item: any) => String(item?.guest_email || '').toLowerCase() === String(guestContext.guest.email).toLowerCase())
+        : null;
+
+      const existing = byPhone || byEmail;
+      if (existing?.id) {
+        conversationId = String(existing.id);
+      }
+    }
+
+    if (conversationId) {
+      const sendResult = await whatsappApi.sendMessage(user.propertyId, conversationId, body);
+      if (!sendResult?.success) throw new Error('Failed to send WhatsApp message');
+      setWhatsAppConversationId(conversationId);
+      return conversationId;
+    }
+
+    const startResult = await whatsappApi.startConversation(
+      user.propertyId,
+      guestPhone,
+      guestContext?.guest?.fullName,
+      guestContext?.guest?.email || undefined,
+      body
+    );
+    if (!startResult?.success || !startResult?.conversation?.id) {
+      throw new Error('Failed to start WhatsApp conversation');
+    }
+    const createdConversationId = String(startResult.conversation.id);
+    setWhatsAppConversationId(createdConversationId);
+    return createdConversationId;
+  };
+
+  const sendViaGuestPortal = async (body: string): Promise<string> => {
+    if (!user?.propertyId) throw new Error('Missing property context');
+
+    const reservationId = guestContext?.reservations?.[0]?.id;
+    if (!reservationId) throw new Error('No reservation linked for guest portal chat.');
+
+    let conversationId = guestPortalConversationId;
+    if (!conversationId) {
+      const listResult = await guestPortalApi.listConversations(user.propertyId);
+      const list = listResult?.conversations || [];
+      const existing = list.find((item: any) => String(item?.reservation_id || '') === String(reservationId));
+      if (existing?.id) {
+        conversationId = String(existing.id);
+      }
+    }
+
+    if (conversationId) {
+      const sendResult = await guestPortalApi.sendMessage(user.propertyId, conversationId, body, []);
+      if (!sendResult?.success) throw new Error('Failed to send guest portal message');
+      setGuestPortalConversationId(conversationId);
+      return conversationId;
+    }
+
+    const startResult = await guestPortalApi.startConversation(user.propertyId, String(reservationId), body);
+    if (!startResult?.success || !startResult?.conversation?.id) {
+      throw new Error('Failed to start guest portal conversation');
+    }
+    const createdConversationId = String(startResult.conversation.id);
+    setGuestPortalConversationId(createdConversationId);
+    return createdConversationId;
+  };
+
+  const loadWhatsAppHistory = async (propertyId: string) => {
+    const guestPhone = recipientPhone;
+    const guestEmail = String(guestContext?.guest?.email || '').toLowerCase();
+
+    const listResult = await whatsappApi.listConversations(propertyId);
+    const list = listResult?.conversations || [];
+    const existing = list.find((item: any) => {
+      const phoneMatch = guestPhone && normalizePhone(item?.guest_phone) === guestPhone;
+      const emailMatch = guestEmail && String(item?.guest_email || '').toLowerCase() === guestEmail;
+      return phoneMatch || emailMatch;
+    });
+
+    if (!existing?.id) {
+      setWhatsAppMessages([]);
+      return;
+    }
+
+    const conversationId = String(existing.id);
+    setWhatsAppConversationId(conversationId);
+    const messagesResult = await whatsappApi.getMessages(propertyId, conversationId, 100);
+    setWhatsAppMessages(messagesResult?.messages || []);
+  };
+
+  const loadGuestPortalHistory = async (propertyId: string) => {
+    const reservationId = guestContext?.reservations?.[0]?.id;
+    if (!reservationId) {
+      setGuestPortalMessages([]);
+      return;
+    }
+
+    const listResult = await guestPortalApi.listConversations(propertyId);
+    const list = listResult?.conversations || [];
+    const existing = list.find((item: any) => String(item?.reservation_id || '') === String(reservationId));
+
+    if (!existing?.id) {
+      setGuestPortalMessages([]);
+      return;
+    }
+
+    const conversationId = String(existing.id);
+    setGuestPortalConversationId(conversationId);
+    const messagesResult = await guestPortalApi.getMessages(propertyId, conversationId, 100);
+    setGuestPortalMessages(messagesResult?.messages || []);
+  };
+
+  const handleSendEmail = async () => {
+    const body = composerText.trim();
+    if (!body) return;
+
+    setIsSending(true);
+    try {
+      if (composerChannel === 'sms') {
+        throw new Error('SMS sending is not yet available in this workspace.');
+      }
+
+      if (composerChannel === 'whatsapp') {
+        const conversationId = await sendViaWhatsApp(body);
+        const messagesResult = await whatsappApi.getMessages(user!.propertyId!, conversationId, 100);
+        setWhatsAppMessages(messagesResult?.messages || []);
+        setComposerText('');
+        toast({ title: 'Sent', description: 'WhatsApp message sent.' });
+        return;
+      }
+
+      if (composerChannel === 'guest_portal') {
+        const conversationId = await sendViaGuestPortal(body);
+        const messagesResult = await guestPortalApi.getMessages(user!.propertyId!, conversationId, 100);
+        setGuestPortalMessages(messagesResult?.messages || []);
+        setComposerText('');
+        toast({ title: 'Sent', description: 'Guest portal message sent.' });
+        return;
+      }
+
+      if (!user?.propertyId || !recipientEmail) {
+        throw new Error('Missing property or recipient email.');
+      }
+
+      const manualSubject = newConversationSubject.trim();
+      const normalizedSubject = showNewConversationFields
+        ? manualSubject
+        : /^re:/i.test(String(email.subject || ''))
+          ? String(email.subject || '(No Subject)')
+          : `Re: ${email.subject || '(No Subject)'}`;
+      const threadContactName = String(guestDisplayName || '').trim() || undefined;
+
+      if (showNewConversationFields && !normalizedSubject) {
+        throw new Error('Subject is required for new email conversations.');
+      }
+
+      const result = replyReferenceId
+        ? await emailApi.sendReply(
+            user.propertyId,
+            replyReferenceId,
+            recipientEmail,
+            normalizedSubject,
+            body.replace(/\n/g, '<br>'),
+            body,
+            [],
+            threadContactName
+          )
+        : await emailApi.sendComposed(
+            user.propertyId,
+            recipientEmail,
+            normalizedSubject,
+            body.replace(/\n/g, '<br>'),
+            body,
+            [],
+            undefined,
+            undefined,
+            threadContactName
+          );
+
+      if (!result?.success) {
+        throw new Error('Failed to send email');
+      }
+
+      const optimisticSent: Email = {
+        id: result.savedEmailId ? String(result.savedEmailId) : undefined,
+        uid: 0,
+        from: {
+          name: guestDisplayName || recipientEmail || 'Guest',
+          email: recipientEmail,
+        },
+        subject: normalizedSubject,
+        date: new Date().toISOString(),
+        snippet: body.slice(0, 150),
+        body,
+        bodyText: body,
+        unread: false,
+        starred: false,
+        archived: false,
+        attachments: [],
+      };
+
+      setThreadMessages((prev) => [...prev, optimisticSent]);
+      onNewEmailSent?.(optimisticSent, { isFirstMessage: showNewConversationFields });
+      setComposerText('');
+      if (showNewConversationFields) {
+        setShowNewConversationFields(false);
+      }
+      toast({ title: 'Sent', description: 'Your message has been sent.' });
+      onRefreshEmails?.();
+    } catch (error: any) {
+      toast({ title: 'Send failed', description: error?.message || 'Could not send message.', variant: 'destructive' });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  useEffect(() => {
+    const loadGuestContext = async () => {
+      if (!user?.propertyId) {
+        setGuestContext(null);
+        return;
+      }
+
+      const lookupEmail = String(latestIncoming?.from?.email || email.from?.email || '').trim();
+      if (!lookupEmail && !email.id) {
+        setGuestContext(null);
+        return;
+      }
+
+      setIsLoadingContext(true);
+      try {
+        const result = await emailApi.getEmailGuestContext(user.propertyId, lookupEmail, email.id);
+        const context = result?.context || null;
+        setGuestContext(context);
+      } catch (error) {
+        console.warn('Failed to load guest context', error);
+        setGuestContext(null);
+      } finally {
+        setIsLoadingContext(false);
+      }
+    };
+
+    loadGuestContext();
+  }, [email.id, email.from?.email, latestIncoming, user?.propertyId]);
+
+  useEffect(() => {
+    const loadChannelHistory = async () => {
+      if (!user?.propertyId || !guestContext) return;
+      try {
+        await loadWhatsAppHistory(user.propertyId);
+        await loadGuestPortalHistory(user.propertyId);
+      } catch (error) {
+        console.warn('Failed to load channel history', error);
+      }
+    };
+    loadChannelHistory();
+  }, [guestContext, recipientPhone, user?.propertyId]);
+
+  const mappedEmailMessages = useMemo<UnifiedMessage[]>(() => {
+    return threadMessages.map((message) => ({
+      id: String(message.id || `${message.uid}-${message.date}`),
+      source: 'email',
+      outgoing: isSentMessage(message),
+      date: message.date,
+      senderName: message.from?.name || message.from?.email || 'Unknown',
+      senderEmail: message.from?.email || undefined,
+      subject: message.subject || undefined,
+      text: messageText(message),
+      attachmentsCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
+    }));
+  }, [threadMessages]);
+
+  const mappedWhatsAppMessages = useMemo<UnifiedMessage[]>(() => {
+    return (whatsAppMessages || []).map((message: any) => ({
+      id: `wa-${message.id}`,
+      source: 'whatsapp',
+      outgoing: String(message.sender_type || '') === 'property',
+      date: String(message.created_at || new Date().toISOString()),
+      senderName: String(message.sender_name || 'WhatsApp User'),
+      text: String(message.message || ''),
+      attachmentsCount: 0,
+    }));
+  }, [whatsAppMessages]);
+
+  const mappedGuestPortalMessages = useMemo<UnifiedMessage[]>(() => {
+    return (guestPortalMessages || []).map((message: any) => ({
+      id: `gp-${message.id}`,
+      source: 'guest_portal',
+      outgoing: String(message.sender_type || '') === 'property',
+      date: String(message.created_at || new Date().toISOString()),
+      senderName: String(message.sender_name || 'Guest Portal User'),
+      text: String(message.message || ''),
+      attachmentsCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
+    }));
+  }, [guestPortalMessages]);
+
+  const displayedMessages = useMemo<UnifiedMessage[]>(() => {
+    let source: UnifiedMessage[] = [];
+    if (activeChannel === 'all') {
+      source = [...mappedEmailMessages, ...mappedWhatsAppMessages, ...mappedGuestPortalMessages];
+    } else if (activeChannel === 'email') {
+      source = mappedEmailMessages;
+    } else if (activeChannel === 'whatsapp') {
+      source = mappedWhatsAppMessages;
+    } else if (activeChannel === 'guest_portal') {
+      source = mappedGuestPortalMessages;
+    } else {
+      source = [];
+    }
+
+    return source.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [activeChannel, mappedEmailMessages, mappedGuestPortalMessages, mappedWhatsAppMessages]);
+
+  const channelCounts = useMemo(() => {
+    const emailCount = mappedEmailMessages.length;
+    const whatsappCount = mappedWhatsAppMessages.length;
+    const guestPortalCount = mappedGuestPortalMessages.length;
+    const smsCount = 0;
+
+    return {
+      all: emailCount + whatsappCount + guestPortalCount + smsCount,
+      email: emailCount,
+      whatsapp: whatsappCount,
+      guest_portal: guestPortalCount,
+      sms: smsCount,
+    };
+  }, [mappedEmailMessages.length, mappedGuestPortalMessages.length, mappedWhatsAppMessages.length]);
+
+  return (
+    <div className="flex h-full bg-slate-100">
+      <div className="flex min-w-0 flex-1 flex-col border-r border-slate-200 bg-white">
+        <header className="border-b border-slate-200 bg-white px-4 py-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={onBack}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-semibold text-slate-900">{guestDisplayName}</h2>
+                <p className="truncate text-xs text-slate-500">{recipientEmail || 'Unknown contact'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+            {CHANNELS.map((channel) => (
+              <button
+                key={channel.key}
+                type="button"
+                onClick={() => handleSwitchChannel(channel.key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+                  activeChannel === channel.key
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                )}
+              >
+                <span>{channel.label}</span>
+                <span
+                  className={cn(
+                    'min-w-[18px] rounded-full px-1.5 text-[10px] leading-4',
+                    activeChannel === channel.key
+                      ? 'bg-slate-100 text-slate-700'
+                      : 'bg-slate-200/70 text-slate-600'
+                  )}
+                >
+                  {channelCounts[channel.key]}
+                </span>
+              </button>
+            ))}
+          </div>
+        </header>
+
+        <ScrollArea className="flex-1 bg-slate-50 px-4 py-4">
+          <div className="space-y-3">
+            {displayedMessages.map((message) => {
+              const outgoing = message.outgoing;
+              const date = new Date(message.date);
+              const label = isValid(date) ? format(date, 'PP p') : 'Unknown date';
+              return (
+                <div key={message.id} className={cn('flex', outgoing ? 'justify-end' : 'justify-start')}>
+                  <div
+                    className={cn(
+                      'max-w-[76%] rounded-2xl border px-3 py-2 shadow-sm',
+                      outgoing
+                        ? 'border-emerald-200 bg-emerald-50'
+                        : 'border-slate-200 bg-white'
+                    )}
+                  >
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-700">{message.senderName}</span>
+                      <Badge variant="outline" className="h-4 rounded-full px-1.5 text-[9px] uppercase tracking-wide">
+                        {message.source === 'guest_portal' ? 'Guest Portal' : message.source}
+                      </Badge>
+                      <span className="text-[10px] text-slate-400">{label}</span>
+                    </div>
+                    {message.source === 'email' && message.subject && (
+                      <p className="mb-1 text-xs font-semibold text-slate-600">Subject: {message.subject}</p>
+                    )}
+                    <p className="whitespace-pre-wrap break-words text-sm text-slate-700">{message.text || 'No readable content.'}</p>
+                    {!!message.attachmentsCount && message.attachmentsCount > 0 && (
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500">
+                        <Paperclip className="h-3 w-3" />
+                        {message.attachmentsCount} attachment{message.attachmentsCount > 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+
+        <footer className="border-t border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Template
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+              Variables
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+              Upload
+            </Button>
+            <Select value={composerChannel} onValueChange={(value: SendChannel) => setComposerChannel(value)}>
+              <SelectTrigger className="ml-auto h-8 w-[150px] rounded-lg text-xs">
+                <SelectValue placeholder="Send via" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="sms">SMS</SelectItem>
+                <SelectItem value="guest_portal">Guest Portal</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <div className="flex-1 space-y-2">
+              {showNewConversationFields && composerChannel === 'email' && (
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Subject</p>
+                  <Input
+                    value={newConversationSubject}
+                    onChange={(event) => setNewConversationSubject(event.target.value)}
+                    placeholder="Enter email subject"
+                    className="h-9 rounded-lg border-slate-200"
+                  />
+                </div>
+              )}
+              <Textarea
+                value={composerText}
+                onChange={(event) => setComposerText(event.target.value)}
+                placeholder={
+                  composerChannel === 'email'
+                    ? 'Write your email reply...'
+                    : composerChannel === 'whatsapp'
+                    ? 'Write WhatsApp message...'
+                    : composerChannel === 'guest_portal'
+                    ? 'Write guest portal message...'
+                    : 'SMS will be available soon.'
+                }
+                className="min-h-[72px] resize-none rounded-xl border-slate-200"
+              />
+            </div>
+            <Button
+              onClick={handleSendEmail}
+              disabled={
+                isSending ||
+                !composerText.trim() ||
+                composerChannel === 'sms' ||
+                (showNewConversationFields && composerChannel === 'email' && !newConversationSubject.trim())
+              }
+              className="h-10 rounded-xl"
+            >
+              {isSending ? <Clock3 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
+        </footer>
+      </div>
+
+    </div>
+  );
+}

@@ -1,6 +1,5 @@
 import { httpsCallable, getFunctions } from 'firebase/functions';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp, deleteDoc, collection, writeBatch, getDoc } from 'firebase/firestore';
+import { createClient } from '@/utils/supabase/client';
 
 interface SendGuestMessageParams {
   guestId: string;
@@ -48,17 +47,23 @@ export const sendGuestMessage = async (params: SendGuestMessageParams) => {
  */
 export const updateGuestPreferences = async (params: UpdateGuestPreferencesParams) => {
   try {
-    const guestRef = doc(db, 'guests', params.guestId);
-    const updateData: Record<string, any> = {
-      updatedAt: serverTimestamp()
-    };
+    const supabase = createClient();
+    const updateData: Record<string, string> = {};
 
-    if (params.roomPreferences !== undefined) updateData.roomPreferences = params.roomPreferences;
-    if (params.dietaryRestrictions !== undefined) updateData.dietaryRestrictions = params.dietaryRestrictions;
-    if (params.specialOccasion !== undefined) updateData.specialOccasion = params.specialOccasion;
-    if (params.communicationPreference !== undefined) updateData.communicationPreference = params.communicationPreference;
+    if (params.roomPreferences !== undefined) updateData.room_preferences = params.roomPreferences;
+    if (params.dietaryRestrictions !== undefined) updateData.dietary_restrictions = params.dietaryRestrictions;
+    if (params.specialOccasion !== undefined) updateData.special_occasion = params.specialOccasion;
+    if (params.communicationPreference !== undefined) updateData.communication_preference = params.communicationPreference;
 
-    await updateDoc(guestRef, updateData);
+    const { error } = await supabase
+      .from('guests')
+      .update({
+        ...updateData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.guestId);
+
+    if (error) throw error;
     return { success: true };
   } catch (error) {
     console.error('Error updating guest preferences:', error);
@@ -71,21 +76,32 @@ export const updateGuestPreferences = async (params: UpdateGuestPreferencesParam
  */
 export const addGuestNote = async (guestId: string, note: string) => {
   try {
-    const guestRef = doc(db, 'guests', guestId);
-    const guestDoc = await getDoc(guestRef);
-    
-    if (!guestDoc.exists()) {
+    const supabase = createClient();
+    const { data: guestDoc, error: fetchError } = await supabase
+      .from('guests')
+      .select('notes')
+      .eq('id', guestId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    if (!guestDoc) {
       throw new Error('Guest not found');
     }
 
-    const currentNotes = guestDoc.data()?.internalNotes || '';
+    const currentNotes = guestDoc.notes || '';
     const timestamp = new Date().toLocaleString();
     const newNotes = currentNotes ? `${currentNotes}\n\n[${timestamp}] ${note}` : `[${timestamp}] ${note}`;
 
-    await updateDoc(guestRef, {
-      internalNotes: newNotes,
-      updatedAt: serverTimestamp()
-    });
+    const { error } = await supabase
+      .from('guests')
+      .update({
+        notes: newNotes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', guestId);
+
+    if (error) throw error;
 
     return { success: true, newNotes };
   } catch (error) {
@@ -99,12 +115,16 @@ export const addGuestNote = async (guestId: string, note: string) => {
  */
 export const updateGuestNotes = async (guestId: string, notes: string) => {
   try {
-    const guestRef = doc(db, 'guests', guestId);
-    
-    await updateDoc(guestRef, {
-      internalNotes: notes,
-      updatedAt: serverTimestamp()
-    });
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('guests')
+      .update({
+        notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', guestId);
+
+    if (error) throw error;
 
     return { success: true };
   } catch (error) {
@@ -118,21 +138,13 @@ export const updateGuestNotes = async (guestId: string, notes: string) => {
  */
 export const deleteGuest = async (guestId: string) => {
   try {
-    const batch = writeBatch(db);
-    const guestRef = doc(db, 'guests', guestId);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('guests')
+      .delete()
+      .eq('id', guestId);
 
-    // Delete guest document
-    batch.delete(guestRef);
-
-    // Delete guest's subcollections (notes will be handled by Cloud Function)
-    const messagesCollection = collection(db, 'guests', guestId, 'messages');
-    const loyaltyCollection = collection(db, 'guests', guestId, 'loyaltyHistory');
-    
-    // Note: In production, you'd want to use a Cloud Function to handle cascade delete
-    // For now, we'll just delete the main guest document
-    
-    batch.delete(guestRef);
-    await batch.commit();
+    if (error) throw error;
 
     return { success: true };
   } catch (error) {
