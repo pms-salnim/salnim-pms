@@ -140,8 +140,16 @@ export default function CommunicationHubPage() {
   };
 
   const getEmailIdentity = (email: Email) => {
-    if (email.id) return email.id;
-    return `${email.uid}-${email.date}-${email.from?.email || 'unknown'}`;
+    const uid = Number(email.uid || 0);
+    const normalizedFrom = String(email.from?.email || '').trim().toLowerCase() || 'unknown';
+
+    // Inbound emails can occasionally be persisted more than once with different DB ids.
+    // Prefer UID-based identity so the same received message is rendered only once.
+    if (uid > 0) return `uid:${uid}-${normalizedFrom}`;
+
+    if (email.id) return `id:${email.id}`;
+
+    return `fallback:${email.date}-${normalizedFrom}-${String(email.subject || '').trim().toLowerCase()}`;
   };
 
   const getConversationKey = (email: Email) => {

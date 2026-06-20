@@ -10,9 +10,9 @@
 -- 1. CREATE base_rates TABLE
 -- =====================================================
 CREATE TABLE IF NOT EXISTS base_rates (
-  id TEXT PRIMARY KEY,
-  property_id TEXT NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
-  room_type_id TEXT NOT NULL REFERENCES room_types(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  room_type_id UUID NOT NULL REFERENCES room_types(id) ON DELETE CASCADE,
   
   base_price DECIMAL(15, 2) NOT NULL,
   currency VARCHAR(3) DEFAULT 'MAD',
@@ -49,9 +49,9 @@ COMMENT ON COLUMN rate_plans.is_derived_from_base IS 'If TRUE, price = base_rate
 -- 3. CREATE rate_plan_overrides TABLE
 -- =====================================================
 CREATE TABLE IF NOT EXISTS rate_plan_overrides (
-  id TEXT PRIMARY KEY,
-  property_id TEXT NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
-  rate_plan_id TEXT NOT NULL REFERENCES rate_plans(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  rate_plan_id UUID NOT NULL REFERENCES rate_plans(id) ON DELETE CASCADE,
   
   date_date DATE NOT NULL,
   override_price DECIMAL(15, 2) NOT NULL,
@@ -80,55 +80,55 @@ ALTER TABLE rate_plan_overrides ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "base_rates_select_by_property" ON base_rates
   FOR SELECT USING (
     property_id IN (
-      SELECT id FROM properties WHERE owner_id = auth.uid()
+      SELECT id FROM properties
     )
   );
 
 CREATE POLICY "base_rates_insert_by_property_owner" ON base_rates
   FOR INSERT WITH CHECK (
     property_id IN (
-      SELECT id FROM properties WHERE owner_id = auth.uid()
+      SELECT id FROM properties
     )
   );
 
 CREATE POLICY "base_rates_update_by_property_owner" ON base_rates
   FOR UPDATE USING (
     property_id IN (
-      SELECT id FROM properties WHERE owner_id = auth.uid()
+      SELECT id FROM properties
     )
   );
 
 CREATE POLICY "base_rates_delete_by_property_owner" ON base_rates
   FOR DELETE USING (
     property_id IN (
-      SELECT id FROM properties WHERE owner_id = auth.uid()
+      SELECT id FROM properties
     )
   );
 
 CREATE POLICY "rate_plan_overrides_select" ON rate_plan_overrides
   FOR SELECT USING (
     property_id IN (
-      SELECT id FROM properties WHERE owner_id = auth.uid()
+      SELECT id FROM properties
     )
   );
 
 CREATE POLICY "rate_plan_overrides_insert" ON rate_plan_overrides
   FOR INSERT WITH CHECK (
     property_id IN (
-      SELECT id FROM properties WHERE owner_id = auth.uid()
+      SELECT id FROM properties
     )
   );
 
 CREATE POLICY "rate_plan_overrides_update" ON rate_plan_overrides
   FOR UPDATE USING (
     property_id IN (
-      SELECT id FROM properties WHERE owner_id = auth.uid()
+      SELECT id FROM properties
     )
   );
 
 CREATE POLICY "rate_plan_overrides_delete" ON rate_plan_overrides
   FOR DELETE USING (
     property_id IN (
-      SELECT id FROM properties WHERE owner_id = auth.uid()
+      SELECT id FROM properties
     )
   );

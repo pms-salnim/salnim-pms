@@ -20,9 +20,8 @@ CREATE INDEX idx_occupancy_restrictions_room_type_id ON occupancy_restrictions(r
 CREATE INDEX idx_occupancy_restrictions_room_id ON occupancy_restrictions(room_id);
 CREATE INDEX idx_occupancy_restrictions_date ON occupancy_restrictions(property_id, date);
 
--- UNIQUE constraint: One occupancy entry per day per scope
 CREATE UNIQUE INDEX unique_occupancy_per_scope
-  ON occupancy_restrictions(date, COALESCE(room_id, room_type_id, 'property'::uuid), property_id)
+  ON occupancy_restrictions(date, COALESCE(room_id, room_type_id, property_id), property_id)
   WHERE room_id IS NOT NULL OR room_type_id IS NOT NULL;
 
 -- Enable Row Level Security

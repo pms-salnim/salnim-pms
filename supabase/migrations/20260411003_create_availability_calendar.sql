@@ -25,7 +25,7 @@ CREATE INDEX idx_availability_calendar_status ON availability_calendar(property_
 
 -- UNIQUE constraint: One availability entry per day per scope
 CREATE UNIQUE INDEX unique_availability_per_scope
-  ON availability_calendar(date, COALESCE(room_id, room_type_id, 'property'::uuid), property_id)
+  ON availability_calendar(date, COALESCE(room_id, room_type_id, property_id), property_id)
   WHERE room_id IS NOT NULL OR room_type_id IS NOT NULL;
 
 -- Enable Row Level Security

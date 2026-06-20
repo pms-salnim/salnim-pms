@@ -163,6 +163,41 @@ function getPrimaryRecipient(to: any): { email: string; name?: string } {
   };
 }
 
+function dedupeEmailsByUid<T extends { uid?: number | null; id?: string; date_ms?: number | null; updated_at?: string | null }>(rows: T[]): T[] {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+
+  const byIdentity = new Map<string, T>();
+
+  rows.forEach((row) => {
+    const uid = Number(row?.uid || 0);
+    const key = uid > 0 ? `uid:${uid}` : `id:${String(row?.id || '')}`;
+    const existing = byIdentity.get(key);
+
+    if (!existing) {
+      byIdentity.set(key, row);
+      return;
+    }
+
+    const existingDate = Number(existing?.date_ms || 0);
+    const currentDate = Number(row?.date_ms || 0);
+
+    if (currentDate > existingDate) {
+      byIdentity.set(key, row);
+      return;
+    }
+
+    if (currentDate === existingDate) {
+      const existingUpdatedAt = new Date(String(existing?.updated_at || 0)).getTime();
+      const currentUpdatedAt = new Date(String(row?.updated_at || 0)).getTime();
+      if (currentUpdatedAt > existingUpdatedAt) {
+        byIdentity.set(key, row);
+      }
+    }
+  });
+
+  return Array.from(byIdentity.values());
+}
+
 function extractImapConfigFromSettings(settings: any): {
   host: string;
   port: number;
@@ -619,8 +654,18 @@ async function handleSyncEmails(
       attachments: Array<{ file_name: string; content_type: string; file_size: number | null }>;
     }>;
 
-    if (validParsed.length > 0) {
-      const uids = validParsed.map((v) => v.uid);
+    // Safety net: if IMAP returns duplicate entries for the same UID, only process one.
+    const validParsedByUid = Array.from(
+      validParsed.reduce((acc, item) => {
+        if (!acc.has(item.uid)) {
+          acc.set(item.uid, item);
+        }
+        return acc;
+      }, new Map<number, (typeof validParsed)[number]>()).values()
+    );
+
+    if (validParsedByUid.length > 0) {
+      const uids = validParsedByUid.map((v) => v.uid);
 
       const { data: existingRows } = await supabase
         .from('property_emails')
@@ -629,8 +674,8 @@ async function handleSyncEmails(
         .in('uid', uids);
 
       const existingUidSet = new Set((existingRows || []).map((row) => Number(row.uid)));
-      const toInsert = validParsed.filter((v) => !existingUidSet.has(v.uid));
-      const toUpdate = validParsed.filter((v) => existingUidSet.has(v.uid));
+      const toInsert = validParsedByUid.filter((v) => !existingUidSet.has(v.uid));
+      const toUpdate = validParsedByUid.filter((v) => existingUidSet.has(v.uid));
 
       if (toUpdate.length > 0) {
         await Promise.all(
@@ -717,10 +762,13 @@ async function handleSyncEmails(
       throw listError;
     }
 
+    const dedupedEmails = dedupeEmailsByUid(emails || [])
+      .sort((a: any, b: any) => Number(b?.date_ms || 0) - Number(a?.date_ms || 0));
+
     return NextResponse.json({
       success: true,
-      emails: emails || [],
-      synced: validParsed.length,
+      emails: dedupedEmails,
+      synced: validParsedByUid.length,
     });
   } catch (error) {
     console.error('Error syncing emails:', error);

@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS seasons (
   description TEXT,
   season_start DATE NOT NULL,
   season_end DATE NOT NULL,
-  price_modifier DECIMAL(5, 2) CHECK (price_modifier NOT NULL), -- % adjustment (e.g., 150 = 150% of base)
-  color HEX,  -- Visual indicator hex color (e.g., '#FF6B6B' for red)
+  price_modifier DECIMAL(5, 2), -- % adjustment (e.g., 150 = 150% of base)
+  color VARCHAR(7),  -- Visual indicator hex color (e.g., '#FF6B6B' for red)
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'archived')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

@@ -3,12 +3,12 @@
 -- handle the new end_date column for range-based storage
 
 CREATE OR REPLACE FUNCTION get_availability_for_date(
-  p_property_id TEXT,
+  p_property_id UUID,
   p_room_type_id UUID,
   p_room_id UUID,
   p_date DATE
 )
-RETURNS TABLE (id TEXT, status VARCHAR, min_nights INTEGER, max_nights INTEGER) AS $$
+RETURNS TABLE (id UUID, status VARCHAR, min_nights INTEGER, max_nights INTEGER) AS $$
 BEGIN
   -- Try room-level availability first
   RETURN QUERY
@@ -53,7 +53,7 @@ $$ LANGUAGE plpgsql;
 
 -- Function to check if a room is available for a date range
 CREATE OR REPLACE FUNCTION is_room_available_for_range(
-  p_property_id TEXT,
+  p_property_id UUID,
   p_room_id UUID,
   p_start_date DATE,
   p_end_date DATE
@@ -78,7 +78,7 @@ $$ LANGUAGE plpgsql;
 
 -- Function to get blocked dates in a range
 CREATE OR REPLACE FUNCTION get_blocked_dates_in_range(
-  p_property_id TEXT,
+  p_property_id UUID,
   p_room_id UUID,
   p_start_date DATE,
   p_end_date DATE
@@ -87,7 +87,7 @@ RETURNS TABLE (blocked_date DATE, status VARCHAR, reason TEXT) AS $$
 BEGIN
   RETURN QUERY
   SELECT 
-    blocked_date,
+    blocked_dates.blocked_date::DATE,
     a.status::VARCHAR,
     a.notes as reason
   FROM availability_calendar a
@@ -95,7 +95,7 @@ BEGIN
     GREATEST(a.date, p_start_date),
     LEAST(COALESCE(a.end_date, p_end_date), p_end_date),
     INTERVAL '1 day'
-  )::DATE as blocked_date
+  ) AS blocked_dates(blocked_date)
   WHERE a.property_id = p_property_id
     AND a.room_id = p_room_id
     AND a.status IN ('not_available', 'blocked', 'closed_to_arrival', 'closed_to_departure')
@@ -107,7 +107,7 @@ $$ LANGUAGE plpgsql;
 
 -- Function to get minimum stay for a specific date
 CREATE OR REPLACE FUNCTION get_min_stay_for_date(
-  p_property_id TEXT,
+  p_property_id UUID,
   p_room_id UUID,
   p_date DATE
 )

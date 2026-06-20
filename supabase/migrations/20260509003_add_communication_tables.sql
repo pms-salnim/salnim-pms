@@ -10,7 +10,7 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.guest_portal_conversations (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  property_id TEXT NOT NULL,
+  property_id UUID NOT NULL,
   reservation_id TEXT NOT NULL,
   guest_name TEXT NOT NULL,
   guest_email TEXT,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS public.guest_portal_conversations (
 CREATE TABLE IF NOT EXISTS public.guest_portal_messages (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   conversation_id TEXT NOT NULL REFERENCES public.guest_portal_conversations(id) ON DELETE CASCADE,
-  property_id TEXT NOT NULL,
+  property_id UUID NOT NULL,
   sender_type TEXT NOT NULL CHECK (sender_type IN ('guest', 'property')),
   sender_id TEXT NOT NULL,
   sender_name TEXT NOT NULL,
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS public.guest_portal_message_attachments (
 
 CREATE TABLE IF NOT EXISTS public.whatsapp_conversations (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  property_id TEXT NOT NULL,
+  property_id UUID NOT NULL,
   guest_name TEXT NOT NULL,
   guest_phone TEXT NOT NULL,
   guest_email TEXT,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_conversations (
 CREATE TABLE IF NOT EXISTS public.whatsapp_messages (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   conversation_id TEXT NOT NULL REFERENCES public.whatsapp_conversations(id) ON DELETE CASCADE,
-  property_id TEXT NOT NULL,
+  property_id UUID NOT NULL,
   external_message_id TEXT,
   sender_type TEXT NOT NULL CHECK (sender_type IN ('guest', 'property')),
   sender_id TEXT NOT NULL,
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_messages (
 
 CREATE TABLE IF NOT EXISTS public.property_emails (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  property_id TEXT NOT NULL,
+  property_id UUID NOT NULL,
   uid INTEGER,
   from_name TEXT,
   from_email TEXT NOT NULL,
@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS public.email_attachments (
 
 CREATE TABLE IF NOT EXISTS public.email_labels (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  property_id TEXT NOT NULL,
+  property_id UUID NOT NULL,
   name TEXT NOT NULL,
   color TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),

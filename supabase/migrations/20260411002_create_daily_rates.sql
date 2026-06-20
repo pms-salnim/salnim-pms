@@ -26,7 +26,7 @@ CREATE INDEX idx_daily_rates_level_lookup ON daily_rates(property_id, date, room
 -- UNIQUE constraint: One rate per day, per room (or room_type, or property level)
 -- When room_id is NULL, it's room_type level; when both are NULL, it's property level
 CREATE UNIQUE INDEX unique_daily_rate_scope
-  ON daily_rates(date, COALESCE(room_id, room_type_id, 'property'::uuid), rate_plan_id, property_id)
+  ON daily_rates(date, COALESCE(room_id, room_type_id, property_id), rate_plan_id, property_id)
   WHERE room_id IS NOT NULL OR room_type_id IS NOT NULL;
 
 -- Enable Row Level Security

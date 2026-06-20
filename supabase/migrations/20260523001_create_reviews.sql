@@ -5,7 +5,7 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  property_id TEXT NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  property_id UUID NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
   source TEXT NOT NULL DEFAULT 'guest_portal',
   guest_name TEXT NOT NULL,
   guest_email TEXT,
@@ -146,7 +146,7 @@ ON public.reviews
 FOR INSERT
 TO authenticated
 WITH CHECK (
-  public.can_access_review_property(property_id)
+  public.can_access_review_property(property_id::text)
 );
 
 CREATE POLICY reviews_update_by_property_staff
@@ -154,10 +154,10 @@ ON public.reviews
 FOR UPDATE
 TO authenticated
 USING (
-  public.can_access_review_property(property_id)
+  public.can_access_review_property(property_id::text)
 )
 WITH CHECK (
-  public.can_access_review_property(property_id)
+  public.can_access_review_property(property_id::text)
 );
 
 CREATE POLICY reviews_delete_by_property_staff
@@ -165,7 +165,7 @@ ON public.reviews
 FOR DELETE
 TO authenticated
 USING (
-  public.can_access_review_property(property_id)
+  public.can_access_review_property(property_id::text)
 );
 
 COMMIT;
