@@ -82,17 +82,18 @@ export default function BlockedDatesPage() {
     return roomType ? `${roomType.name} (${t('table.all_rooms')})` : t('table.unknown_room_type');
   };
 
-  const getNoteDisplay = (notes: any) => {
+  const getNoteDisplay = (notes: unknown): string => {
     if (!notes) return "-";
     if (typeof notes === 'string') {
         return notes;
     }
-    if (typeof notes === 'object' && notes.key && notes.params) {
+    if (typeof notes === 'object' && notes !== null && 'key' in notes && 'params' in notes) {
+        const n = notes as { key: string; params: Record<string, string> };
         // Translate the note using the stored key and parameters
-        return t(notes.key, {
-            ...notes.params,
-            date: format(parseISO(notes.params.date), 'PPp'),
-        });
+        return String(t(n.key, {
+            ...n.params,
+            date: format(parseISO(n.params.date), 'PPp'),
+        }));
     }
     return "-";
   };

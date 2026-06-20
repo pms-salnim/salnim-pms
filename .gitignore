@@ -43,3 +43,10 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# nested repo clone — not part of this project
+/salnim-pms/
+
+# duplicate files with timestamps in names
+* [0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9].sql
+*copy*.sql

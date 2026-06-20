@@ -127,7 +127,7 @@ export default function PublicBookingLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { propertySlug: string };
+  params: Promise<{ propertySlug: string }>;
 }) {
   const resolvedParams = React.use(params);
   return (

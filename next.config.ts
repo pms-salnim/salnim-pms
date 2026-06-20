@@ -5,10 +5,8 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   /* config options here */
   typescript: {
+    // 977 pre-existing type errors — fix incrementally per feature
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   images: {
     remotePatterns: [
