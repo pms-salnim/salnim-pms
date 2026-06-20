@@ -1,0 +1,205 @@
+[
+  {
+    "file": "src/app/api/pricing/base-rates/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/pricing/rate-plan-overrides/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/pricing/rate-plan-adjustments/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/pricing/calculate-price/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/property-settings/rates-availability/save-availability/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/property-settings/rates-availability/update-room/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/property-settings/rates-availability/test-insert/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/property-settings/rates-availability/rate-overrides/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/communication/email/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/communication/whatsapp/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_JWT_SECRET"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/communication/guest-portal/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY",
+      "SUPABASE_JWT_SECRET"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/guests/crud/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/reservations/crud/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/reservations/list/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/rooms/crud/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/rooms/list/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/rooms/room-types/crud/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/rooms/room-types/list/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/roles/crud/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/roles/list/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/properties/update/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/properties/infos/update/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/properties/system/notifications/update/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/properties/system/preferences/update/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  },
+  {
+    "file": "src/app/api/property-settings/communication-channels/route.ts",
+    "env_vars_used": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "instantiation_location": "module-level"
+  }
+]

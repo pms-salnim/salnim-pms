@@ -1,10 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
-);
+let supabase: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseClient() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return supabase;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build query
-    let query = supabase
+    let query = getSupabaseClient()
       .from('roles')
       .select('*')
       .eq('property_id', propertyId)

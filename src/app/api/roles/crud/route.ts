@@ -1,10 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
-);
+let supabase: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseClient() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return supabase;
+}
 
 interface RolePayload {
   propertyId: string;
@@ -58,7 +65,7 @@ async function handleCreate(data: RolePayload) {
 
   console.log('Creating role:', { name: data.name, propertyId: data.propertyId });
 
-  const { data: newRole, error } = await supabase
+  const { data: newRole, error } = await getSupabaseClient()
     .from('roles')
     .insert({
       property_id: data.propertyId,
@@ -110,7 +117,7 @@ async function handleUpdate(data: RolePayload & { id: string }) {
 
   console.log('Updating role:', { id: data.id, name: data.name });
 
-  const { data: updatedRole, error } = await supabase
+  const { data: updatedRole, error } = await getSupabaseClient()
     .from('roles')
     .update({
       name: data.name,
@@ -155,7 +162,7 @@ async function handleDelete(data: { id: string; propertyId: string }) {
 
   console.log('Deleting role:', { id: data.id });
 
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from('roles')
     .delete()
     .eq('id', data.id)
