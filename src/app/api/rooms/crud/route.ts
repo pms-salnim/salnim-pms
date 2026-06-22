@@ -30,6 +30,10 @@ async function verifyUserProperty(userId: string, propertyId: string) {
   }
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Get auth token from header
@@ -52,7 +56,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { action, propertyId, roomId, roomTypeId, name, number, floor, status, cleaningStatus, notes, amenities } = await request.json();
+    const body = await request.json();
+    const {
+      action,
+      propertyId,
+      roomId,
+      roomTypeId,
+      name,
+      number,
+      floor,
+      status,
+      cleaningStatus,
+      notes,
+      roomIds,
+      updates,
+    } = body;
 
     if (!propertyId) {
       return NextResponse.json(
@@ -65,7 +83,8 @@ export async function POST(request: NextRequest) {
     await verifyUserProperty(data.user.id, propertyId);
 
     if (action === 'create') {
-      const id = roomId || `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // rooms.id is UUID in schema; ensure create uses a valid UUID.
+      const id = roomId && isUuid(roomId) ? roomId : crypto.randomUUID();
 
       const { data: newRoom, error: createError } = await supabaseAdmin
         .from('rooms')
@@ -79,7 +98,6 @@ export async function POST(request: NextRequest) {
           status: status || 'Available',
           cleaning_status: cleaningStatus || 'clean',
           notes: notes || '',
-          amenities: amenities || [],
         })
         .select('*')
         .single();
@@ -113,7 +131,6 @@ export async function POST(request: NextRequest) {
       if (status !== undefined) updatePayload.status = status;
       if (cleaningStatus !== undefined) updatePayload.cleaning_status = cleaningStatus;
       if (notes !== undefined) updatePayload.notes = notes;
-      if (amenities !== undefined) updatePayload.amenities = amenities;
 
       const { data: updatedRoom, error: updateError } = await supabaseAdmin
         .from('rooms')
@@ -167,11 +184,16 @@ export async function POST(request: NextRequest) {
 
     if (action === 'bulk-update') {
       // Handle bulk updates for multiple rooms
-      const { roomIds, updates } = await request.json();
-      
       if (!roomIds || !Array.isArray(roomIds)) {
         return NextResponse.json(
           { error: 'roomIds array is required for bulk-update' },
+          { status: 400 }
+        );
+      }
+
+      if (!updates || typeof updates !== 'object') {
+        return NextResponse.json(
+          { error: 'updates object is required for bulk-update' },
           { status: 400 }
         );
       }
@@ -181,7 +203,6 @@ export async function POST(request: NextRequest) {
       if (updates.status !== undefined) updatePayload.status = updates.status;
       if (updates.cleaningStatus !== undefined) updatePayload.cleaning_status = updates.cleaningStatus;
       if (updates.notes !== undefined) updatePayload.notes = updates.notes;
-      if (updates.amenities !== undefined) updatePayload.amenities = updates.amenities;
 
       const { error: updateError } = await supabaseAdmin
         .from('rooms')
@@ -205,8 +226,6 @@ export async function POST(request: NextRequest) {
 
     if (action === 'bulk-delete') {
       // Handle bulk deletes for multiple rooms
-      const { roomIds } = await request.json();
-      
       if (!roomIds || !Array.isArray(roomIds)) {
         return NextResponse.json(
           { error: 'roomIds array is required for bulk-delete' },
