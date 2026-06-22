@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PropertySettingsSubtabs } from '@/components/property-settings/property-settings-subtabs';
 import { useAuth } from '@/contexts/auth-context';
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient } from '@/utils/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import type { RoomType } from '@/types/roomType';
 import type { Property } from '@/types/property';
@@ -47,10 +47,7 @@ export interface BaseRate {
   updated_at?: string;
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
-);
+const supabase = createSupabaseClient();
 
 const BaseRateForm = dynamic(() => import('@/components/base-rates/base-rate-form'), {
   loading: () => <div className="h-48 flex items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
@@ -85,6 +82,18 @@ export default function BaseRatesPage() {
 
   const canManage = user?.permissions?.ratePlans;
 
+  const getAccessToken = async (): Promise<string | null> => {
+    for (let attempts = 0; attempts < 3; attempts++) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) return token;
+      if (attempts < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    }
+    return null;
+  };
+
   // Fetch base rates and room types when property loads
   useEffect(() => {
     if (!property?.id || !user?.id) {
@@ -97,9 +106,8 @@ export default function BaseRatesPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Get session for authentication
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
           throw new Error('No active session');
         }
 
@@ -107,7 +115,7 @@ export default function BaseRatesPage() {
         const roomTypesResponse = await fetch(`/api/rooms/room-types/list?propertyId=${property.id}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
         });
 
@@ -120,7 +128,7 @@ export default function BaseRatesPage() {
         const baseRatesResponse = await fetch(`/api/pricing/base-rates?propertyId=${property.id}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
         });
 
@@ -162,8 +170,8 @@ export default function BaseRatesPage() {
 
     setIsLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('No active session');
       }
 
@@ -173,7 +181,7 @@ export default function BaseRatesPage() {
         method: editingBaseRate ? 'PATCH' : 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           propertyId: property.id,
@@ -202,7 +210,7 @@ export default function BaseRatesPage() {
       const listResponse = await fetch(`/api/pricing/base-rates?propertyId=${property.id}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -233,8 +241,8 @@ export default function BaseRatesPage() {
     if (!baseRateToDelete || !property?.id) return;
     setIsLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('No active session');
       }
 
@@ -242,7 +250,7 @@ export default function BaseRatesPage() {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           propertyId: property.id,
@@ -261,7 +269,7 @@ export default function BaseRatesPage() {
       const listResponse = await fetch(`/api/pricing/base-rates?propertyId=${property.id}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
