@@ -29,7 +29,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Icons } from "@/components/icons";
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient } from '@/utils/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import type { RoomType, Amenity, BedConfiguration, BedType, AmenityCategory } from '@/types/roomType';
 import { defaultAmenities, bedTypes, amenityCategories } from '@/types/roomType';
@@ -45,10 +45,7 @@ interface RoomTypesComponentProps {
 }
 
 // Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
-);
+const supabase = createSupabaseClient();
 
 export default function RoomTypesComponent({ propertyId }: RoomTypesComponentProps) {
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
@@ -147,6 +144,18 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const { t } = useTranslation(['pages/rooms/types/content', 'amenities']);
 
+  const getAccessToken = async (): Promise<string | null> => {
+    for (let attempts = 0; attempts < 3; attempts++) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) return token;
+      if (attempts < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (!propertyId) {
       setIsLoading(false);
@@ -157,8 +166,8 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
 
     const loadRoomTypes = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
           console.error('Not authenticated');
           setIsLoading(false);
           return;
@@ -169,7 +178,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
           }
         );
@@ -900,8 +909,8 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         const parsedAssignedRoomNumbers = parsedRoomNumbers.length > 0 ? parsedRoomNumbers : [];
         
         // Get session for auth
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
           throw new Error('Not authenticated');
         }
 
@@ -930,7 +939,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify(payload),
         });
@@ -960,7 +969,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
           }
         );
@@ -984,8 +993,8 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
     }
     setIsLoading(true);
     try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
           throw new Error('Not authenticated');
         }
 
@@ -993,7 +1002,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             action: 'delete',
@@ -1021,7 +1030,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
           }
         );
@@ -1136,8 +1145,8 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
 
     setIsLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('Not authenticated');
       }
 
@@ -1151,7 +1160,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
               action: 'delete',
@@ -1187,7 +1196,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
         }
       );
@@ -1233,8 +1242,8 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
 
     setIsLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('Not authenticated');
       }
 
@@ -1262,7 +1271,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
               action: 'update',
@@ -1299,7 +1308,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
         }
       );
@@ -1333,8 +1342,8 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
 
     setIsLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('Not authenticated');
       }
 
@@ -1366,7 +1375,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
               action: 'update',
@@ -1403,7 +1412,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
         }
       );
@@ -1507,8 +1516,8 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         }
 
         setIsLoading(true);
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
           throw new Error('Not authenticated');
         }
 
@@ -1578,7 +1587,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionData.session.access_token}`,
+                'Authorization': `Bearer ${accessToken}`,
               },
               body: JSON.stringify({
                 action: 'create',
@@ -1623,7 +1632,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
           }
         );
@@ -1645,8 +1654,8 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
   const handleDuplicateRoomType = async (roomType: RoomType) => {
     try {
       setIsLoading(true);
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('Not authenticated');
       }
 
@@ -1668,7 +1677,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           action: 'create',
@@ -1694,7 +1703,7 @@ export default function RoomTypesComponent({ propertyId }: RoomTypesComponentPro
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
         }
       );
