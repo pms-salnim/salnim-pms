@@ -9,7 +9,7 @@ import { fullPermissions } from '@/types/staff';
 // Use service role key for admin operations (server-side only)
 const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
   ? createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
       {
         auth: {
@@ -60,7 +60,7 @@ export async function signUpUser(data: SignupData) {
     }
 
     const userId = authData.user.id;
-    const propertyId = generateId();
+    const propertyId = crypto.randomUUID();
 
     // 2. Create property first
     const { error: propertyError } = await supabaseAdmin
@@ -82,6 +82,8 @@ export async function signUpUser(data: SignupData) {
       ]);
 
     if (propertyError) {
+      // Keep auth and app data in sync if property insert fails.
+      await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => undefined);
       throw new Error(propertyError.message || 'Failed to create property');
     }
 
@@ -105,6 +107,9 @@ export async function signUpUser(data: SignupData) {
       ]);
 
     if (userError) {
+      // Roll back created records when user profile insert fails.
+      await supabaseAdmin.from('properties').delete().eq('id', propertyId);
+      await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => undefined);
       throw new Error(userError.message || 'Failed to create user profile');
     }
 
@@ -197,14 +202,3 @@ export async function updateUserLanguage(userId: string, language: string) {
   }
 }
 
-/**
- * Simple ID generator (replacing Firebase's auto-generated IDs)
- */
-function generateId(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let id = '';
-  for (let i = 0; i < 20; i++) {
-    id += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return id;
-}
