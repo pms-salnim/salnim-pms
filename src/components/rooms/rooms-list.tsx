@@ -36,7 +36,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusCircle, Trash2, Grid3X3, List, Settings2 } from "lucide-react";
 import { Icons } from "@/components/icons";
-import { createClient } from '@supabase/supabase-js';
 import { toast } from '@/hooks/use-toast';
 import type { Room, RoomStatus } from '@/types/room';
 import { roomStatuses } from '@/types/room';
@@ -55,16 +54,14 @@ import { startOfDay, format, isBetween, isWithinInterval } from 'date-fns';
 import { toDate } from '@/lib/dateUtils';
 import { useTranslation } from "react-i18next";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { createClient as createSupabaseClient } from '@/utils/supabase/client';
 
 interface RoomsListProps {
   propertyId: string;
 }
 
 // Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
-);
+const supabase = createSupabaseClient();
 
 export default function RoomsList({ propertyId }: RoomsListProps) {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -151,6 +148,18 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
     });
   };
 
+  const getAccessToken = async (): Promise<string | null> => {
+    for (let attempts = 0; attempts < 3; attempts++) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) return token;
+      if (attempts < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (!propertyId) {
       setIsLoading(false);
@@ -164,8 +173,8 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
 
     const loadRoomsData = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
           console.error('Not authenticated');
           setIsLoading(false);
           return;
@@ -177,7 +186,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
           }
         );
@@ -193,7 +202,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
           }
         );
@@ -298,8 +307,8 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
     setIsLoading(true);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('Not authenticated');
       }
 
@@ -315,7 +324,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             action: 'update',
@@ -343,7 +352,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
           }
         );
@@ -365,7 +374,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
               action: 'create',
@@ -394,7 +403,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
           {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${sessionData.session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
           }
         );
@@ -518,8 +527,8 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
     if (!roomToDelete) return;
     setIsLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('Not authenticated');
       }
 
@@ -527,7 +536,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           action: 'delete',
@@ -549,7 +558,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
         }
       );
@@ -616,8 +625,8 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
     setIsLoading(true);
     try {
       // Get session and token
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('No active session');
       }
 
@@ -626,7 +635,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           action: 'bulk-update',
@@ -655,7 +664,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
       const listResponse = await fetch(`/api/rooms/list?propertyId=${userProperty?.id}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -679,8 +688,8 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
     setIsLoading(true);
     try {
       // Get session and token
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('No active session');
       }
 
@@ -689,7 +698,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           action: 'bulk-delete',
@@ -711,7 +720,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
       const listResponse = await fetch(`/api/rooms/list?propertyId=${userProperty?.id}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -798,8 +807,8 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
         let errorCount = 0;
 
         // Get session for authentication
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
           throw new Error('No active session');
         }
 
@@ -842,7 +851,7 @@ export default function RoomsList({ propertyId }: RoomsListProps) {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionData.session.access_token}`,
+                'Authorization': `Bearer ${accessToken}`,
               },
               body: JSON.stringify({
                 action: 'create',
