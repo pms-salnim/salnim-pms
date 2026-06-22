@@ -30,6 +30,10 @@ async function verifyUserProperty(userId: string, propertyId: string) {
   }
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Get auth token from header
@@ -89,8 +93,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'create') {
-      // Generate a simple ID if not provided
-      const id = roomTypeId || `rt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // room_types.id is UUID in schema; ensure we always write a valid UUID.
+      const id = roomTypeId && isUuid(roomTypeId) ? roomTypeId : crypto.randomUUID();
 
       const { data: newRoomType, error: createError } = await supabaseAdmin
         .from('room_types')
