@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PropertySettingsSubtabs } from '@/components/property-settings/property-settings-subtabs';
 import { useAuth } from '@/contexts/auth-context';
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient } from '@/utils/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import type { RatePlan } from '@/types/ratePlan';
 import type { RoomType } from '@/types/roomType';
@@ -36,10 +36,7 @@ import type { Property } from '@/types/property';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTranslation } from 'react-i18next';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!
-);
+const supabase = createSupabaseClient();
 
 const RatePlanForm = dynamic(() => import('@/components/rate-plans/rate-plan-form'), {
   loading: () => <div className="h-48 flex items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
@@ -75,6 +72,18 @@ export default function AllRatePlansPage() {
   
   const canManage = user?.permissions?.ratePlans;
 
+  const getAccessToken = async (): Promise<string | null> => {
+    for (let attempts = 0; attempts < 3; attempts++) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) return token;
+      if (attempts < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+    }
+    return null;
+  };
+
   // Fetch rate plans and room types when property loads
   useEffect(() => {
     if (!property?.id || !user?.id) {
@@ -87,9 +96,8 @@ export default function AllRatePlansPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Get session for authentication
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
           throw new Error('No active session');
         }
 
@@ -97,7 +105,7 @@ export default function AllRatePlansPage() {
         const roomTypesResponse = await fetch(`/api/rooms/room-types/list?propertyId=${property.id}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
         });
 
@@ -110,7 +118,7 @@ export default function AllRatePlansPage() {
         const ratePlansResponse = await fetch(`/api/rate-plans/list?propertyId=${property.id}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
         });
 
@@ -169,8 +177,8 @@ export default function AllRatePlansPage() {
 
     setIsLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('No active session');
       }
 
@@ -184,7 +192,7 @@ export default function AllRatePlansPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           action: editingRatePlan ? 'update' : 'create',
@@ -231,7 +239,7 @@ export default function AllRatePlansPage() {
       const listResponse = await fetch(`/api/rate-plans/list?propertyId=${property.id}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -262,8 +270,8 @@ export default function AllRatePlansPage() {
     if (!ratePlanToDelete || !property?.id) return;
     setIsLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error('No active session');
       }
 
@@ -271,7 +279,7 @@ export default function AllRatePlansPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           action: 'delete',
@@ -291,7 +299,7 @@ export default function AllRatePlansPage() {
       const listResponse = await fetch(`/api/rate-plans/list?propertyId=${property.id}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
