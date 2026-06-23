@@ -260,24 +260,15 @@ export async function POST(request: NextRequest) {
 
             // Queue the split parts for re-insertion
             for (const part of splitParts) {
-              const timestamp = Date.now()
-              const randomSuffix = Math.random().toString(36).substring(2, 8)
-              const idInfo = `${propertyId}|${part.start}|${part.end}|${finalRoomId || finalRoomTypeId}|${part.status}|${timestamp}|${randomSuffix}`
-              const msgBuffer = new TextEncoder().encode(idInfo)
-              const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
-              const hashArray = Array.from(new Uint8Array(hashBuffer))
-              const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-              const partId = hashHex.substring(0, 50)
-
-              // ✅ ONLY include essential fields: id, property_id, room_id, room_type_id, date, end_date, status, notes
+              // ✅ ONLY include essential fields; let DB generate UUID id
               const partRecord: any = {
-                id: partId,
                 property_id: propertyId,
                 room_id: finalRoomId,
                 room_type_id: finalRoomTypeId,
                 date: part.start,
                 end_date: part.end,
                 status: part.status,
+                applied_at_level: existing.applied_at_level || (finalRoomId ? 'room' : 'room_type'),
               }
 
               // Only add notes if present
@@ -292,24 +283,15 @@ export async function POST(request: NextRequest) {
         }
 
         // ✅ STEP 3c: Generate ID for the new record
-        const timestamp = Date.now()
-        const randomSuffix = Math.random().toString(36).substring(2, 8)
-        const idInfo = `${propertyId}|${startDate}|${effectiveEndDate}|${finalRoomId || finalRoomTypeId}|${status}|${timestamp}|${randomSuffix}`
-        const msgBuffer = new TextEncoder().encode(idInfo)
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
-        const hashArray = Array.from(new Uint8Array(hashBuffer))
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-        const newId = hashHex.substring(0, 50)
-
         // ✅ STEP 3d: Build the new record - ONLY essential fields
         const newRecord: any = {
-          id: newId,
           property_id: propertyId,
           room_id: finalRoomId,
           room_type_id: finalRoomTypeId,
           date: startDate,
           end_date: effectiveEndDate,
           status: status,
+          applied_at_level: finalRoomId ? 'room' : 'room_type',
         }
 
         // Only add notes if provided

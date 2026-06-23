@@ -35,10 +35,87 @@ const CHANNELS: Array<{ key: ConversationChannel; label: string }> = [
   { key: 'guest_portal', label: 'Guest Portal' },
 ];
 
+const normalizeText = (value: unknown): string => String(value || '').trim();
+
+const buildCombinedName = (...parts: Array<unknown>): string =>
+  parts
+    .map((part) => normalizeText(part))
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const buildCommaName = (firstName: unknown, lastName: unknown): string => {
+  const first = normalizeText(firstName);
+  const last = normalizeText(lastName);
+  if (!first && !last) return '';
+  if (!first) return last;
+  if (!last) return first;
+  return `${first}, ${last}`;
+};
+
+const valueMatches = (query: string, value: unknown): boolean => {
+  const normalizedQuery = normalizeText(query).toLowerCase();
+  if (!normalizedQuery) return true;
+  return normalizeText(value).toLowerCase().includes(normalizedQuery);
+};
+
+const guestNameFromRow = (guest: any): string =>
+  normalizeText(guest?.name)
+  || normalizeText(guest?.full_name)
+  || buildCombinedName(guest?.first_name, guest?.last_name)
+  || normalizeText(guest?.email)
+  || 'Guest';
+
+const reservationNameFromRow = (reservation: any): string =>
+  normalizeText(reservation?.guest_name)
+  || buildCombinedName(reservation?.guest_first_name, reservation?.guest_last_name)
+  || buildCombinedName(reservation?.first_name, reservation?.last_name)
+  || normalizeText(reservation?.guest_email)
+  || 'Guest';
+
+const guestMatchesQuery = (guest: any, query: string): boolean => {
+  const firstName = normalizeText(guest?.first_name);
+  const lastName = normalizeText(guest?.last_name);
+  const candidates = [
+    guest?.name,
+    guest?.full_name,
+    buildCombinedName(firstName, lastName),
+    buildCommaName(firstName, lastName),
+    guest?.email,
+    guest?.phone,
+  ];
+  return candidates.some((candidate) => valueMatches(query, candidate));
+};
+
+const reservationMatchesQuery = (reservation: any, query: string): boolean => {
+  const firstName = normalizeText(reservation?.guest_first_name || reservation?.first_name);
+  const lastName = normalizeText(reservation?.guest_last_name || reservation?.last_name);
+  const candidates = [
+    reservation?.guest_name,
+    buildCombinedName(firstName, lastName),
+    buildCommaName(firstName, lastName),
+    reservation?.guest_email,
+    reservation?.guest_phone,
+    reservation?.reservation_number,
+  ];
+  return candidates.some((candidate) => valueMatches(query, candidate));
+};
+
+const parseApiError = async (response: Response): Promise<string> => {
+  try {
+    const json = await response.json();
+    return String(json?.error || json?.details || `Request failed with status ${response.status}`);
+  } catch {
+    return `Request failed with status ${response.status}`;
+  }
+};
+
 export default function NewConversationDialog({ open, onOpenChange, propertyId, onStartConversation }: NewConversationDialogProps) {
   const supabase = createClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingRecent, setIsLoadingRecent] = useState(false);
   const [results, setResults] = useState<ConversationSearchResult[]>([]);
   const [selectedResultId, setSelectedResultId] = useState<string>('');
   const [showManualStarter, setShowManualStarter] = useState(false);
@@ -46,6 +123,40 @@ export default function NewConversationDialog({ open, onOpenChange, propertyId, 
   const [manualGuestName, setManualGuestName] = useState('');
   const [manualEmail, setManualEmail] = useState('');
   const [manualPhone, setManualPhone] = useState('');
+  const [isQueryEmpty, setIsQueryEmpty] = useState(true);
+
+  const fetchConversationResults = async (query: string): Promise<ConversationSearchResult[]> => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      throw new Error('Missing session');
+    }
+
+    const response = await fetch('/api/communication/conversation-search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        propertyId,
+        query,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseApiError(response));
+    }
+
+    const payload = await response.json();
+    if (!Array.isArray(payload?.results)) {
+      return [];
+    }
+
+    return payload.results as ConversationSearchResult[];
+  };
 
   useEffect(() => {
     if (!open) {
@@ -57,8 +168,45 @@ export default function NewConversationDialog({ open, onOpenChange, propertyId, 
       setManualGuestName('');
       setManualEmail('');
       setManualPhone('');
+      setIsQueryEmpty(true);
     }
   }, [open]);
+
+  // Load recent reservations and guests when modal opens
+  useEffect(() => {
+    if (!open || !propertyId) return;
+
+    let isCancelled = false;
+    const loadRecentResults = async () => {
+      setIsLoadingRecent(true);
+      try {
+        const recentResults = await fetchConversationResults('');
+        if (!isCancelled) {
+          setResults(recentResults);
+        }
+      } catch (error: any) {
+        console.error('Failed to load recent results:', {
+          message: error?.message || null,
+          details: error?.details || null,
+          hint: error?.hint || null,
+          code: error?.code || null,
+        });
+        if (!isCancelled) {
+          setResults([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingRecent(false);
+        }
+      }
+    };
+
+    loadRecentResults();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [open, propertyId, supabase]);
 
   const handleManualStart = () => {
     if (manualChannel === 'email' && !manualEmail.trim()) return;
@@ -76,14 +224,19 @@ export default function NewConversationDialog({ open, onOpenChange, propertyId, 
     onStartConversation(result, manualChannel);
   };
 
-  const escapedQuery = useMemo(() => searchQuery.trim().replace(/,/g, ' ').replace(/%/g, ''), [searchQuery]);
+  const escapedQuery = useMemo(() => searchQuery.trim().replace(/%/g, ''), [searchQuery]);
 
+  useEffect(() => {
+    setIsQueryEmpty(escapedQuery.length === 0);
+  }, [escapedQuery]);
+
+  // Search effect - only runs when query has 2+ characters
   useEffect(() => {
     if (!open || !propertyId) return;
 
     const queryValue = escapedQuery;
     if (queryValue.length < 2) {
-      setResults([]);
+      // If query is empty, keep showing recent results (already loaded)
       setIsSearching(false);
       return;
     }
@@ -92,57 +245,17 @@ export default function NewConversationDialog({ open, onOpenChange, propertyId, 
     const timeout = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const guestSearch = supabase
-          .from('guests')
-          .select('id, first_name, last_name, email, phone')
-          .eq('property_id', propertyId)
-          .or(`first_name.ilike.%${queryValue}%,last_name.ilike.%${queryValue}%,email.ilike.%${queryValue}%,phone.ilike.%${queryValue}%`)
-          .order('updated_at', { ascending: false })
-          .limit(10);
-
-        const reservationSearch = supabase
-          .from('reservations')
-          .select('id, reservation_number, guest_name, guest_email, guest_phone')
-          .eq('property_id', propertyId)
-          .or(`guest_name.ilike.%${queryValue}%,guest_email.ilike.%${queryValue}%,guest_phone.ilike.%${queryValue}%,reservation_number.ilike.%${queryValue}%`)
-          .order('updated_at', { ascending: false })
-          .limit(15);
-
-        const [{ data: guestRows, error: guestError }, { data: reservationRows, error: reservationError }] = await Promise.all([
-          guestSearch,
-          reservationSearch,
-        ]);
-
-        if (guestError) throw guestError;
-        if (reservationError) throw reservationError;
+        const searchResults = await fetchConversationResults(queryValue);
         if (isCancelled) return;
 
-        const guestResults: ConversationSearchResult[] = (guestRows || []).map((guest: any) => ({
-          id: `guest-${guest.id}`,
-          type: 'guest',
-          guestName: `${String(guest.first_name || '').trim()} ${String(guest.last_name || '').trim()}`.trim() || String(guest.email || 'Guest'),
-          email: String(guest.email || '').trim(),
-          phone: String(guest.phone || '').trim(),
-        }));
-
-        const reservationResults: ConversationSearchResult[] = (reservationRows || []).map((reservation: any) => ({
-          id: `reservation-${reservation.id}`,
-          type: 'reservation',
-          guestName: String(reservation.guest_name || reservation.guest_email || 'Guest'),
-          email: String(reservation.guest_email || '').trim(),
-          phone: String(reservation.guest_phone || '').trim(),
-          reservationId: String(reservation.id || ''),
-          reservationNumber: String(reservation.reservation_number || ''),
-        }));
-
-        const merged = [...reservationResults, ...guestResults];
-        const deduped = merged.filter((item, index, all) => {
-          const key = `${item.type}:${item.guestName}:${item.email}:${item.phone}:${item.reservationId || ''}`.toLowerCase();
-          return all.findIndex((candidate) => `${candidate.type}:${candidate.guestName}:${candidate.email}:${candidate.phone}:${candidate.reservationId || ''}`.toLowerCase() === key) === index;
+        setResults(searchResults);
+      } catch (error: any) {
+        console.error('Failed to search conversation targets:', {
+          message: error?.message || null,
+          details: error?.details || null,
+          hint: error?.hint || null,
+          code: error?.code || null,
         });
-
-        setResults(deduped.slice(0, 20));
-      } catch (error) {
         if (!isCancelled) {
           setResults([]);
         }
@@ -260,6 +373,13 @@ export default function NewConversationDialog({ open, onOpenChange, propertyId, 
         )}
 
         <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+          {isLoadingRecent && !searchQuery.trim() && (
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading recent guests and reservations...
+            </div>
+          )}
+
           {isSearching && (
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -267,10 +387,26 @@ export default function NewConversationDialog({ open, onOpenChange, propertyId, 
             </div>
           )}
 
-          {!isSearching && searchQuery.trim().length >= 2 && results.length === 0 && (
+          {!isSearching && !isLoadingRecent && searchQuery.trim().length >= 2 && results.length === 0 && (
             <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-              No matches found.
+              No matches found for "{searchQuery.trim()}".
             </div>
+          )}
+
+          {!isSearching && !isLoadingRecent && isQueryEmpty && results.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+              No recent guests or reservations found.
+            </div>
+          )}
+
+          {results.length > 0 && (
+            <>
+              {isQueryEmpty && (
+                <div className="px-1 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Recent Guests & Reservations
+                </div>
+              )}
+            </>
           )}
 
           {results.map((result) => {

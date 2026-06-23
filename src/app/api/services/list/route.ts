@@ -6,6 +6,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+function isSchemaOrRelationError(error: any): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes('schema cache') ||
+    message.includes('relationship') ||
+    message.includes('does not exist') ||
+    message.includes('could not find')
+  );
+}
+
+function isMissingTableError(error: any, table: string): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes(`relation \"public.${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`relation \"${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`could not find the table 'public.${table.toLowerCase()}'`)
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabaseAdmin = createClient(
@@ -65,7 +84,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch services for the property with category details
-    const { data: services, error: fetchError } = await supabaseAdmin
+    let { data: services, error: fetchError } = await supabaseAdmin
       .from('services')
       .select(`
         *,
@@ -75,10 +94,28 @@ export async function GET(request: NextRequest) {
       .eq('property_id', propertyId)
       .order('created_at', { ascending: false });
 
+    if (fetchError && isSchemaOrRelationError(fetchError)) {
+      const fallback = await supabaseAdmin
+        .from('services')
+        .select('*')
+        .eq('property_id', propertyId)
+        .order('created_at', { ascending: false });
+
+      services = fallback.data;
+      fetchError = fallback.error;
+    }
+
     if (fetchError) {
+      if (isMissingTableError(fetchError, 'services')) {
+        return NextResponse.json({ services: [] });
+      }
+
       console.error('Fetch error:', fetchError);
       return NextResponse.json(
-        { error: fetchError.message || 'Failed to fetch services' },
+        {
+          error: fetchError.message || 'Failed to fetch services',
+          details: fetchError,
+        },
         { status: 500 }
       );
     }

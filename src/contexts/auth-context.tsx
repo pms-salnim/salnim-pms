@@ -3,7 +3,7 @@
 
 import type { User } from '@/types/user';
 import type { FirestoreUser, PropertyType as SignupPropertyType } from '@/types/firestoreUser';
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AuthSession } from '@supabase/supabase-js';
 import type { StaffRole, Permissions, AppModuleKey } from '@/types/staff';
@@ -90,6 +90,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [lastEmailSyncAt, setLastEmailSyncAt] = useState<number | null>(null);
   const [isSyncingEmails, setIsSyncingEmails] = useState(false);
   const emailSyncCooldownMs = 2 * 60 * 1000;
+  const lastEmailErrorToastAtRef = useRef(0);
 
   // Internal Workspace State
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
@@ -127,6 +128,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      const imapConfig = property?.imapConfiguration as any;
+      const hasImapConfig = !!(
+        (imapConfig?.host || imapConfig?.imapHost) &&
+        (imapConfig?.user || imapConfig?.imapUser) &&
+        (imapConfig?.pass || imapConfig?.imapPass)
+      );
+
+      // If IMAP is not configured, skip silently to avoid error-toast spam.
+      if (!hasImapConfig) {
+        if (!isPolling) {
+          console.debug('Email fetch skipped: IMAP not configured');
+        }
+        return;
+      }
+
       // ✅ Prevent concurrent requests - exit if already syncing
       if (isSyncingEmails) {
         console.debug('Email sync already in progress, skipping duplicate request');
@@ -148,7 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const result = await emailApi.syncEmails(user.propertyId, { maxNew: 200 });
         if (!result?.success || !Array.isArray(result.emails)) {
-          throw new Error('Failed to fetch emails');
+          throw new Error(result?.error || result?.details || result?.message || 'Failed to fetch emails');
         }
 
         const newEmails: Email[] = result.emails.map((row: any) => ({
@@ -177,16 +193,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             : [],
         }));
 
-        setEmails(currentEmails => {
-          if (isPolling) {
-            const currentUids = new Set(currentEmails.map(e => e.uid));
-            const hasNew = newEmails.some(e => !currentUids.has(e.uid) && e.unread);
-            if (hasNew) {
-              toast({ title: "New Mail", description: "You have new messages in your inbox." });
-            }
-          }
-          return newEmails;
-        });
+        const currentUids = new Set(emails.map(e => e.uid));
+        const hasNew = isPolling && newEmails.some(e => !currentUids.has(e.uid) && e.unread);
+        
+        setEmails(newEmails);
+        
+        if (hasNew) {
+          setTimeout(() => {
+            toast({ title: "New Mail", description: "You have new messages in your inbox." });
+          }, 0);
+        }
 
         // ✅ Update last sync timestamp only on successful sync
         setLastEmailSyncAt(Date.now());
@@ -194,7 +210,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (fetchError: any) {
         // ✅ Only show errors for user-initiated fetches, not background polling
         if (!isPolling) {
-          toast({ title: "Error Fetching Emails", description: fetchError.message || "Could not retrieve emails.", variant: "destructive" });
+          const now = Date.now();
+          const toastCooldownMs = 10000;
+          if (now - lastEmailErrorToastAtRef.current >= toastCooldownMs) {
+            lastEmailErrorToastAtRef.current = now;
+            setTimeout(() => {
+              toast({ title: "Error Fetching Emails", description: fetchError.message || "Could not retrieve emails.", variant: "destructive" });
+            }, 0);
+          }
           console.error("Email fetch failed:", fetchError);
         } else if (isPolling) {
           console.debug("Background email sync failed:", fetchError.message);
@@ -211,7 +234,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!isPolling) setIsLoadingEmails(false);
       setInitialEmailFetchDone(true);
     }
-  }, [user?.propertyId, lastEmailSyncAt, isSyncingEmails]);
+  }, [user?.propertyId, property?.imapConfiguration, lastEmailSyncAt, isSyncingEmails]);
 
 
   const fetchAndSetUser = async (userId: string, accessToken?: string, retries = 3, delayMs = 500) => {

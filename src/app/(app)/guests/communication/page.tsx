@@ -1,6 +1,7 @@
 
 "use client";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Icons } from '@/components/icons';
 import { useAuth } from '@/contexts/auth-context';
@@ -8,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { Archive, Mail, MessageSquare, Bot, Settings, Bell, MessageCircle, RefreshCw, MailPlus, Inbox, Paperclip, ChevronLeft, ChevronRight, Send, MailWarning, AlertCircle, Trash2, Users, UserCheck, CalendarClock, LogOut, CheckCircle2, X, Search, Star } from 'lucide-react';
+import { Archive, Mail, MessageSquare, Bot, Settings, Bell, MessageCircle, RefreshCw, MailPlus, Inbox, Paperclip, ChevronLeft, ChevronRight, Send, MailWarning, AlertCircle, Trash2, Users, UserCheck, CalendarClock, LogOut, CheckCircle2, X, Search, Star, Pin, PinOff, ArchiveRestore, Info } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -28,6 +29,13 @@ import {
   DialogDescription,
   DialogTrigger
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import ReplyEmailForm from '@/components/guests/reply-email-form';
 import type { Email } from '@/contexts/auth-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -38,6 +46,9 @@ import EmailDetailView from '../../../../components/guests/communication/EmailDe
 import LabelManager from '@/components/guests/communication/LabelManager';
 import { emailApi } from '@/lib/communication-api';
 import NewConversationDialog, { type ConversationChannel, type ConversationSearchResult } from '@/components/guests/communication/NewConversationDialog';
+import type { Guest } from '@/types/guest';
+import type { Reservation } from '@/types/reservation';
+import { createClient } from '@/utils/supabase/client';
 
 type ActiveView = 
     | 'inbox_all' 
@@ -69,6 +80,88 @@ type EmailConversation = {
 };
 
 type ThreadChannel = 'all' | ConversationChannel;
+type ThreadMailbox = 'all' | 'pinned' | 'archived' | 'trash';
+
+const GuestProfile = dynamic(() => import('@/components/guests/guest-profile'), {
+  loading: () => <div className="flex h-full items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
+  ssr: false,
+});
+
+const normalizePhone = (value?: string | null): string => String(value || '').replace(/\D/g, '');
+
+const normalizeGuestFromRow = (guestRow: any): Guest => ({
+  id: String(guestRow.id || ''),
+  propertyId: String(guestRow.property_id || guestRow.propertyId || ''),
+  fullName: String(
+    guestRow.name
+    || guestRow.full_name
+    || guestRow.fullName
+    || [guestRow.first_name, guestRow.last_name].filter(Boolean).join(' ').trim()
+    || 'Guest'
+  ),
+  firstName: guestRow.first_name || guestRow.firstName || '',
+  lastName: guestRow.last_name || guestRow.lastName || '',
+  email: String(guestRow.email || ''),
+  phone: String(guestRow.phone || ''),
+  nationality: String(guestRow.nationality || guestRow.country || ''),
+  country: String(guestRow.country || guestRow.nationality || ''),
+  passportOrId: guestRow.passport_id || guestRow.passportOrId,
+  loyaltyStatus: guestRow.loyalty_status || guestRow.loyaltyStatus || 'not-enrolled',
+  loyaltyPoints: guestRow.loyalty_points || guestRow.loyaltyPoints || 0,
+  spendForNextPoint: guestRow.spend_for_next_point || guestRow.spendForNextPoint || 0,
+  totalPointsEarned: guestRow.total_points_earned || guestRow.totalPointsEarned || 0,
+  totalPointsRedeemed: guestRow.total_points_redeemed || guestRow.totalPointsRedeemed || 0,
+  gender: guestRow.gender,
+  birthdate: guestRow.birthdate,
+  address: guestRow.address,
+  internalNotes: guestRow.notes || guestRow.internal_notes || '',
+  roomPreferences: guestRow.room_preferences || '',
+  dietaryRestrictions: guestRow.dietary_restrictions || '',
+  specialOccasion: guestRow.special_occasion || '',
+  communicationPreference: guestRow.communication_preference || '',
+});
+
+const normalizeReservationFromRow = (reservationRow: any): Reservation => ({
+  id: String(reservationRow.id || ''),
+  propertyId: String(reservationRow.propertyId || reservationRow.property_id || ''),
+  guestId: reservationRow.guestId || reservationRow.guest_id || null,
+  guestName: reservationRow.guestName || reservationRow.guest_name,
+  guestEmail: reservationRow.guestEmail || reservationRow.guest_email,
+  guestPhone: reservationRow.guestPhone || reservationRow.guest_phone,
+  guestPassportOrId: reservationRow.guestPassportOrId || reservationRow.guest_passport_id,
+  guestCountry: reservationRow.guestCountry || reservationRow.guest_country,
+  source: reservationRow.source,
+  rooms: reservationRow.rooms || reservationRow.rooms_data || [],
+  startDate: reservationRow.startDate ? new Date(reservationRow.startDate) : reservationRow.start_date ? new Date(reservationRow.start_date) : new Date(),
+  endDate: reservationRow.endDate ? new Date(reservationRow.endDate) : reservationRow.end_date ? new Date(reservationRow.end_date) : new Date(),
+  status: reservationRow.status || 'Pending',
+  reservationNumber: reservationRow.reservationNumber || reservationRow.reservation_number,
+  totalPrice: reservationRow.totalPrice || reservationRow.total_price || 0,
+  priceBeforeDiscount: reservationRow.priceBeforeDiscount || reservationRow.price_before_discount || 0,
+  notes: reservationRow.notes,
+  paymentStatus: reservationRow.paymentStatus || reservationRow.payment_status,
+  partialPaymentAmount: reservationRow.partialPaymentAmount || reservationRow.partial_payment_amount,
+  paidWithPoints: reservationRow.paidWithPoints || reservationRow.paid_with_points,
+  createdAt: reservationRow.createdAt ? new Date(reservationRow.createdAt) : reservationRow.created_at ? new Date(reservationRow.created_at) : undefined,
+  updatedAt: reservationRow.updatedAt ? new Date(reservationRow.updatedAt) : reservationRow.updated_at ? new Date(reservationRow.updated_at) : undefined,
+  actualCheckInTime: reservationRow.actualCheckInTime || reservationRow.actual_check_in_time,
+  actualCheckOutTime: reservationRow.actualCheckOutTime || reservationRow.actual_check_out_time,
+  isCheckedOut: reservationRow.isCheckedOut || reservationRow.is_checked_out || false,
+  selectedExtras: reservationRow.selectedExtras || reservationRow.selected_extras,
+  promotionApplied: reservationRow.promotionApplied || reservationRow.promotion_applied,
+  packageInfo: reservationRow.packageInfo || reservationRow.package_info,
+  color: reservationRow.color,
+  roomsTotal: reservationRow.roomsTotal || reservationRow.rooms_total,
+  extrasTotal: reservationRow.extrasTotal || reservationRow.extras_total,
+  subtotal: reservationRow.subtotal,
+  discountAmount: reservationRow.discountAmount || reservationRow.discount_amount,
+  netAmount: reservationRow.netAmount || reservationRow.net_amount,
+  taxAmount: reservationRow.taxAmount || reservationRow.tax_amount,
+  groupBooking: reservationRow.groupBooking || reservationRow.group_booking,
+  groupName: reservationRow.groupName || reservationRow.group_name,
+  companyName: reservationRow.companyName || reservationRow.company_name,
+  roomId: reservationRow.roomId || '',
+});
 
 const NavLink = ({ active, onClick, children, collapsed }: { active: boolean; onClick: () => void; children: React.ReactNode; collapsed?: boolean }) => (
   <Button
@@ -128,6 +221,17 @@ export default function CommunicationHubPage() {
   const [filterAttachments, setFilterAttachments] = useState(false);
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
   const [emailForLabeling, setEmailForLabeling] = useState<Email | null>(null);
+  const [persistedChannelSettings, setPersistedChannelSettings] = useState<any | null>(null);
+  const [isLoadingChannelSettings, setIsLoadingChannelSettings] = useState(false);
+  const [guestDirectory, setGuestDirectory] = useState<Guest[]>([]);
+  const [guestReservations, setGuestReservations] = useState<Reservation[]>([]);
+  const [isLoadingGuestPanel, setIsLoadingGuestPanel] = useState(false);
+  const [isGuestInfoPanelOpen, setIsGuestInfoPanelOpen] = useState(false);
+  const [threadMailbox, setThreadMailbox] = useState<ThreadMailbox>('all');
+  const [pinnedConversationKeys, setPinnedConversationKeys] = useState<string[]>([]);
+  const [archivedConversationKeys, setArchivedConversationKeys] = useState<string[]>([]);
+  const [trashedConversationKeys, setTrashedConversationKeys] = useState<string[]>([]);
+  const [starredConversationKeys, setStarredConversationKeys] = useState<string[]>([]);
   
   const [initialFetchDone, setInitialFetchDone] = useState(false);
   
@@ -212,6 +316,122 @@ export default function CommunicationHubPage() {
 
     return !!fromEmail && (fromEmail === userEmail || (smtpUser && fromEmail === smtpUser));
   }, [property, user?.email]);
+
+  const getThreadPreviewText = useCallback((email: Email) => {
+    const rawPreview = String(email.bodyText || email.body || email.snippet || email.subject || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return rawPreview || 'No message preview available';
+  }, []);
+
+  const getThreadPreviewLabel = useCallback((email: Email) => {
+    return isSentEmail(email) ? 'You' : 'Guest';
+  }, [isSentEmail]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCommunicationSettings = async () => {
+      if (!user?.propertyId) {
+        if (isMounted) {
+          setPersistedChannelSettings(null);
+          setIsLoadingChannelSettings(false);
+        }
+        return;
+      }
+
+      if (isMounted) {
+        setIsLoadingChannelSettings(true);
+      }
+
+      try {
+        const url = new URL('/api/property-settings/communication-channels', window.location.origin);
+        url.searchParams.set('propertyId', user.propertyId);
+
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          if (isMounted) {
+            setPersistedChannelSettings(null);
+          }
+          return;
+        }
+
+        const data = await response.json();
+        if (isMounted) {
+          setPersistedChannelSettings(data?.settings || null);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setPersistedChannelSettings(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingChannelSettings(false);
+        }
+      }
+    };
+
+    loadCommunicationSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.propertyId]);
+
+  const hasImapChannelConfigured = useCallback((): boolean => {
+    if (!property && !persistedChannelSettings) return false;
+
+    const prop = property as any;
+    const imap =
+      prop?.imapConfiguration
+      || persistedChannelSettings?.imapSettings
+      || persistedChannelSettings?.imapConfiguration
+      || persistedChannelSettings?.imap_configuration
+      || persistedChannelSettings?.imap;
+
+    return !!(
+      (imap?.host || imap?.imapHost) &&
+      (imap?.user || imap?.imapUser)
+    );
+  }, [persistedChannelSettings, property]);
+
+  // Check if any communication channels are configured
+  const hasAnyCommunicationChannels = useCallback((): boolean => {
+    if (!property && !persistedChannelSettings) return false;
+    
+    const prop = property as any;
+    const persisted = persistedChannelSettings as any;
+
+    const smtpConfig =
+      prop?.emailConfiguration
+      || persisted?.smtpSettings
+      || persisted?.emailConfiguration
+      || persisted?.email;
+    
+    // Check for email configuration (SMTP)
+    const hasEmailConfig = !!(
+      (smtpConfig?.smtpUser || smtpConfig?.user) &&
+      (smtpConfig?.smtpHost || smtpConfig?.host)
+    );
+
+    // Check for inbound email channel (IMAP)
+    const hasImapConfig = hasImapChannelConfigured();
+    
+    // Check for WhatsApp integration
+    const whatsappIntegration = prop?.whatsappIntegration || persisted?.whatsappIntegration || persisted?.whatsapp;
+    const hasWhatsApp = !!(whatsappIntegration?.enabled && whatsappIntegration?.accessToken);
+    
+    // Check for guest portal (basic check - if the property has guest portal settings)
+    const guestPortal = prop?.guestPortal || persisted?.guestPortal;
+    const hasGuestPortal = !!(guestPortal?.enabled);
+    
+    return hasEmailConfig || hasImapConfig || hasWhatsApp || hasGuestPortal;
+  }, [hasImapChannelConfigured, persistedChannelSettings, property]);
   
   useEffect(() => {
     setCurrentPage(1);
@@ -242,7 +462,7 @@ export default function CommunicationHubPage() {
     });
   }, [emails, optimisticallyReadEmailKeys, optimisticSentEmails]);
 
-  const { currentList, totalPages } = useMemo<{ currentList: EmailConversation[]; totalPages: number }>(() => {
+  const { currentList, totalPages, totalConversationCount } = useMemo<{ currentList: EmailConversation[]; totalPages: number; totalConversationCount: number }>(() => {
     // Always show all conversations by default (inbound + outbound).
     let sourceList: Email[] = [...displayEmails];
 
@@ -285,7 +505,7 @@ export default function CommunicationHubPage() {
       conversationMap.set(key, current);
     });
 
-    const conversations: EmailConversation[] = Array.from(conversationMap.entries()).map(([key, messages]) => {
+    let conversations: EmailConversation[] = Array.from(conversationMap.entries()).map(([key, messages]) => {
       const sortedMessages = [...messages].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       const latestEmail = sortedMessages[0];
       return {
@@ -296,16 +516,36 @@ export default function CommunicationHubPage() {
         messages: sortedMessages,
         unreadCount: sortedMessages.filter((item) => item.unread).length,
       };
-    }).sort((a, b) => new Date(b.latestEmail.date).getTime() - new Date(a.latestEmail.date).getTime());
+    });
+
+    conversations = conversations.filter((conversation) => {
+      const key = conversation.key;
+      const isArchived = archivedConversationKeys.includes(key);
+      const isTrashed = trashedConversationKeys.includes(key);
+      const isPinned = pinnedConversationKeys.includes(key);
+
+      if (threadMailbox === 'archived') return isArchived && !isTrashed;
+      if (threadMailbox === 'trash') return isTrashed;
+      if (threadMailbox === 'pinned') return isPinned && !isArchived && !isTrashed;
+      return !isArchived && !isTrashed;
+    });
+
+    conversations = conversations.sort((a, b) => {
+      const aPinned = pinnedConversationKeys.includes(a.key) ? 1 : 0;
+      const bPinned = pinnedConversationKeys.includes(b.key) ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      return new Date(b.latestEmail.date).getTime() - new Date(a.latestEmail.date).getTime();
+    });
     
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     
     return {
       currentList: conversations.slice(startIndex, endIndex),
-      totalPages: Math.ceil(conversations.length / itemsPerPage) || 1
+      totalPages: Math.ceil(conversations.length / itemsPerPage) || 1,
+      totalConversationCount: conversations.length,
     };
-  }, [conversationDisplayNames, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, itemsPerPage, searchQuery]);
+  }, [archivedConversationKeys, conversationDisplayNames, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, itemsPerPage, pinnedConversationKeys, searchQuery, threadMailbox, trashedConversationKeys]);
 
   const groupedConversations = useMemo(() => {
     const groups: { label: string; items: EmailConversation[] }[] = [];
@@ -367,16 +607,17 @@ export default function CommunicationHubPage() {
   }, [conversationHistoryByKey, selectedEmail, optimisticSentEmails]);
 
   const safeRefetchEmails = useCallback(() => {
-    if (user?.propertyId) {
+    if (user?.propertyId && hasImapChannelConfigured()) {
       refetchEmails();
     }
-  }, [user?.propertyId, refetchEmails]);
+  }, [user?.propertyId, hasImapChannelConfigured, refetchEmails]);
 
   const forceRefetchEmails = useCallback(() => {
-    if (user?.propertyId) {
-      refetchEmails(false, true);
+    if (user?.propertyId && hasImapChannelConfigured()) {
+      // Automatic page refreshes should not show destructive toasts.
+      refetchEmails(true, true);
     }
-  }, [user?.propertyId, refetchEmails]);
+  }, [user?.propertyId, hasImapChannelConfigured, refetchEmails]);
 
   useEffect(() => {
     if (!initialFetchDone && user?.propertyId) {
@@ -392,9 +633,275 @@ export default function CommunicationHubPage() {
     }
   }, [activeView, user?.propertyId, forceRefetchEmails]);
 
+  useEffect(() => {
+    if (!user?.propertyId) {
+      setGuestDirectory([]);
+      setGuestReservations([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadGuestPanelData = async () => {
+      setIsLoadingGuestPanel(true);
+      try {
+        const supabase = createClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session) return;
+
+        const [guestResponse, reservationResponse] = await Promise.all([
+          supabase
+            .from('guests')
+            .select('*')
+            .eq('property_id', user.propertyId)
+            .order('updated_at', { ascending: false }),
+          fetch(`/api/reservations/list?propertyId=${encodeURIComponent(user.propertyId)}`, {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }),
+        ]);
+
+        if (guestResponse.error) {
+          throw guestResponse.error;
+        }
+
+        const reservationPayload = await reservationResponse.json();
+        if (!reservationResponse.ok) {
+          throw new Error(String(reservationPayload?.error || 'Failed to load reservations for guest panel'));
+        }
+
+        if (cancelled) return;
+
+        setGuestDirectory((guestResponse.data || []).map(normalizeGuestFromRow));
+        setGuestReservations((reservationPayload?.reservations || []).map(normalizeReservationFromRow));
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load guest profile panel data:', error);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingGuestPanel(false);
+        }
+      }
+    };
+
+    loadGuestPanelData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.propertyId]);
+
   const emailSyncCooldownMs = 2 * 60 * 1000;
   const isEmailSyncOnCooldown = lastEmailSyncAt ? (Date.now() - lastEmailSyncAt) < emailSyncCooldownMs : false;
   const lastSyncLabel = lastEmailSyncAt ? format(new Date(lastEmailSyncAt), 'PPp') : 'Never';
+
+  const threadStoragePrefix = useMemo(() => {
+    const propertyId = String(user?.propertyId || 'default');
+    return `communication-threads:${propertyId}`;
+  }, [user?.propertyId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const pinnedRaw = window.localStorage.getItem(`${threadStoragePrefix}:pinned`);
+      const archivedRaw = window.localStorage.getItem(`${threadStoragePrefix}:archived`);
+      const trashedRaw = window.localStorage.getItem(`${threadStoragePrefix}:trashed`);
+      const starredRaw = window.localStorage.getItem(`${threadStoragePrefix}:starred`);
+      setPinnedConversationKeys(pinnedRaw ? JSON.parse(pinnedRaw) : []);
+      setArchivedConversationKeys(archivedRaw ? JSON.parse(archivedRaw) : []);
+      setTrashedConversationKeys(trashedRaw ? JSON.parse(trashedRaw) : []);
+      setStarredConversationKeys(starredRaw ? JSON.parse(starredRaw) : []);
+    } catch {
+      setPinnedConversationKeys([]);
+      setArchivedConversationKeys([]);
+      setTrashedConversationKeys([]);
+      setStarredConversationKeys([]);
+    }
+  }, [threadStoragePrefix]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(`${threadStoragePrefix}:pinned`, JSON.stringify(pinnedConversationKeys));
+  }, [pinnedConversationKeys, threadStoragePrefix]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(`${threadStoragePrefix}:archived`, JSON.stringify(archivedConversationKeys));
+  }, [archivedConversationKeys, threadStoragePrefix]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(`${threadStoragePrefix}:trashed`, JSON.stringify(trashedConversationKeys));
+  }, [threadStoragePrefix, trashedConversationKeys]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(`${threadStoragePrefix}:starred`, JSON.stringify(starredConversationKeys));
+  }, [starredConversationKeys, threadStoragePrefix]);
+
+  const getThreadMessageRefs = useCallback((conversationKey: string) => {
+    const threadMessages = conversationHistoryByKey.get(conversationKey) || [];
+    const emailIds = Array.from(
+      new Set(
+        threadMessages
+          .map((message) => String(message.id || '').trim())
+          .filter(Boolean)
+      )
+    );
+
+    const emailUids = Array.from(
+      new Set(
+        threadMessages
+          .map((message) => Number(message.uid))
+          .filter((uid) => Number.isFinite(uid) && uid > 0)
+      )
+    );
+
+    return { threadMessages, emailIds, emailUids };
+  }, [conversationHistoryByKey]);
+
+  const isConversationPinned = useCallback((conversationKey: string) => pinnedConversationKeys.includes(conversationKey), [pinnedConversationKeys]);
+  const isConversationArchived = useCallback((conversationKey: string) => archivedConversationKeys.includes(conversationKey), [archivedConversationKeys]);
+  const isConversationTrashed = useCallback((conversationKey: string) => trashedConversationKeys.includes(conversationKey), [trashedConversationKeys]);
+  const isConversationStarred = useCallback((conversationKey: string, fallback?: Email[]) => {
+    if (starredConversationKeys.includes(conversationKey)) return true;
+    const messages = fallback || conversationHistoryByKey.get(conversationKey) || [];
+    return messages.some((message) => !!message.starred);
+  }, [conversationHistoryByKey, starredConversationKeys]);
+
+  const handleTogglePin = useCallback((conversationKey: string) => {
+    setPinnedConversationKeys((prev) => prev.includes(conversationKey)
+      ? prev.filter((key) => key !== conversationKey)
+      : [conversationKey, ...prev]
+    );
+  }, []);
+
+  const handleToggleStarThread = useCallback(async (conversationKey: string) => {
+    const currentlyStarred = isConversationStarred(conversationKey);
+    const { emailIds } = getThreadMessageRefs(conversationKey);
+
+    setStarredConversationKeys((prev) => currentlyStarred
+      ? prev.filter((key) => key !== conversationKey)
+      : [conversationKey, ...prev]
+    );
+
+    if (!user?.propertyId || emailIds.length === 0) return;
+
+    const response = currentlyStarred
+      ? await emailApi.unstar(user.propertyId, emailIds)
+      : await emailApi.star(user.propertyId, emailIds);
+
+    if (!response?.success) {
+      setStarredConversationKeys((prev) => currentlyStarred
+        ? [conversationKey, ...prev.filter((key) => key !== conversationKey)]
+        : prev.filter((key) => key !== conversationKey)
+      );
+      toast({ title: 'Update failed', description: 'Could not update star status for this thread.', variant: 'destructive' });
+      return;
+    }
+
+    safeRefetchEmails();
+  }, [getThreadMessageRefs, isConversationStarred, safeRefetchEmails, user?.propertyId]);
+
+  const handleArchiveThread = useCallback(async (conversationKey: string) => {
+    const { emailIds } = getThreadMessageRefs(conversationKey);
+
+    setArchivedConversationKeys((prev) => prev.includes(conversationKey) ? prev : [conversationKey, ...prev]);
+    setTrashedConversationKeys((prev) => prev.filter((key) => key !== conversationKey));
+
+    if (selectedEmail && getConversationKey(selectedEmail) === conversationKey) {
+      setSelectedEmail(null);
+    }
+
+    if (!user?.propertyId || emailIds.length === 0) return;
+
+    const response = await emailApi.archive(user.propertyId, emailIds);
+    if (!response?.success) {
+      setArchivedConversationKeys((prev) => prev.filter((key) => key !== conversationKey));
+      toast({ title: 'Archive failed', description: 'Could not archive this thread.', variant: 'destructive' });
+      return;
+    }
+
+    safeRefetchEmails();
+  }, [getThreadMessageRefs, safeRefetchEmails, selectedEmail, user?.propertyId]);
+
+  const handleUnarchiveThread = useCallback(async (conversationKey: string) => {
+    const { emailIds } = getThreadMessageRefs(conversationKey);
+
+    setArchivedConversationKeys((prev) => prev.filter((key) => key !== conversationKey));
+
+    if (!user?.propertyId || emailIds.length === 0) return;
+
+    const response = await emailApi.unarchive(user.propertyId, emailIds);
+    if (!response?.success) {
+      setArchivedConversationKeys((prev) => [conversationKey, ...prev.filter((key) => key !== conversationKey)]);
+      toast({ title: 'Unarchive failed', description: 'Could not move this thread back to inbox.', variant: 'destructive' });
+      return;
+    }
+
+    safeRefetchEmails();
+  }, [getThreadMessageRefs, safeRefetchEmails, user?.propertyId]);
+
+  const handleDeleteThread = useCallback(async (conversationKey: string) => {
+    const { emailIds } = getThreadMessageRefs(conversationKey);
+
+    setTrashedConversationKeys((prev) => prev.includes(conversationKey) ? prev : [conversationKey, ...prev]);
+    setArchivedConversationKeys((prev) => prev.filter((key) => key !== conversationKey));
+
+    if (selectedEmail && getConversationKey(selectedEmail) === conversationKey) {
+      setSelectedEmail(null);
+    }
+
+    if (!user?.propertyId || emailIds.length === 0) return;
+
+    const response = await emailApi.delete(user.propertyId, emailIds);
+    if (!response?.success) {
+      setTrashedConversationKeys((prev) => prev.filter((key) => key !== conversationKey));
+      toast({ title: 'Delete failed', description: 'Could not move this thread to trash.', variant: 'destructive' });
+      return;
+    }
+
+    safeRefetchEmails();
+  }, [getThreadMessageRefs, safeRefetchEmails, selectedEmail, user?.propertyId]);
+
+  const handleRestoreThread = useCallback(async (conversationKey: string) => {
+    const { emailIds } = getThreadMessageRefs(conversationKey);
+
+    setTrashedConversationKeys((prev) => prev.filter((key) => key !== conversationKey));
+
+    if (!user?.propertyId || emailIds.length === 0) return;
+
+    const response = await emailApi.restore(user.propertyId, emailIds);
+    if (!response?.success) {
+      setTrashedConversationKeys((prev) => [conversationKey, ...prev.filter((key) => key !== conversationKey)]);
+      toast({ title: 'Restore failed', description: 'Could not restore this thread.', variant: 'destructive' });
+      return;
+    }
+
+    safeRefetchEmails();
+  }, [getThreadMessageRefs, safeRefetchEmails, user?.propertyId]);
+
+  const handleMarkThreadUnread = useCallback(async (conversationKey: string) => {
+    const { threadMessages, emailIds } = getThreadMessageRefs(conversationKey);
+
+    const threadOptimisticKeys = threadMessages.map(getOptimisticEmailKey);
+    setOptimisticallyReadEmailKeys((prev) => prev.filter((key) => !threadOptimisticKeys.includes(key)));
+
+    if (!user?.propertyId || emailIds.length === 0) return;
+
+    const response = await emailApi.markUnread(user.propertyId, emailIds);
+    if (!response?.success) {
+      toast({ title: 'Update failed', description: 'Could not mark this thread as unread.', variant: 'destructive' });
+      return;
+    }
+
+    safeRefetchEmails();
+  }, [getThreadMessageRefs, safeRefetchEmails, user?.propertyId]);
 
   const handleTestSmtpConnection = async (settingsToTest: any) => {
     if (!settingsToTest.smtpHost || !settingsToTest.smtpPort || !settingsToTest.smtpUser || !settingsToTest.smtpPass) {
@@ -537,25 +1044,23 @@ export default function CommunicationHubPage() {
   
   // Email action handlers
   const handleStar = async (email: Email) => {
-    toast({ title: email.starred ? "Unstarred" : "Starred", description: "Email updated" });
-    // TODO: Implement Firebase update for starred status
+    const conversationKey = getConversationKey(email);
+    await handleToggleStarThread(conversationKey);
   };
 
   const handleArchive = async (email: Email) => {
-    toast({ title: "Archived", description: "Email moved to archive" });
-    // TODO: Implement Firebase update for archived status
-    setSelectedEmail(null);
+    const conversationKey = getConversationKey(email);
+    await handleArchiveThread(conversationKey);
   };
 
   const handleDelete = async (email: Email) => {
-    toast({ title: "Deleted", description: "Email moved to trash" });
-    // TODO: Implement Firebase update for deletion
-    setSelectedEmail(null);
+    const conversationKey = getConversationKey(email);
+    await handleDeleteThread(conversationKey);
   };
 
   const handleMarkUnread = async (email: Email) => {
-    toast({ title: "Marked as unread", description: "Email updated" });
-    // TODO: Implement Firebase update for unread status
+    const conversationKey = getConversationKey(email);
+    await handleMarkThreadUnread(conversationKey);
   };
 
   const handleForward = (email: Email) => {
@@ -584,6 +1089,7 @@ export default function CommunicationHubPage() {
     initialChannel: ThreadChannel = 'all',
     options?: { promptSubjectForEmail?: boolean }
   ) => {
+    const selectedConversationKey = getConversationKey(emailToSelect);
     const readOptimistically = { ...emailToSelect, unread: false };
     setSelectedEmail(readOptimistically);
     setSelectedThreadChannel(initialChannel);
@@ -592,43 +1098,71 @@ export default function CommunicationHubPage() {
     setSelectedThreadContactPhone('');
 
     if (emailToSelect.unread) {
-      const optimisticKey = getOptimisticEmailKey(emailToSelect);
-      setOptimisticallyReadEmailKeys(prev => prev.includes(optimisticKey) ? prev : [...prev, optimisticKey]);
-        try {
+      const threadKey = selectedConversationKey;
+      const threadMessages = conversationHistoryByKey.get(threadKey) || [emailToSelect];
+      const unreadThreadMessages = threadMessages.filter((message) => message.unread);
+      const messagesToMarkRead = unreadThreadMessages.length > 0 ? unreadThreadMessages : [emailToSelect];
+
+      const threadOptimisticKeys = messagesToMarkRead.map(getOptimisticEmailKey);
+      const threadEmailIds = Array.from(
+        new Set(
+          messagesToMarkRead
+            .map((message) => String(message.id || '').trim())
+            .filter(Boolean)
+        )
+      );
+      const threadEmailUids = Array.from(
+        new Set(
+          messagesToMarkRead
+            .map((message) => Number(message.uid))
+            .filter((uid) => Number.isFinite(uid) && uid > 0)
+        )
+      );
+
+      setOptimisticallyReadEmailKeys((prev) => {
+        const merged = new Set(prev);
+        threadOptimisticKeys.forEach((key) => merged.add(key));
+        return Array.from(merged);
+      });
+
+      try {
         if (user?.propertyId) {
           const markReadResult = await emailApi.markRead(
             user.propertyId,
-            emailToSelect.id ? [emailToSelect.id] : [],
-            Number.isFinite(emailToSelect.uid) ? [Number(emailToSelect.uid)] : []
+            threadEmailIds,
+            threadEmailUids
           );
           if (!markReadResult?.success) {
-            throw new Error('Failed to mark email as read in communication API');
+            throw new Error('Failed to mark email thread as read in communication API');
           }
         }
 
         // Best effort: keep external mailbox flags in sync for other mail apps.
         const token = await auth.currentUser?.getIdToken();
-        if (token) {
-          await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/markEmailAsRead', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ messageUid: emailToSelect.uid })
-          });
+        if (token && threadEmailUids.length > 0) {
+          await Promise.all(
+            threadEmailUids.map((uid) =>
+              fetch('https://europe-west1-protrack-hub.cloudfunctions.net/markEmailAsRead', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({ messageUid: uid })
+              }).catch(() => null)
+            )
+          );
         }
-            safeRefetchEmails();
-        } catch (error: any) {
-            console.error("Failed to mark email as read on server:", error);
-            setOptimisticallyReadEmailKeys(prev => prev.filter(key => key !== getOptimisticEmailKey(emailToSelect)));
-            setSelectedEmail(emailToSelect);
-            toast({
-                title: t('toasts.mark_read_error_title'),
-                description: t('toasts.mark_read_error_description'),
-                variant: "destructive"
-            });
-        }
+
+        safeRefetchEmails();
+      } catch (error: any) {
+        console.error("Failed to mark email as read on server:", error);
+        toast({
+          title: t('toasts.mark_read_error_title'),
+          description: 'Read status will be retried on next sync.',
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -713,6 +1247,49 @@ export default function CommunicationHubPage() {
     }
   };
 
+  const openGuestInfoFromEmail = useCallback(async (email: Email) => {
+    await handleSelectEmail(email);
+    setIsGuestInfoPanelOpen(true);
+  }, [handleSelectEmail]);
+
+  const selectedGuestForPanel = useMemo(() => {
+    if (!selectedEmail) return null;
+
+    const selectedEmailValue = String(selectedEmail.from?.email || '').trim().toLowerCase();
+    const selectedPhoneValue = normalizePhone(selectedThreadContactPhone || '');
+    const selectedNameValue = String(selectedEmail.from?.name || '').trim().toLowerCase();
+
+    const matchedGuest = guestDirectory.find((guest) => {
+      const guestEmail = String(guest.email || '').trim().toLowerCase();
+      const guestPhone = normalizePhone(guest.phone || '');
+      const guestName = String(guest.fullName || '').trim().toLowerCase();
+
+      if (selectedEmailValue && guestEmail && selectedEmailValue === guestEmail) return true;
+      if (selectedPhoneValue && guestPhone && selectedPhoneValue === guestPhone) return true;
+      if (selectedNameValue && guestName && selectedNameValue === guestName) return true;
+      return false;
+    });
+
+    if (matchedGuest) return matchedGuest;
+
+    const linkedGuestId = guestReservations.find((reservation) => {
+      const reservationEmail = String(reservation.guestEmail || '').trim().toLowerCase();
+      const reservationPhone = normalizePhone(reservation.guestPhone || '');
+      const reservationName = String(reservation.guestName || '').trim().toLowerCase();
+      if (selectedEmailValue && reservationEmail && selectedEmailValue === reservationEmail) return true;
+      if (selectedPhoneValue && reservationPhone && selectedPhoneValue === reservationPhone) return true;
+      if (selectedNameValue && reservationName && selectedNameValue === reservationName) return true;
+      return false;
+    })?.guestId;
+
+    if (linkedGuestId) {
+      const matchedById = guestDirectory.find((guest) => guest.id === linkedGuestId);
+      if (matchedById) return matchedById;
+    }
+
+    return null;
+  }, [guestDirectory, guestReservations, selectedEmail, selectedThreadContactPhone]);
+
   if (isLoadingAuth) {
     return <div className="flex h-screen items-center justify-center"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
   }
@@ -731,10 +1308,48 @@ export default function CommunicationHubPage() {
     );
   }
 
+  if (isLoadingChannelSettings) {
+    return <div className="flex h-screen items-center justify-center"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
+  }
+
+  // Show message if no communication channels are configured
+  if (!hasAnyCommunicationChannels()) {
+    return (
+      <div className="h-screen flex items-center justify-center p-4 bg-white rounded-lg border border-slate-200">
+        <div className="max-w-sm space-y-4 text-center">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-slate-100">
+            <AlertCircle className="h-10 w-10 text-slate-400" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Communication channels aren't set up</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              You need to configure at least one communication channel (Email, WhatsApp, or Guest Portal) to start managing conversations with guests.
+            </p>
+          </div>
+          <Button
+            onClick={() => {
+              if (user?.propertyId) {
+                window.location.href = `/property-settings/communication/communication-channels?propertyId=${user.propertyId}`;
+              }
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            Set up communication channels
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-hidden rounded-lg bg-white border border-slate-200" style={{ height: 'calc(96vh - var(--app-header-height))' }}>
-      <div className="flex h-full min-w-0">
-        <aside className="flex w-[320px] shrink-0 flex-col border-r border-slate-200 bg-slate-50">
+      <div className="flex h-full min-w-0 flex-col md:flex-row">
+        <aside
+          className={cn(
+            'flex min-h-0 w-full shrink-0 flex-col overflow-x-hidden bg-slate-50 md:w-[360px] lg:w-[390px] md:border-r md:border-slate-200',
+            selectedEmail ? 'hidden md:flex' : 'flex'
+          )}
+        >
           <div className="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -787,12 +1402,51 @@ export default function CommunicationHubPage() {
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   All conversations
                 </h3>
-                <span className="text-[10px] text-slate-400">{currentList.length} threads</span>
+                <span className="text-[10px] text-slate-400">{totalConversationCount} threads</span>
+              </div>
+
+              <div className="flex flex-wrap gap-1">
+                <Button
+                  type="button"
+                  variant={threadMailbox === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 rounded-full px-3 text-xs"
+                  onClick={() => setThreadMailbox('all')}
+                >
+                  All
+                </Button>
+                <Button
+                  type="button"
+                  variant={threadMailbox === 'pinned' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 rounded-full px-3 text-xs"
+                  onClick={() => setThreadMailbox('pinned')}
+                >
+                  Pinned
+                </Button>
+                <Button
+                  type="button"
+                  variant={threadMailbox === 'archived' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 rounded-full px-3 text-xs"
+                  onClick={() => setThreadMailbox('archived')}
+                >
+                  Archived
+                </Button>
+                <Button
+                  type="button"
+                  variant={threadMailbox === 'trash' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 rounded-full px-3 text-xs"
+                  onClick={() => setThreadMailbox('trash')}
+                >
+                  Trash
+                </Button>
               </div>
             </div>
           </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0 overflow-x-hidden">
             <div className="divide-y divide-slate-100 bg-white">
               {currentList.length > 0 ? (
                 groupedConversations.map((group) => (
@@ -805,25 +1459,54 @@ export default function CommunicationHubPage() {
                         const emailDate = new Date(latestThreadEmail.date);
                         const formattedDate = isValid(emailDate) ? format(emailDate, 'p') : '—';
                         const isSelected = selectedEmail && getConversationKey(selectedEmail) === conversation.key;
+                        const pinned = isConversationPinned(conversation.key);
+                        const archived = isConversationArchived(conversation.key);
+                        const trashed = isConversationTrashed(conversation.key);
+                        const starred = isConversationStarred(conversation.key, conversation.messages);
+                        const previewText = getThreadPreviewText(latestThreadEmail);
+                        const previewLabel = getThreadPreviewLabel(latestThreadEmail);
+                        const isLatestSent = isSentEmail(latestThreadEmail);
 
                         return (
-                          <button
+                          <div
                             key={conversation.key}
-                            type="button"
+                            role="button"
+                            tabIndex={0}
                             onClick={() => handleSelectEmail(email)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                handleSelectEmail(email);
+                              }
+                            }}
                             className={cn(
-                              'block w-full border-b border-slate-100 px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50',
+                              'group block w-full min-w-0 overflow-hidden cursor-pointer border-b border-slate-100 px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50',
                               isSelected && 'bg-slate-50',
                               conversation.unreadCount > 0 && 'bg-blue-50/40'
                             )}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
+                            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 overflow-hidden">
+                              <div className="min-w-0 flex-1 overflow-hidden">
                                 <div className="flex min-w-0 items-center gap-2">
                                 {conversation.unreadCount > 0 && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-600" />}
-                                <span className={cn('truncate text-sm', conversation.unreadCount > 0 ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
+                                {pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                                {starred && <Star className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                                <span className={cn('block min-w-0 truncate text-sm', conversation.unreadCount > 0 ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
                                   {conversation.contactName}
                                 </span>
+                                </div>
+                                <div className="mt-1.5 flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-xs">
+                                  <span
+                                    className={cn(
+                                      'shrink-0 font-medium',
+                                      isLatestSent ? 'text-emerald-600' : 'text-blue-600'
+                                    )}
+                                  >
+                                    {previewLabel}:
+                                  </span>
+                                  <span className="block min-w-0 flex-1 truncate text-slate-500">
+                                    {previewText}
+                                  </span>
                                 </div>
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                   {getConversationChannels(conversation).map((channel) => (
@@ -833,8 +1516,112 @@ export default function CommunicationHubPage() {
                                   ))}
                                 </div>
                               </div>
-                              <div className="flex shrink-0 flex-col items-end gap-1">
+                              <div className="flex min-w-[96px] shrink-0 flex-col items-end gap-1 pl-2">
                                 <span className="text-[11px] font-medium text-slate-400">{formattedDate}</span>
+                                <div className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={async (event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      await openGuestInfoFromEmail(email);
+                                    }}
+                                    title="Guest info"
+                                  >
+                                    <Info className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      handleTogglePin(conversation.key);
+                                    }}
+                                    title={pinned ? 'Unpin thread' : 'Pin thread'}
+                                  >
+                                    {pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={async (event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      await handleToggleStarThread(conversation.key);
+                                    }}
+                                    title={starred ? 'Unstar thread' : 'Star thread'}
+                                  >
+                                    <Star className={cn('h-3.5 w-3.5', starred && 'fill-amber-400 text-amber-500')} />
+                                  </Button>
+                                  {threadMailbox === 'trash' || trashed ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={async (event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        await handleRestoreThread(conversation.key);
+                                      }}
+                                      title="Restore thread"
+                                    >
+                                      <ArchiveRestore className="h-3.5 w-3.5" />
+                                    </Button>
+                                  ) : archived ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={async (event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        await handleUnarchiveThread(conversation.key);
+                                      }}
+                                      title="Unarchive thread"
+                                    >
+                                      <ArchiveRestore className="h-3.5 w-3.5" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={async (event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        await handleArchiveThread(conversation.key);
+                                      }}
+                                      title="Archive thread"
+                                    >
+                                      <Archive className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-red-500 hover:text-red-600"
+                                    onClick={async (event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      await handleDeleteThread(conversation.key);
+                                    }}
+                                    title="Move thread to trash"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
                                 <Badge
                                   variant="outline"
                                   className={cn('h-5 rounded-full px-2 text-[10px] font-medium', getStatusBadgeClassName(latestThreadEmail))}
@@ -843,7 +1630,7 @@ export default function CommunicationHubPage() {
                                 </Badge>
                               </div>
                             </div>
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -856,40 +1643,92 @@ export default function CommunicationHubPage() {
           </ScrollArea>
         </aside>
 
-        <main className="flex-1 min-w-0 bg-white">
-          {selectedEmail ? (
-            <EmailDetailView
-              email={selectedEmail}
-              onBack={() => setSelectedEmail(null)}
-              onReply={handleReply}
-              onForward={handleForward}
-              onStar={handleStar}
-              onArchive={handleArchive}
-              onDelete={handleDelete}
-              onMarkUnread={handleMarkUnread}
-              onAddLabel={handleAddLabel}
-              conversationHistory={isSelectedThreadNewConversation ? [] : selectedConversationHistory}
-              onChannelChange={handleChannelChangeFromThread}
-              onRefreshEmails={safeRefetchEmails}
-              initialChannel={selectedThreadChannel}
-              isNewConversation={isSelectedThreadNewConversation}
-              requireManualEmailSubject={shouldPromptSubjectForSelectedThread}
-              initialContactPhone={selectedThreadContactPhone}
-              onNewEmailSent={handleThreadEmailSent}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center bg-slate-50/30 text-center">
-              <div className="max-w-sm space-y-3 px-6">
-                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm">
-                  <MessageSquare className="h-8 w-8 text-slate-300" />
+        <main className={cn('min-w-0 flex-1 bg-white', selectedEmail ? 'block' : 'hidden md:block')}>
+          <div className="relative h-full min-w-0">
+            {selectedEmail ? (
+              <>
+                <div className="absolute right-3 top-3 z-10">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 bg-white"
+                    onClick={() => setIsGuestInfoPanelOpen(true)}
+                    title="Guest info"
+                  >
+                    <Info className="h-4 w-4" />
+                  </Button>
                 </div>
-                <h2 className="text-xl font-bold text-slate-800">Select a conversation</h2>
-                <p className="text-sm text-slate-400">Choose a message from the left panel to view details and reply.</p>
+                <EmailDetailView
+                  email={selectedEmail}
+                  onBack={() => setSelectedEmail(null)}
+                  onReply={handleReply}
+                  onForward={handleForward}
+                  onStar={handleStar}
+                  onArchive={handleArchive}
+                  onDelete={handleDelete}
+                  onMarkUnread={handleMarkUnread}
+                  onAddLabel={handleAddLabel}
+                  conversationHistory={isSelectedThreadNewConversation ? [] : selectedConversationHistory}
+                  onChannelChange={handleChannelChangeFromThread}
+                  onRefreshEmails={safeRefetchEmails}
+                  initialChannel={selectedThreadChannel}
+                  isNewConversation={isSelectedThreadNewConversation}
+                  requireManualEmailSubject={shouldPromptSubjectForSelectedThread}
+                  initialContactPhone={selectedThreadContactPhone}
+                  onNewEmailSent={handleThreadEmailSent}
+                />
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center bg-slate-50/30 text-center">
+                <div className="max-w-sm space-y-3 px-6">
+                  <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm">
+                    <MessageSquare className="h-8 w-8 text-slate-300" />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800">Select a conversation</h2>
+                  <p className="text-sm text-slate-400">Choose a message from the left panel to view details and reply.</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </main>
       </div>
+
+      <Sheet open={isGuestInfoPanelOpen} onOpenChange={setIsGuestInfoPanelOpen}>
+        <SheetContent side="right" className="w-[min(1100px,96vw)] sm:max-w-none p-0">
+          <div className="flex h-full flex-col">
+            <SheetHeader className="border-b border-slate-200 px-6 py-4 pr-12 text-left">
+              <SheetTitle>Guest Details</SheetTitle>
+              <SheetDescription>Profile and reservation history</SheetDescription>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {!selectedEmail ? (
+                <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-400">
+                  Select a conversation to view guest profile details.
+                </div>
+              ) : isLoadingGuestPanel ? (
+                <div className="flex h-full items-center justify-center">
+                  <Icons.Spinner className="h-6 w-6 animate-spin text-slate-400" />
+                </div>
+              ) : selectedGuestForPanel ? (
+                <GuestProfile
+                  guest={selectedGuestForPanel}
+                  allReservations={guestReservations}
+                  onGuestDeleted={() => {
+                    setGuestDirectory((current) => current.filter((guest) => guest.id !== selectedGuestForPanel.id));
+                    setSelectedEmail(null);
+                    setIsGuestInfoPanelOpen(false);
+                  }}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
+                  Guest details are unavailable for this conversation.
+                </div>
+              )}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <NewConversationDialog
         open={isNewConversationOpen}

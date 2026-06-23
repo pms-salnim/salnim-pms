@@ -9,6 +9,17 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
+const CHANNEL_SETTINGS_TABLES = [
+  'communication_channels_settings',
+  'communication_channel_settings',
+] as const;
+
+const isMissingRelationError = (error: any): boolean => {
+  const code = String(error?.code || '').toUpperCase();
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42P01' || message.includes('does not exist') || message.includes('relation');
+};
+
 async function verifyUser(req: NextRequest): Promise<{ id: string; email?: string } | null> {
   const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -89,7 +100,7 @@ async function resolveSenderDisplayName(authUser: { id: string; email?: string }
     const userName = String(
       userRow?.full_name
       || userRow?.name
-      || [userRow?.first_name, userRow?.last_name].filter(Boolean).join(' ')
+      || userRow?.name || [userRow?.first_name, userRow?.last_name].filter(Boolean).join(' ')
       || ''
     ).trim();
     if (userName) return userName;
@@ -103,7 +114,7 @@ async function resolveSenderDisplayName(authUser: { id: string; email?: string }
     const teamMemberName = String(
       teamMember?.full_name
       || teamMember?.name
-      || [teamMember?.first_name, teamMember?.last_name].filter(Boolean).join(' ')
+      || teamMember?.name || [teamMember?.first_name, teamMember?.last_name].filter(Boolean).join(' ')
       || ''
     ).trim();
     if (teamMemberName) return teamMemberName;
@@ -118,7 +129,7 @@ async function resolveSenderDisplayName(authUser: { id: string; email?: string }
       const teamMemberByEmailName = String(
         teamMemberByEmail?.full_name
         || teamMemberByEmail?.name
-        || [teamMemberByEmail?.first_name, teamMemberByEmail?.last_name].filter(Boolean).join(' ')
+        || teamMemberByEmail?.name || [teamMemberByEmail?.first_name, teamMemberByEmail?.last_name].filter(Boolean).join(' ')
         || ''
       ).trim();
       if (teamMemberByEmailName) return teamMemberByEmailName;
@@ -255,13 +266,21 @@ function extractSmtpConfigFromSettings(settings: any): {
 }
 
 async function getPropertyCommunicationSettings(propertyId: string): Promise<any | null> {
-  const { data: row } = await supabase
-    .from('communication_channel_settings')
-    .select('settings')
-    .eq('property_id', propertyId)
-    .maybeSingle();
+  for (const tableName of CHANNEL_SETTINGS_TABLES) {
+    const { data: row, error } = await supabase
+      .from(tableName)
+      .select('settings')
+      .eq('property_id', propertyId)
+      .maybeSingle();
 
-  return row?.settings || null;
+    if (error && isMissingRelationError(error)) {
+      continue;
+    }
+
+    return row?.settings || null;
+  }
+
+  return null;
 }
 
 async function getSmtpConfigForProperty(propertyId: string) {
@@ -499,6 +518,22 @@ async function handleSyncEmails(
 ): Promise<NextResponse> {
   let connection: any = null;
 
+  const loadStoredEmails = async () => {
+    const { data: storedEmails, error: storedError } = await supabase
+      .from('property_emails')
+      .select('*, attachments:email_attachments(*), labels:email_message_labels(label_id)')
+      .eq('property_id', propertyId)
+      .order('date_ms', { ascending: false })
+      .range(0, 49);
+
+    if (storedError) {
+      throw storedError;
+    }
+
+    return dedupeEmailsByUid(storedEmails || [])
+      .sort((a: any, b: any) => Number(b?.date_ms || 0) - Number(a?.date_ms || 0));
+  };
+
   try {
     const maxNew = typeof data?.maxNew === 'number'
       ? Math.min(Math.max(data.maxNew, 1), 500)
@@ -507,9 +542,16 @@ async function handleSyncEmails(
     const imapConfig = await getImapConfigForProperty(propertyId);
 
     if (!imapConfig) {
+      const emails = await loadStoredEmails();
       return NextResponse.json(
-        { error: 'IMAP not configured for this property' },
-        { status: 400 }
+        {
+          success: true,
+          emails,
+          synced: 0,
+          degraded: true,
+          message: 'IMAP not configured for this property',
+        },
+        { status: 200 }
       );
     }
 
@@ -616,6 +658,10 @@ async function handleSyncEmails(
           const plainBody = textBody || (htmlBody ? htmlBody.replace(/<[^>]+>/g, ' ') : '');
           const snippet = plainBody.slice(0, 150).replace(/\s+/g, ' ').trim();
           const flags = item.attributes?.flags || [];
+          const normalizedFlags = Array.isArray(flags)
+            ? flags.map((flag: any) => String(flag || '').trim().toLowerCase())
+            : [];
+          const isSeen = normalizedFlags.some((flag: string) => flag === '\\seen' || flag === 'seen' || flag.includes('seen'));
 
           const attachments = (parsed.attachments || []).map((att: any) => ({
             file_name: att.filename || 'attachment',
@@ -636,7 +682,7 @@ async function handleSyncEmails(
               snippet,
               body_text: textBody,
               body_html: htmlBody,
-              is_unread: !flags.includes('\\Seen'),
+              is_unread: !isSeen,
               has_attachments: attachments.length > 0,
             },
             attachments,
@@ -669,17 +715,26 @@ async function handleSyncEmails(
 
       const { data: existingRows } = await supabase
         .from('property_emails')
-        .select('id, uid')
+        .select('id, uid, is_unread')
         .eq('property_id', propertyId)
         .in('uid', uids);
 
       const existingUidSet = new Set((existingRows || []).map((row) => Number(row.uid)));
+      const existingUnreadByUid = new Map<number, boolean>(
+        (existingRows || []).map((row: any) => [Number(row.uid), Boolean(row.is_unread)])
+      );
       const toInsert = validParsedByUid.filter((v) => !existingUidSet.has(v.uid));
       const toUpdate = validParsedByUid.filter((v) => existingUidSet.has(v.uid));
 
       if (toUpdate.length > 0) {
         await Promise.all(
           toUpdate.map(async (v) => {
+            const existingIsUnread = existingUnreadByUid.get(v.uid);
+            // Keep messages read once opened in app, while still allowing first-time read detection from IMAP.
+            const mergedIsUnread = typeof existingIsUnread === 'boolean'
+              ? (existingIsUnread && Boolean(v.email.is_unread))
+              : Boolean(v.email.is_unread);
+
             const { error: updateError } = await supabase
               .from('property_emails')
               .update({
@@ -691,7 +746,7 @@ async function handleSyncEmails(
                 snippet: v.email.snippet,
                 body_text: v.email.body_text,
                 body_html: v.email.body_html,
-                is_unread: v.email.is_unread,
+                is_unread: mergedIsUnread,
                 has_attachments: v.email.has_attachments,
                 updated_at: new Date().toISOString(),
               })
@@ -751,19 +806,7 @@ async function handleSyncEmails(
       }
     }
 
-    const { data: emails, error: listError } = await supabase
-      .from('property_emails')
-      .select('*, attachments:email_attachments(*), labels:email_message_labels(label_id)')
-      .eq('property_id', propertyId)
-      .order('date_ms', { ascending: false })
-      .range(0, 49);
-
-    if (listError) {
-      throw listError;
-    }
-
-    const dedupedEmails = dedupeEmailsByUid(emails || [])
-      .sort((a: any, b: any) => Number(b?.date_ms || 0) - Number(a?.date_ms || 0));
+    const dedupedEmails = await loadStoredEmails();
 
     return NextResponse.json({
       success: true,
@@ -772,6 +815,23 @@ async function handleSyncEmails(
     });
   } catch (error) {
     console.error('Error syncing emails:', error);
+
+    try {
+      const fallbackEmails = await loadStoredEmails();
+      return NextResponse.json(
+        {
+          success: true,
+          emails: fallbackEmails,
+          synced: 0,
+          degraded: true,
+          message: 'Email sync failed. Showing last stored emails.',
+        },
+        { status: 200 }
+      );
+    } catch (fallbackError) {
+      console.error('Failed to load fallback stored emails:', fallbackError);
+    }
+
     return NextResponse.json(
       { error: 'Failed to sync emails' },
       { status: 500 }
@@ -1041,7 +1101,7 @@ async function handleGetEmailGuestContext(
     const context = {
       guest: {
         id: primaryGuest.id,
-        fullName: `${primaryGuest.first_name || ''} ${primaryGuest.last_name || ''}`.trim() || guestEmail,
+        fullName: primaryGuest.name || `${primaryGuest.first_name || ''} ${primaryGuest.last_name || ''}`.trim() || guestEmail,
         email: primaryGuest.email || guestEmail,
         phone: primaryGuest.phone || null,
         country: primaryGuest.country || null,

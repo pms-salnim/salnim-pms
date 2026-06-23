@@ -25,6 +25,46 @@ const supabaseAdmin = createSupabaseClient(supabaseUrl, supabaseServiceRoleKey, 
   },
 });
 
+const CHANNEL_SETTINGS_TABLES = [
+  "communication_channels_settings",
+  "communication_channel_settings",
+] as const;
+
+const isMissingRelationError = (error: any): boolean => {
+  const code = String(error?.code || "").toUpperCase();
+  const message = String(error?.message || "").toLowerCase();
+  return code === "42P01" || message.includes("does not exist") || message.includes("relation");
+};
+
+async function getChannelSettingsRecord(
+  client: any,
+  propertyId: string,
+  selectColumns = "settings"
+): Promise<{ tableName: string; data: any; error: any }> {
+  let lastError: any = null;
+
+  for (const tableName of CHANNEL_SETTINGS_TABLES) {
+    const { data, error } = await client
+      .from(tableName)
+      .select(selectColumns)
+      .eq("property_id", propertyId)
+      .maybeSingle();
+
+    if (error && isMissingRelationError(error)) {
+      lastError = error;
+      continue;
+    }
+
+    return { tableName, data, error };
+  }
+
+  return {
+    tableName: CHANNEL_SETTINGS_TABLES[0],
+    data: null,
+    error: lastError,
+  };
+}
+
 type SmtpSettings = {
   smtpHost: string;
   smtpPort: number;
@@ -57,11 +97,7 @@ const isMaskedSecret = (value: unknown): value is string => {
 };
 
 async function getExistingChannelSettings(propertyId: string): Promise<Record<string, any>> {
-  const { data } = await supabaseAdmin
-    .from("communication_channel_settings")
-    .select("settings")
-    .eq("property_id", propertyId)
-    .maybeSingle();
+  const { data } = await getChannelSettingsRecord(supabaseAdmin, propertyId, "settings");
 
   return (data?.settings as Record<string, any>) || {};
 }
@@ -159,11 +195,15 @@ async function saveChannelSettings({
   smtpSettings?: SmtpSettings;
   imapSettings?: ImapSettings;
 }) {
-  const { data: existingRecord } = await supabase
-    .from("communication_channel_settings")
-    .select("id, settings")
-    .eq("property_id", propertyId)
-    .maybeSingle();
+  const {
+    tableName,
+    data: existingRecord,
+    error: existingLookupError,
+  } = await getChannelSettingsRecord(supabase, propertyId, "id, settings");
+
+  if (existingLookupError && isMissingRelationError(existingLookupError)) {
+    return { data: null, error: existingLookupError };
+  }
 
   const mergedSettings = {
     ...(existingRecord?.settings || {}),
@@ -174,7 +214,7 @@ async function saveChannelSettings({
 
   if (existingRecord?.id) {
     return supabase
-      .from("communication_channel_settings")
+      .from(tableName)
       .update({ settings: mergedSettings })
       .eq("property_id", propertyId)
       .select()
@@ -182,7 +222,7 @@ async function saveChannelSettings({
   }
 
   return supabase
-    .from("communication_channel_settings")
+    .from(tableName)
     .insert({
       property_id: propertyId,
       settings: mergedSettings,
@@ -339,11 +379,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch communication channel settings for the property
-    const { data, error } = await supabase
-      .from("communication_channel_settings")
-      .select("*")
-      .eq("property_id", propertyId)
-      .maybeSingle();
+    const { data, error } = await getChannelSettingsRecord(supabase, propertyId, "*");
 
     if (error) {
       console.error("Error fetching settings:", error);

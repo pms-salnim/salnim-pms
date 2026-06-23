@@ -96,9 +96,9 @@ CREATE POLICY reservations_select_policy ON public.reservations
   FOR SELECT USING (
     EXISTS (
       SELECT 1
-      FROM public.properties p
-      WHERE p.id = reservations.property_id
-        AND p.owner_id = auth.uid()
+      FROM public.users u
+      WHERE u.id = auth.uid()
+        AND u.property_id = reservations.property_id
     )
   );
 
@@ -107,9 +107,9 @@ CREATE POLICY reservations_insert_policy ON public.reservations
   FOR INSERT WITH CHECK (
     EXISTS (
       SELECT 1
-      FROM public.properties p
-      WHERE p.id = reservations.property_id
-        AND p.owner_id = auth.uid()
+      FROM public.users u
+      WHERE u.id = auth.uid()
+        AND u.property_id = reservations.property_id
     )
   );
 
@@ -118,9 +118,9 @@ CREATE POLICY reservations_update_policy ON public.reservations
   FOR UPDATE USING (
     EXISTS (
       SELECT 1
-      FROM public.properties p
-      WHERE p.id = reservations.property_id
-        AND p.owner_id = auth.uid()
+      FROM public.users u
+      WHERE u.id = auth.uid()
+        AND u.property_id = reservations.property_id
     )
   );
 
@@ -129,8 +129,8 @@ CREATE POLICY reservations_delete_policy ON public.reservations
   FOR DELETE USING (
     EXISTS (
       SELECT 1
-      FROM public.properties p
-      WHERE p.id = reservations.property_id
-        AND p.owner_id = auth.uid()
+      FROM public.users u
+      WHERE u.id = auth.uid()
+        AND u.property_id = reservations.property_id
     )
   );

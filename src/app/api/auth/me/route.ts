@@ -8,6 +8,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
+const CHANNEL_SETTINGS_TABLES = [
+  'communication_channels_settings',
+  'communication_channel_settings',
+] as const;
+
+const isMissingRelationError = (error: any): boolean => {
+  const code = String(error?.code || '').toUpperCase();
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42P01' || message.includes('does not exist') || message.includes('relation');
+};
+
 export async function GET(request: NextRequest) {
   try {
     // Initialize admin client inside function (not at module load time)
@@ -136,6 +147,87 @@ export async function GET(request: NextRequest) {
       } else {
         console.log('Property fetched successfully:', propertyData?.id);
         property = propertyData;
+        
+        // Fetch communication channel settings for this property
+        try {
+          let channelSettings: any = null;
+          let channelError: any = null;
+
+          for (const tableName of CHANNEL_SETTINGS_TABLES) {
+            const { data, error } = await supabaseAdmin
+              .from(tableName)
+              .select('settings')
+              .eq('property_id', userProfile.property_id)
+              .maybeSingle();
+
+            if (error && isMissingRelationError(error)) {
+              continue;
+            }
+
+            channelSettings = data;
+            channelError = error;
+            break;
+          }
+
+          if (channelError) {
+            console.warn('Communication channel settings not found:', channelError.message);
+          } else if (channelSettings?.settings) {
+            // Merge communication settings into the property object
+            // Parse IMAP and Email configuration from the settings JSONB
+            const settings = channelSettings.settings as any;
+
+            const imapSettings = settings.imapSettings || settings.imap_configuration || settings.imap;
+            const smtpSettings =
+              settings.smtpSettings
+              || settings.emailConfiguration
+              || settings.emailConfigurations?.[0]?.smtpSettings
+              || settings.emailConfigurations?.[0]
+              || settings.email;
+            const whatsappSettings = settings.whatsappIntegration || settings.whatsapp;
+
+            const normalizedImapSettings = imapSettings
+              ? {
+                  ...imapSettings,
+                  host: imapSettings.host || imapSettings.imapHost,
+                  port: Number(imapSettings.port || imapSettings.imapPort || 993),
+                  user: imapSettings.user || imapSettings.imapUser,
+                  pass: imapSettings.pass || imapSettings.imapPass,
+                  useTls: imapSettings.useTls ?? imapSettings.use_tls ?? true,
+                }
+              : null;
+
+            const normalizedSmtpSettings = smtpSettings
+              ? {
+                  ...smtpSettings,
+                  smtpHost: smtpSettings.smtpHost || smtpSettings.host,
+                  smtpPort: Number(smtpSettings.smtpPort || smtpSettings.port || 587),
+                  smtpUser: smtpSettings.smtpUser || smtpSettings.user,
+                  smtpPass: smtpSettings.smtpPass || smtpSettings.pass,
+                }
+              : null;
+
+            if (normalizedImapSettings) {
+              property = { ...property, imapConfiguration: normalizedImapSettings };
+            }
+            if (normalizedSmtpSettings) {
+              property = { ...property, emailConfiguration: normalizedSmtpSettings };
+            }
+            if (whatsappSettings) {
+              property = { ...property, whatsappIntegration: whatsappSettings };
+            }
+            if (settings.guestPortal) {
+              property = { ...property, guestPortal: settings.guestPortal };
+            }
+            console.log('Communication channel settings merged:', {
+              hasIMAP: !!normalizedImapSettings,
+              hasEmail: !!normalizedSmtpSettings,
+              hasWhatsApp: !!whatsappSettings,
+            });
+          }
+        } catch (settingsError) {
+          console.error('Error fetching communication settings:', settingsError);
+          // Continue anyway - settings are optional
+        }
       }
     } else {
       console.warn('User has no property_id set');

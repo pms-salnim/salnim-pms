@@ -1178,7 +1178,8 @@ function BulkAvailabilityPageContent() {
             } catch {
               errorData = { error: `HTTP ${response.status}` };
             }
-            throw new Error(errorData.error || `Batch ${batchIdx + 1} failed (HTTP ${response.status})`);
+            const details = errorData.details ? `: ${errorData.details}` : '';
+            throw new Error((errorData.error || `Batch ${batchIdx + 1} failed (HTTP ${response.status})`) + details);
           }
 
           const result = await response.json();

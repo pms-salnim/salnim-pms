@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+function isMissingTableError(error: any, table: string): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes(`relation \"public.${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`relation \"${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`could not find the table 'public.${table.toLowerCase()}'`)
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabaseAdmin = createClient(
@@ -71,9 +80,16 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (fetchError) {
+      if (isMissingTableError(fetchError, 'promotions')) {
+        return NextResponse.json({ promotions: [] });
+      }
+
       console.error('Fetch error:', fetchError);
       return NextResponse.json(
-        { error: fetchError.message || 'Failed to fetch promotions' },
+        {
+          error: fetchError.message || 'Failed to fetch promotions',
+          details: fetchError,
+        },
         { status: 500 }
       );
     }

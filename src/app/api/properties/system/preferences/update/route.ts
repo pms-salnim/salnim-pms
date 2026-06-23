@@ -6,17 +6,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize admin client for database access
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
+function createSupabaseClientForRequest(token: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseKey = serviceRoleKey || anonKey;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase environment variables are missing');
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
-  }
-);
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,6 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.slice(7);
+    const supabaseAdmin = createSupabaseClientForRequest(token);
 
     // Verify token
     const { data, error: authError } = await supabaseAdmin.auth.getUser(token);
@@ -119,6 +131,7 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.slice(7);
+    const supabaseAdmin = createSupabaseClientForRequest(token);
 
     // Verify token
     const { data, error: authError } = await supabaseAdmin.auth.getUser(token);
@@ -154,10 +167,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch preference settings
+    // Fetch the full row to avoid hard failures when optional columns differ across environments.
     const { data: propertyData, error: fetchError } = await supabaseAdmin
       .from('properties')
-      .select('preference_settings')
+      .select('*')
       .eq('id', propertyId)
       .single();
 
@@ -169,8 +182,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const rawPreferenceSettings = (propertyData as any)?.preference_settings;
+    const fallbackBookingPageSettings = (propertyData as any)?.booking_page_settings;
+
+    const normalizedSettings =
+      rawPreferenceSettings && typeof rawPreferenceSettings === 'object'
+        ? rawPreferenceSettings
+        : (
+            fallbackBookingPageSettings
+            && typeof fallbackBookingPageSettings === 'object'
+            && typeof fallbackBookingPageSettings.allowSameDayTurnover === 'boolean'
+          )
+          ? { allowSameDayTurnover: fallbackBookingPageSettings.allowSameDayTurnover }
+          : {};
+
     return NextResponse.json({
-      settings: propertyData.preference_settings || {},
+      settings: normalizedSettings,
     });
   } catch (error: any) {
     console.error('Preference settings fetch API error:', error);

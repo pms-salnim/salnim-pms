@@ -136,14 +136,14 @@ async function ensureGuestProfileForReservation(params: {
   }
 
   const { firstName, lastName } = splitGuestName(guestName);
+  const fullName = `${firstName} ${lastName}`.trim();
 
   if (existingGuest?.id) {
     const patch: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
 
-    if (!existingGuest.first_name && firstName) patch.first_name = firstName;
-    if (!existingGuest.last_name && lastName) patch.last_name = lastName;
+    if (!existingGuest.name && fullName) patch.name = fullName;
     if (!existingGuest.email && normalizedEmail) patch.email = normalizedEmail;
     if (!existingGuest.phone && normalizedPhone) patch.phone = normalizedPhone;
     if (!existingGuest.country && guestCountry) patch.country = guestCountry;
@@ -169,8 +169,7 @@ async function ensureGuestProfileForReservation(params: {
     .insert({
       id: newGuestId,
       property_id: propertyId,
-      first_name: firstName,
-      last_name: lastName,
+      name: fullName || 'Guest',
       email: normalizedEmail || null,
       phone: normalizedPhone || null,
       country: guestCountry || null,

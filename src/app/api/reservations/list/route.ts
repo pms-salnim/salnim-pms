@@ -55,6 +55,15 @@ function transformReservation(r: any) {
   };
 }
 
+function isMissingReservationsTableError(error: any): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes("could not find the table 'public.reservations'") ||
+    message.includes('relation "public.reservations" does not exist') ||
+    message.includes('relation "reservations" does not exist')
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('Authorization');
@@ -92,6 +101,14 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (fetchError) {
+      if (isMissingReservationsTableError(fetchError)) {
+        return NextResponse.json({
+          reservations: [],
+          warning: 'reservations_table_missing',
+          details: fetchError.message,
+        });
+      }
+
       console.error('[reservations/list] fetch error:', fetchError);
       return NextResponse.json({ error: fetchError.message }, { status: 500 });
     }

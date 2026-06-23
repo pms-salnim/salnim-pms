@@ -1,6 +1,25 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
+function isSchemaOrRelationError(error: any): boolean {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("schema cache") ||
+    message.includes("relationship") ||
+    message.includes("does not exist") ||
+    message.includes("could not find")
+  );
+}
+
+function isMissingTableError(error: any, table: string): boolean {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes(`relation \"public.${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`relation \"${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`could not find the table 'public.${table.toLowerCase()}'`)
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -55,9 +74,23 @@ export async function GET(request: NextRequest) {
       query = query.eq("visible_in_guest_portal", true);
     }
 
-    const { data: mealPlans, error } = await query;
+    let { data: mealPlans, error } = await query;
+
+    if (error && isSchemaOrRelationError(error)) {
+      const fallback = await supabase
+        .from("meal_plans")
+        .select("*")
+        .eq("property_id", propertyId);
+
+      mealPlans = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
+      if (isMissingTableError(error, "meal_plans")) {
+        return NextResponse.json([]);
+      }
+
       console.error("Supabase error:", error);
       return NextResponse.json(
         {

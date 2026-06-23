@@ -52,6 +52,28 @@ interface RateOverrideRecord {
  * - roomIds (optional): Comma-separated room IDs
  * - roomTypeIds (optional): Comma-separated room type IDs (for rate lookups)
  */
+
+// ✅ Helper: Detect schema/relation errors for retry logic
+function isSchemaOrRelationError(error: any): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes('schema cache') ||
+    message.includes('relationship') ||
+    message.includes('does not exist') ||
+    message.includes('could not find')
+  );
+}
+
+// ✅ Helper: Detect if a table is completely missing
+function isMissingTableError(error: any, table: string): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes(`relation \"public.${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`relation \"${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`could not find the table 'public.${table.toLowerCase()}'`)
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -98,9 +120,19 @@ export async function GET(request: NextRequest) {
       roomMappingQuery = roomMappingQuery.in('id', roomIds);
     }
 
-    const { data: roomMappingData, error: roomMappingError } = await roomMappingQuery;
+    let { data: roomMappingData, error: roomMappingError } = await roomMappingQuery;
     console.log('[Calendar API] Room mapping result:', { count: roomMappingData?.length, error: roomMappingError?.message });
-    if (roomMappingError) {
+    if (roomMappingError && isSchemaOrRelationError(roomMappingError)) {
+      console.warn('[Calendar API] Room mapping has schema error, retrying simple select...');
+      const fallback = await supabase.from('rooms').select('id, room_type_id').eq('property_id', propertyId);
+      roomMappingData = fallback.data || [];
+      roomMappingError = fallback.error;
+    }
+    if (isMissingTableError(roomMappingError, 'rooms')) {
+      console.warn('[Calendar API] Rooms table missing, proceeding with empty room mapping');
+      roomMappingData = [];
+      roomMappingError = null;
+    } else if (roomMappingError) {
       console.error('[Calendar API] Room mapping error:', roomMappingError);
       throw roomMappingError;
     }
@@ -128,9 +160,23 @@ export async function GET(request: NextRequest) {
       availQuery = availQuery.in('room_id', roomIds);
     }
 
-    const { data: availData, error: availError } = await availQuery;
+    let { data: availData, error: availError } = await availQuery;
     console.log('[Calendar API] 📥 Raw availability result:', { count: availData?.length, error: availError?.message });
-    if (availError) {
+    if (availError && isSchemaOrRelationError(availError)) {
+      console.warn('[Calendar API] Availability query has schema error, retrying simple select...');
+      const fallback = await supabase
+        .from('availability_calendar')
+        .select('room_id, date, status')
+        .eq('property_id', propertyId)
+        .lte('date', maxDate);
+      availData = fallback.data || [];
+      availError = fallback.error;
+    }
+    if (isMissingTableError(availError, 'availability_calendar')) {
+      console.warn('[Calendar API] Availability calendar table missing, proceeding with empty availability');
+      availData = [];
+      availError = null;
+    } else if (availError) {
       console.error('[Calendar API] Availability error:', availError);
       throw availError;
     }
@@ -212,9 +258,23 @@ export async function GET(request: NextRequest) {
       restrictQuery = restrictQuery.in('room_type_id', roomTypeIds);  // ✅ UPDATED: Filter by room_type_id
     }
 
-    const { data: restrictData, error: restrictError } = await restrictQuery;
+    let { data: restrictData, error: restrictError } = await restrictQuery;
     console.log('[Calendar API] Restrictions result:', { count: restrictData?.length, error: restrictError?.message });
-    if (restrictError) {
+    if (restrictError && isSchemaOrRelationError(restrictError)) {
+      console.warn('[Calendar API] Restrictions query has schema error, retrying with minimal columns...');
+      const fallback = await supabase
+        .from('availability_restrictions')
+        .select('*')
+        .eq('property_id', propertyId)
+        .limit(0); // Try minimal query just to check if table exists
+      restrictData = fallback.data || [];
+      restrictError = fallback.error;
+    }
+    if (isMissingTableError(restrictError, 'availability_restrictions') || (restrictError && restrictError.message?.includes('does not exist'))) {
+      console.warn('[Calendar API] Availability restrictions table has schema issues, proceeding with empty restrictions');
+      restrictData = [];
+      restrictError = null;
+    } else if (restrictError) {
       console.error('[Calendar API] Restrictions error:', restrictError);
       throw restrictError;
     }
@@ -234,9 +294,23 @@ export async function GET(request: NextRequest) {
       rateQuery = rateQuery.in('room_type_id', roomTypeIds);
     }
 
-    const { data: rateData, error: rateError } = await rateQuery;
+    let { data: rateData, error: rateError } = await rateQuery;
     console.log('[Calendar API] Rates result:', { count: rateData?.length, error: rateError?.message });
-    if (rateError) {
+    if (rateError && isSchemaOrRelationError(rateError)) {
+      console.warn('[Calendar API] Rates query has schema error, retrying with minimal columns...');
+      const fallback = await supabase
+        .from('rate_overrides')
+        .select('*')
+        .eq('property_id', propertyId)
+        .limit(0); // Try minimal query just to check if table exists
+      rateData = fallback.data || [];
+      rateError = fallback.error;
+    }
+    if (isMissingTableError(rateError, 'rate_overrides') || (rateError && rateError.message?.includes('does not exist'))) {
+      console.warn('[Calendar API] Rate overrides table has schema issues, proceeding with empty rates');
+      rateData = [];
+      rateError = null;
+    } else if (rateError) {
       console.error('[Calendar API] Rates error:', rateError);
       throw rateError;
     }
@@ -252,9 +326,23 @@ export async function GET(request: NextRequest) {
       .gt('end_date', minDate)
       .order('start_date', { ascending: true });
 
-    const { data: reservationsData, error: reservationsError } = await reservationsQuery;
+    let { data: reservationsData, error: reservationsError } = await reservationsQuery;
     console.log('[Calendar API] Reservations result:', { count: reservationsData?.length, error: reservationsError?.message });
-    if (reservationsError) {
+    if (reservationsError && isSchemaOrRelationError(reservationsError)) {
+      console.warn('[Calendar API] Reservations query has schema error, retrying simple select...');
+      const fallback = await supabase
+        .from('reservations')
+        .select('id, start_date, end_date')
+        .eq('property_id', propertyId)
+        .lte('start_date', maxDate);
+      reservationsData = fallback.data || [];
+      reservationsError = fallback.error;
+    }
+    if (isMissingTableError(reservationsError, 'reservations')) {
+      console.warn('[Calendar API] Reservations table missing, proceeding with empty reservations');
+      reservationsData = [];
+      reservationsError = null;
+    } else if (reservationsError) {
       console.error('[Calendar API] Reservations error:', reservationsError);
       throw reservationsError;
     }

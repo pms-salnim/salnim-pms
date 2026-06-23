@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+function isSchemaOrRelationError(error: any): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes('schema cache') ||
+    message.includes('relationship') ||
+    message.includes('does not exist') ||
+    message.includes('could not find')
+  );
+}
+
+function isMissingTableError(error: any, table: string): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes(`relation \"public.${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`relation \"${table.toLowerCase()}\" does not exist`) ||
+    message.includes(`could not find the table 'public.${table.toLowerCase()}'`)
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabaseAdmin = createClient(
@@ -64,7 +83,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch rate plans with joined room type data
-    const { data: ratePlans, error: fetchError } = await supabaseAdmin
+    let { data: ratePlans, error: fetchError } = await supabaseAdmin
       .from('rate_plans')
       .select(`
         *,
@@ -78,13 +97,32 @@ export async function GET(request: NextRequest) {
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: false });
 
+    if (fetchError && isSchemaOrRelationError(fetchError)) {
+      const fallback = await supabaseAdmin
+        .from('rate_plans')
+        .select('*')
+        .eq('property_id', propertyId)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      ratePlans = fallback.data;
+      fetchError = fallback.error;
+    }
+
     console.log('API: Fetched rate plans from DB:', ratePlans);
     console.log('API: Fetch error:', fetchError);
 
     if (fetchError) {
+      if (isMissingTableError(fetchError, 'rate_plans')) {
+        return NextResponse.json({ ratePlans: [] });
+      }
+
       console.error('Fetch error:', fetchError);
       return NextResponse.json(
-        { error: fetchError.message || 'Failed to fetch rate plans' },
+        {
+          error: fetchError.message || 'Failed to fetch rate plans',
+          details: fetchError,
+        },
         { status: 500 }
       );
     }

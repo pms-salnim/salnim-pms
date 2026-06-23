@@ -123,9 +123,9 @@ export default function AllGuestsPage() {
   const normalizeGuest = useCallback((guestRow: any): Guest => ({
     id: guestRow.id,
     propertyId: guestRow.property_id ?? guestRow.propertyId,
-    fullName: guestRow.full_name ?? guestRow.fullName ?? [guestRow.first_name ?? guestRow.firstName, guestRow.last_name ?? guestRow.lastName].filter(Boolean).join(' ').trim(),
-    firstName: guestRow.first_name ?? guestRow.firstName,
-    lastName: guestRow.last_name ?? guestRow.lastName,
+    fullName: guestRow.name ?? guestRow.full_name ?? guestRow.fullName ?? ([guestRow.first_name ?? guestRow.firstName, guestRow.last_name ?? guestRow.lastName].filter(Boolean).join(' ').trim() || 'Guest'),
+    firstName: guestRow.first_name ?? guestRow.firstName ?? '',
+    lastName: guestRow.last_name ?? guestRow.lastName ?? '',
     email: guestRow.email ?? '',
     phone: guestRow.phone ?? '',
     nationality: guestRow.nationality ?? guestRow.country ?? '',
