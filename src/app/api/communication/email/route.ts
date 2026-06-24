@@ -209,6 +209,135 @@ function dedupeEmailsByUid<T extends { uid?: number | null; id?: string; date_ms
   return Array.from(byIdentity.values());
 }
 
+const normalizeText = (value: any): string => String(value || '').trim();
+
+async function resolveThreadEmailIds(
+  propertyId: string,
+  emailIds: string[],
+  options?: { trashOnly?: boolean }
+): Promise<string[]> {
+  const uniqueInputIds = Array.from(new Set((emailIds || []).map((id) => normalizeText(id)).filter(Boolean)));
+  if (uniqueInputIds.length === 0) return [];
+
+  const { data: seedRows, error: seedError } = await supabase
+    .from('property_emails')
+    .select('id, from_email, source, source_conversation_id')
+    .eq('property_id', propertyId)
+    .in('id', uniqueInputIds);
+
+  if (seedError) {
+    throw seedError;
+  }
+
+  const resolvedIds = new Set<string>(uniqueInputIds);
+  const guestPortalConversations = new Set<string>();
+  const senderEmails = new Set<string>();
+
+  (seedRows || []).forEach((row: any) => {
+    const source = normalizeText(row?.source).toLowerCase();
+    const sourceConversationId = normalizeText(row?.source_conversation_id);
+    const fromEmail = normalizeText(row?.from_email).toLowerCase();
+
+    if (source === 'guest_portal' && sourceConversationId) {
+      guestPortalConversations.add(sourceConversationId);
+      return;
+    }
+
+    if (fromEmail) {
+      senderEmails.add(fromEmail);
+    }
+  });
+
+  for (const sourceConversationId of guestPortalConversations) {
+    let query = supabase
+      .from('property_emails')
+      .select('id')
+      .eq('property_id', propertyId)
+      .eq('source', 'guest_portal')
+      .eq('source_conversation_id', sourceConversationId);
+
+    if (options?.trashOnly) {
+      query = query.eq('is_trash', true);
+    }
+
+    const { data: threadRows, error: threadError } = await query;
+    if (threadError) {
+      throw threadError;
+    }
+
+    (threadRows || []).forEach((row: any) => {
+      const id = normalizeText(row?.id);
+      if (id) resolvedIds.add(id);
+    });
+  }
+
+  for (const fromEmail of senderEmails) {
+    let query = supabase
+      .from('property_emails')
+      .select('id')
+      .eq('property_id', propertyId)
+      .eq('from_email', fromEmail);
+
+    if (options?.trashOnly) {
+      query = query.eq('is_trash', true);
+    }
+
+    const { data: threadRows, error: threadError } = await query;
+    if (threadError) {
+      throw threadError;
+    }
+
+    (threadRows || []).forEach((row: any) => {
+      const id = normalizeText(row?.id);
+      if (id) resolvedIds.add(id);
+    });
+  }
+
+  return Array.from(resolvedIds);
+}
+
+async function reviveThreadForIncomingMessage(params: {
+  propertyId: string;
+  source?: string | null;
+  sourceConversationId?: string | null;
+  fromEmail?: string | null;
+}) {
+  const propertyId = normalizeText(params.propertyId);
+  if (!propertyId) return;
+
+  const source = normalizeText(params.source).toLowerCase();
+  const sourceConversationId = normalizeText(params.sourceConversationId);
+  const fromEmail = normalizeText(params.fromEmail).toLowerCase();
+
+  if (source === 'guest_portal' && sourceConversationId) {
+    await supabase
+      .from('property_emails')
+      .update({
+        is_trash: false,
+        is_archived: false,
+        is_spam: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('property_id', propertyId)
+      .eq('source', 'guest_portal')
+      .eq('source_conversation_id', sourceConversationId);
+    return;
+  }
+
+  if (!fromEmail) return;
+
+  await supabase
+    .from('property_emails')
+    .update({
+      is_trash: false,
+      is_archived: false,
+      is_spam: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('property_id', propertyId)
+    .eq('from_email', fromEmail);
+}
+
 function extractImapConfigFromSettings(settings: any): {
   host: string;
   port: number;
@@ -674,6 +803,25 @@ async function handleSyncEmails(
         return acc;
       }, new Map<number, (typeof validParsed)[number]>()).values()
     );
+
+    if (validParsedByUid.length > 0) {
+      const uniqueIncomingSenders = Array.from(
+        new Set(
+          validParsedByUid
+            .map((item) => normalizeText(item?.email?.from_email).toLowerCase())
+            .filter(Boolean)
+        )
+      );
+
+      await Promise.all(
+        uniqueIncomingSenders.map((fromEmail) =>
+          reviveThreadForIncomingMessage({
+            propertyId,
+            fromEmail,
+          })
+        )
+      );
+    }
 
     if (validParsedByUid.length > 0) {
       const uids = validParsedByUid.map((v) => v.uid);
@@ -1389,6 +1537,8 @@ async function handleDelete(
       );
     }
 
+    const threadEmailIds = await resolveThreadEmailIds(propertyId, emailIds);
+
     const { error } = await supabase
       .from('property_emails')
       .update({ 
@@ -1398,7 +1548,7 @@ async function handleDelete(
         updated_at: new Date().toISOString() 
       })
       .eq('property_id', propertyId)
-      .in('id', emailIds);
+      .in('id', threadEmailIds);
 
     if (error) throw error;
 
@@ -1426,12 +1576,36 @@ async function handleDeletePermanently(
       );
     }
 
+    const threadEmailIds = await resolveThreadEmailIds(propertyId, emailIds, { trashOnly: true });
+
+    if (threadEmailIds.length === 0) {
+      return NextResponse.json({ success: true });
+    }
+
+    const { error: labelDeleteError } = await supabase
+      .from('email_message_labels')
+      .delete()
+      .in('email_id', threadEmailIds);
+
+    if (labelDeleteError && !isMissingRelationError(labelDeleteError)) {
+      throw labelDeleteError;
+    }
+
+    const { error: attachmentDeleteError } = await supabase
+      .from('email_attachments')
+      .delete()
+      .in('email_id', threadEmailIds);
+
+    if (attachmentDeleteError && !isMissingRelationError(attachmentDeleteError)) {
+      throw attachmentDeleteError;
+    }
+
     const { error } = await supabase
       .from('property_emails')
       .delete()
       .eq('property_id', propertyId)
       .eq('is_trash', true)
-      .in('id', emailIds);
+      .in('id', threadEmailIds);
 
     if (error) throw error;
 

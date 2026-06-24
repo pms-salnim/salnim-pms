@@ -76,6 +76,18 @@ async function mirrorGuestPortalMessageToInbox(params: {
     const emailId = `gp-${String(messageRow.id || `${threadIdentity}-${createdAt}`)}`;
     const hasAttachments = Array.isArray(params.attachments) && params.attachments.length > 0;
 
+    await supabase
+      .from('property_emails')
+      .update({
+        is_trash: false,
+        is_archived: false,
+        is_spam: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('property_id', conversation.property_id)
+      .eq('source', 'guest_portal')
+      .eq('source_conversation_id', String(conversation.id || messageRow.conversation_id || ''));
+
     const { error: emailError } = await supabase
       .from('property_emails')
       .upsert(
