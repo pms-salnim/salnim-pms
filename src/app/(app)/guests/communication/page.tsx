@@ -967,6 +967,21 @@ export default function CommunicationHubPage() {
     window.localStorage.setItem(`${threadStoragePrefix}:starred`, JSON.stringify(starredConversationKeys));
   }, [starredConversationKeys, threadStoragePrefix]);
 
+  useEffect(() => {
+    if (displayEmails.length === 0) return;
+
+    setTrashedConversationKeys((prev) => {
+      const next = prev.filter((conversationKey) => {
+        const messages = conversationHistoryByKey.get(conversationKey) || [];
+        if (messages.length === 0) return false;
+        return messages.every((message) => !!(message as any).trash);
+      });
+
+      if (next.length === prev.length) return prev;
+      return next;
+    });
+  }, [conversationHistoryByKey, displayEmails]);
+
   const getThreadMessageRefs = useCallback((conversationKey: string) => {
     const threadMessages = conversationHistoryByKey.get(conversationKey) || [];
     const emailIds = Array.from(
