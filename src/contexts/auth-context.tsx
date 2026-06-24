@@ -131,20 +131,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      const imapConfig = property?.imapConfiguration as any;
-      const hasImapConfig = !!(
-        (imapConfig?.host || imapConfig?.imapHost) &&
-        (imapConfig?.user || imapConfig?.imapUser) &&
-        (imapConfig?.pass || imapConfig?.imapPass)
-      );
-
-      // If IMAP is not configured, skip silently to avoid error-toast spam.
-      if (!hasImapConfig) {
-        if (!isPolling) {
-          console.debug('Email fetch skipped: IMAP not configured');
-        }
-        return;
-      }
+      // Do not hard-block fetch when IMAP is not configured.
+      // The backend returns stored mirrored rows (guest portal / whatsapp / sent)
+      // so communication threads can still appear in inbox.
 
       // ✅ Prevent concurrent requests - exit if already syncing
       if (isSyncingEmails) {
