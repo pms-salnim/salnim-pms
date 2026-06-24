@@ -182,6 +182,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           sourceSenderType: row.source_sender_type || undefined,
           sourceConversationId: row.source_conversation_id || undefined,
           sourceMessageId: row.source_message_id || undefined,
+          sourceReservationId: row.source_reservation_id || undefined,
           from: {
             name: row.from_name || row.from_email || 'Unknown',
             email: row.from_email || 'unknown@example.com',
