@@ -557,10 +557,10 @@ export default function EmailDetailView({
     return (whatsAppMessages || []).map((message: any) => ({
       id: `wa-${message.id}`,
       source: 'whatsapp',
-      outgoing: String(message.sender_type || '') === 'property',
-      date: String(message.created_at || new Date().toISOString()),
-      timestampMs: toTimestampMs(message.timestampMs || message.created_at),
-      senderName: String(message.sender_name || 'WhatsApp User'),
+      outgoing: String(message.senderType || message.sender_type || '').toLowerCase() === 'property',
+      date: String(message.timestamp || message.created_at || new Date().toISOString()),
+      timestampMs: toTimestampMs(message.timestampMs || message.timestamp || message.created_at),
+      senderName: String(message.senderName || message.sender_name || 'WhatsApp User'),
       text: String(message.message || ''),
       attachmentsCount: 0,
     }));
@@ -570,10 +570,10 @@ export default function EmailDetailView({
     const apiMapped = (guestPortalMessages || []).map((message: any) => ({
       id: `gp-${message.id}`,
       source: 'guest_portal',
-      outgoing: String(message.sender_type || '') === 'property',
-      date: String(message.created_at || new Date().toISOString()),
-      timestampMs: toTimestampMs(message.timestampMs || message.created_at),
-      senderName: String(message.sender_name || 'Guest Portal User'),
+      outgoing: String(message.senderType || message.sender_type || '').toLowerCase() === 'property',
+      date: String(message.timestamp || message.created_at || new Date().toISOString()),
+      timestampMs: toTimestampMs(message.timestampMs || message.timestamp || message.created_at),
+      senderName: String(message.senderName || message.sender_name || 'Guest Portal User'),
       text: String(message.message || ''),
       attachmentsCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
     }));
