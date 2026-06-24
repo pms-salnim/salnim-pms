@@ -1073,20 +1073,15 @@ async function handleGetEmailGuestContext(
   data: any
 ): Promise<NextResponse> {
   try {
+    const isInvalidUuidCastError = (error: any): boolean => {
+      const code = String(error?.code || '').toUpperCase();
+      const message = String(error?.message || '').toLowerCase();
+      return code === '22P02' || message.includes('invalid input syntax for type uuid');
+    };
+
     const lookupReservationByToken = async (token: string): Promise<any | null> => {
       const normalizedToken = String(token || '').trim();
       if (!normalizedToken) return null;
-
-      const { data: byId, error: byIdError } = await supabase
-        .from('reservations')
-        .select('*')
-        .eq('property_id', propertyId)
-        .eq('id', normalizedToken)
-        .limit(1)
-        .maybeSingle();
-
-      if (byIdError) throw byIdError;
-      if (byId) return byId;
 
       const { data: byNumber, error: byNumberError } = await supabase
         .from('reservations')
@@ -1097,7 +1092,19 @@ async function handleGetEmailGuestContext(
         .maybeSingle();
 
       if (byNumberError) throw byNumberError;
-      return byNumber || null;
+      if (byNumber) return byNumber;
+
+      const { data: byId, error: byIdError } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('id', normalizedToken)
+        .limit(1)
+        .maybeSingle();
+
+      if (byIdError && !isInvalidUuidCastError(byIdError)) throw byIdError;
+      if (byId) return byId;
+      return null;
     };
 
     const rawEmail = typeof data?.email === 'string' ? data.email.trim().toLowerCase() : '';
