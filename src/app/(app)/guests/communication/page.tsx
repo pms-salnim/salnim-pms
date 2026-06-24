@@ -716,7 +716,14 @@ export default function CommunicationHubPage() {
       }
 
       const isDbTrashed = messages.length > 0 && messages.every((message) => !!(message as any).trash);
-      const isTrashed = isDbTrashed || trashedConversationKeys.includes(key);
+      const hasRevivedIncoming = messages.some((message) => {
+        const isTrashedMessage = !!(message as any).trash;
+        if (isTrashedMessage) return false;
+        if (!message.unread) return false;
+        return !isSentEmail(message);
+      });
+      const isLocallyTrashed = trashedConversationKeys.includes(key) && !hasRevivedIncoming;
+      const isTrashed = isDbTrashed || isLocallyTrashed;
       const isDbArchived = !isDbTrashed && messages.length > 0 && messages.every((message) => !!message.archived);
       const isArchived = !isTrashed && (isDbArchived || archivedConversationKeys.includes(key));
       const isPinned = pinnedConversationKeys.includes(key);
@@ -967,21 +974,6 @@ export default function CommunicationHubPage() {
     window.localStorage.setItem(`${threadStoragePrefix}:starred`, JSON.stringify(starredConversationKeys));
   }, [starredConversationKeys, threadStoragePrefix]);
 
-  useEffect(() => {
-    if (displayEmails.length === 0) return;
-
-    setTrashedConversationKeys((prev) => {
-      const next = prev.filter((conversationKey) => {
-        const messages = conversationHistoryByKey.get(conversationKey) || [];
-        if (messages.length === 0) return false;
-        return messages.every((message) => !!(message as any).trash);
-      });
-
-      if (next.length === prev.length) return prev;
-      return next;
-    });
-  }, [conversationHistoryByKey, displayEmails]);
-
   const getThreadMessageRefs = useCallback((conversationKey: string) => {
     const threadMessages = conversationHistoryByKey.get(conversationKey) || [];
     const emailIds = Array.from(
@@ -1014,12 +1006,21 @@ export default function CommunicationHubPage() {
     return messages.every((message) => !!message.archived);
   }, [archivedConversationKeys, conversationHistoryByKey]);
   const isConversationTrashed = useCallback((conversationKey: string, fallback?: Email[]) => {
-    if (trashedConversationKeys.includes(conversationKey)) return true;
-
     const messages = fallback || conversationHistoryByKey.get(conversationKey) || [];
+
+    if (trashedConversationKeys.includes(conversationKey)) {
+      const hasRevivedIncoming = messages.some((message) => {
+        const isTrashedMessage = !!(message as any).trash;
+        if (isTrashedMessage) return false;
+        if (!message.unread) return false;
+        return !isSentEmail(message);
+      });
+      if (!hasRevivedIncoming) return true;
+    }
+
     if (messages.length === 0) return false;
     return messages.every((message) => !!(message as any).trash);
-  }, [conversationHistoryByKey, trashedConversationKeys]);
+  }, [conversationHistoryByKey, isSentEmail, trashedConversationKeys]);
   const isConversationStarred = useCallback((conversationKey: string, fallback?: Email[]) => {
     if (starredConversationKeys.includes(conversationKey)) return true;
     const messages = fallback || conversationHistoryByKey.get(conversationKey) || [];
