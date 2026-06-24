@@ -46,6 +46,7 @@ import EmailDetailView from '../../../../components/guests/communication/EmailDe
 import LabelManager from '@/components/guests/communication/LabelManager';
 import { emailApi } from '@/lib/communication-api';
 import NewConversationDialog, { type ConversationChannel, type ConversationSearchResult } from '@/components/guests/communication/NewConversationDialog';
+import ReservationDetailModal from '@/components/reservations/reservation-detail-modal';
 import type { Guest } from '@/types/guest';
 import type { Reservation } from '@/types/reservation';
 import { createClient } from '@/utils/supabase/client';
@@ -106,12 +107,6 @@ const GuestProfile = dynamic(() => import('@/components/guests/guest-profile'), 
 });
 
 const normalizePhone = (value?: string | null): string => String(value || '').replace(/\D/g, '');
-
-const extractGuestPortalReservationIdFromEmail = (value?: string | null): string => {
-  const normalized = String(value || '').trim().toLowerCase();
-  const match = normalized.match(/^guest-portal\+([^@]+)@guest-portal\.local$/);
-  return String(match?.[1] || '').trim();
-};
 
 const normalizeGuestFromRow = (guestRow: any): Guest => ({
   id: String(guestRow.id || ''),
@@ -248,6 +243,8 @@ export default function CommunicationHubPage() {
   const [guestReservations, setGuestReservations] = useState<Reservation[]>([]);
   const [isLoadingGuestPanel, setIsLoadingGuestPanel] = useState(false);
   const [isGuestInfoPanelOpen, setIsGuestInfoPanelOpen] = useState(false);
+  const [isReservationDetailsOpen, setIsReservationDetailsOpen] = useState(false);
+  const [selectedReservationForDetails, setSelectedReservationForDetails] = useState<Reservation | null>(null);
   const [threadMailbox, setThreadMailbox] = useState<ThreadMailbox>('all');
   const [pinnedConversationKeys, setPinnedConversationKeys] = useState<string[]>([]);
   const [archivedConversationKeys, setArchivedConversationKeys] = useState<string[]>([]);
@@ -1671,54 +1668,73 @@ export default function CommunicationHubPage() {
     }
   };
 
-  const openGuestInfoFromEmail = useCallback(async (email: Email) => {
-    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
-    setIsGuestInfoPanelOpen(true);
-  }, [handleSelectEmail]);
+  const resolveGuestPortalReservation = useCallback((email: Email): Reservation | null => {
+    if (!email) return null;
 
-  const selectedReservationsForPanel = useMemo(() => {
-    if (!selectedEmail) return [] as Reservation[];
+    const source = String((email as any)?.source || '').trim().toLowerCase();
+    if (source !== 'guest_portal') return null;
 
-    const selectedConversationKey = getConversationKey(selectedEmail);
-    const threadMessages = conversationHistoryByKey.get(selectedConversationKey) || [selectedEmail];
-    const reservationIdSet = new Set<string>();
+    const threadMessages = conversationHistoryByKey.get(getConversationKey(email)) || [email];
+    const reservationCandidates = new Set<string>();
 
-    threadMessages.forEach((message) => {
-      const explicitReservationId = String((message as any)?.sourceReservationId || (message as any)?.source_reservation_id || '').trim();
-      if (explicitReservationId) {
-        reservationIdSet.add(explicitReservationId);
+    const collectCandidate = (value: any) => {
+      const normalized = String(value || '').trim();
+      if (normalized) reservationCandidates.add(normalized);
+    };
+
+    const collectFromGuestPortalEmail = (value: any) => {
+      const normalized = String(value || '').trim().toLowerCase();
+      const match = normalized.match(/^guest-portal\+([^@]+)@guest-portal\.local$/i);
+      if (match?.[1]) {
+        reservationCandidates.add(match[1]);
       }
+    };
 
-      const source = String((message as any)?.source || '').trim().toLowerCase();
-      if (source === 'guest_portal') {
-        const fromEmailReservationId = extractGuestPortalReservationIdFromEmail(message?.from?.email);
-        if (fromEmailReservationId) {
-          reservationIdSet.add(fromEmailReservationId);
-        }
-      }
+    threadMessages.forEach((item) => {
+      collectCandidate((item as any)?.sourceReservationId);
+      collectCandidate((item as any)?.source_reservation_id);
+      collectCandidate((item as any)?.sourceConversationId);
+      collectCandidate((item as any)?.source_conversation_id);
+      collectFromGuestPortalEmail(item?.from?.email);
     });
 
-    const reservationsById = new Map(guestReservations.map((reservation) => [String(reservation.id || '').trim(), reservation]));
-    const matchedById = Array.from(reservationIdSet)
-      .map((id) => reservationsById.get(id))
-      .filter(Boolean) as Reservation[];
+    const reservationList = guestReservations || [];
+    for (const candidate of reservationCandidates) {
+      const candidateLower = candidate.toLowerCase();
+      const matched = reservationList.find((reservation) => {
+        const reservationId = String(reservation.id || '').trim().toLowerCase();
+        const reservationNumber = String(reservation.reservationNumber || '').trim().toLowerCase();
+        return candidateLower === reservationId || (!!reservationNumber && candidateLower === reservationNumber);
+      });
 
-    if (matchedById.length > 0) {
-      return matchedById;
+      if (matched) return matched;
     }
 
-    const isGuestPortalThread = threadMessages.some((message) => String((message as any)?.source || '').trim().toLowerCase() === 'guest_portal');
-    if (!isGuestPortalThread) {
-      return [];
+    return null;
+  }, [conversationHistoryByKey, getConversationKey, guestReservations]);
+
+  const openGuestInfoFromEmail = useCallback(async (email: Email) => {
+    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
+
+    const source = String((email as any)?.source || '').trim().toLowerCase();
+    const sourceEmail = String(email?.from?.email || '').trim().toLowerCase();
+    const hasRealEmail = !!sourceEmail && !sourceEmail.endsWith('@guest-portal.local');
+    const hasPhone = !!String(selectedThreadContactPhone || '').trim();
+
+    if (source === 'guest_portal' && !hasRealEmail && !hasPhone) {
+      const reservation = resolveGuestPortalReservation(email);
+      if (reservation) {
+        setSelectedReservationForDetails(reservation);
+        setIsReservationDetailsOpen(true);
+        setIsGuestInfoPanelOpen(false);
+        return;
+      }
     }
 
-    const guestName = String(selectedEmail.from?.name || '').trim().toLowerCase();
-    if (!guestName) {
-      return [];
-    }
-
-    return guestReservations.filter((reservation) => String(reservation.guestName || '').trim().toLowerCase() === guestName);
-  }, [conversationHistoryByKey, getConversationKey, guestReservations, selectedEmail]);
+    setSelectedReservationForDetails(null);
+    setIsReservationDetailsOpen(false);
+    setIsGuestInfoPanelOpen(true);
+  }, [handleSelectEmail, resolveGuestPortalReservation, selectedThreadContactPhone]);
 
   const selectedGuestForPanel = useMemo(() => {
     if (!selectedEmail) return null;
@@ -1740,12 +1756,6 @@ export default function CommunicationHubPage() {
 
     if (matchedGuest) return matchedGuest;
 
-    const linkedGuestIdFromReservation = selectedReservationsForPanel.find((reservation) => String(reservation.guestId || '').trim())?.guestId;
-    if (linkedGuestIdFromReservation) {
-      const matchedByReservationId = guestDirectory.find((guest) => guest.id === linkedGuestIdFromReservation);
-      if (matchedByReservationId) return matchedByReservationId;
-    }
-
     const linkedGuestId = guestReservations.find((reservation) => {
       const reservationEmail = String(reservation.guestEmail || '').trim().toLowerCase();
       const reservationPhone = normalizePhone(reservation.guestPhone || '');
@@ -1762,7 +1772,7 @@ export default function CommunicationHubPage() {
     }
 
     return null;
-  }, [guestDirectory, guestReservations, selectedEmail, selectedReservationsForPanel, selectedThreadContactPhone]);
+  }, [guestDirectory, guestReservations, selectedEmail, selectedThreadContactPhone]);
 
   if (isLoadingAuth) {
     return <div className="flex h-screen items-center justify-center"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
@@ -2214,7 +2224,10 @@ export default function CommunicationHubPage() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8 bg-white"
-                    onClick={() => setIsGuestInfoPanelOpen(true)}
+                    onClick={async () => {
+                      if (!selectedEmail) return;
+                      await openGuestInfoFromEmail(selectedEmail);
+                    }}
                     title="Guest info"
                   >
                     <Info className="h-4 w-4" />
@@ -2281,54 +2294,6 @@ export default function CommunicationHubPage() {
                     setIsGuestInfoPanelOpen(false);
                   }}
                 />
-              ) : selectedReservationsForPanel.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                    No guest profile is linked to this guest portal thread yet. Showing reservation details instead.
-                  </div>
-                  {selectedReservationsForPanel.map((reservation) => {
-                    const startDate = reservation.startDate instanceof Date ? reservation.startDate : new Date(reservation.startDate as any);
-                    const endDate = reservation.endDate instanceof Date ? reservation.endDate : new Date(reservation.endDate as any);
-                    const roomLabel = Array.isArray(reservation.rooms) && reservation.rooms.length > 0
-                      ? reservation.rooms
-                          .map((room) => room.roomName || room.roomTypeName)
-                          .filter(Boolean)
-                          .join(', ')
-                      : (reservation.roomName || reservation.roomTypeName || 'Not assigned');
-
-                    return (
-                      <div key={reservation.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <h3 className="text-base font-semibold text-slate-900">{reservation.guestName || selectedEmail.from?.name || 'Guest'}</h3>
-                            <p className="text-xs text-slate-500">Reservation ID: {reservation.id}</p>
-                          </div>
-                          <Badge variant="outline" className="capitalize">{reservation.status || 'Pending'}</Badge>
-                        </div>
-                        <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-700 md:grid-cols-2">
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-500">Reservation Number</p>
-                            <p className="font-medium text-slate-900">{reservation.reservationNumber || 'Not available'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-500">Stay Dates</p>
-                            <p className="font-medium text-slate-900">
-                              {isValid(startDate) ? format(startDate, 'MMM d, yyyy') : 'Unknown'} - {isValid(endDate) ? format(endDate, 'MMM d, yyyy') : 'Unknown'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-500">Room</p>
-                            <p className="font-medium text-slate-900">{roomLabel}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-500">Contact</p>
-                            <p className="font-medium text-slate-900">{reservation.guestEmail || reservation.guestPhone || 'No email or phone saved'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
               ) : (
                 <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
                   Guest details are unavailable for this conversation.
@@ -2338,6 +2303,17 @@ export default function CommunicationHubPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <ReservationDetailModal
+        isOpen={isReservationDetailsOpen}
+        onClose={() => {
+          setIsReservationDetailsOpen(false);
+          setSelectedReservationForDetails(null);
+        }}
+        initialData={selectedReservationForDetails}
+        propertySettings={property || null}
+        canManage={true}
+      />
 
       <NewConversationDialog
         open={isNewConversationOpen}
