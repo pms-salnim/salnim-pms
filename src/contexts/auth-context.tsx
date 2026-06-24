@@ -193,16 +193,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             : [],
         }));
 
-        const currentUids = new Set(emails.map(e => e.uid));
-        const hasNew = isPolling && newEmails.some(e => !currentUids.has(e.uid) && e.unread);
-        
         setEmails(newEmails);
-        
-        if (hasNew) {
-          setTimeout(() => {
-            toast({ title: "New Mail", description: "You have new messages in your inbox." });
-          }, 0);
-        }
 
         // ✅ Update last sync timestamp only on successful sync
         setLastEmailSyncAt(Date.now());

@@ -2,31 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { getFirestore, collection, query, where, limit, getDocs, doc, getDoc } from 'firebase/firestore';
-import { app } from '@/lib/firebase';
 import { toast } from '@/hooks/use-toast';
 import GuestPortal from '@/components/guest-portal/guest-portal';
 import { Waves, ArrowRight } from 'lucide-react';
-
-interface GuestPortalData {
-    property: any;
-    reservation: any;
-    rooms: any[];
-    roomTypes: any[];
-    ratePlans: any[];
-    services: any[];
-    mealPlans: any[];
-    packages?: any[];
-    menus?: any[];
-    payments: any[];
-    summary: {
-        totalAmount: number;
-        totalPaid: number;
-        remainingBalance: number;
-        paymentStatus: string;
-    };
-    propertyInfo?: any;
-}
+import { GuestPortalData } from '@/components/guest-portal/types';
 
 interface PortalSettings {
     general: {
@@ -73,51 +52,27 @@ export default function GuestPortalPage() {
             }
 
             try {
-                const db = getFirestore(app);
-                const propertyQuery = query(
-                    collection(db, "properties"),
-                    where("slug", "==", propertySlug.trim()),
-                    limit(1)
-                );
+                const response = await fetch('/api/guest-portal/public', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'checkProperty',
+                        data: {
+                            propertySlug: propertySlug.trim(),
+                        },
+                    }),
+                });
 
-                const propertySnapshot = await getDocs(propertyQuery);
-                if (!propertySnapshot.empty) {
-                    const propertyData = propertySnapshot.docs[0].data();
-                    const propId = propertySnapshot.docs[0].id;
+                const result = await response.json();
+                if (response.ok && result.success && result.propertyExists && result.property) {
+                    const propertyData = result.property;
                     setPropertyExists(true);
                     setPropertyLogo(propertyData.logo || null);
                     setPropertyName(propertyData.name || '');
-                    setPropertyId(propId);
-
-                    // Load default portal settings
-                    try {
-                        const portalsPath = collection(db, 'properties', propId, 'guestPortals');
-                        const portalsSnapshot = await getDocs(portalsPath);
-                        
-                        if (!portalsSnapshot.empty) {
-                            // Find the default portal or use the first one
-                            let defaultPortal = null;
-                            for (const doc of portalsSnapshot.docs) {
-                                const portal = doc.data() as any;
-                                if (portal.general?.defaultPortal) {
-                                    defaultPortal = portal;
-                                    break;
-                                }
-                            }
-                            
-                            // If no default found, use the first portal
-                            if (!defaultPortal) {
-                                defaultPortal = portalsSnapshot.docs[0].data();
-                            }
-
-                            if (defaultPortal) {
-                                setPortalSettings(defaultPortal);
-                            }
-                        }
-                    } catch (err) {
-                        console.error('Error loading portal settings:', err);
-                        // Portal settings are optional, continue without them
-                    }
+                    setPropertyId(propertyData.id || null);
+                    setPortalSettings(result.portalSettings || null);
                 } else {
                     setPropertyExists(false);
                     setPropertyLogo(null);
@@ -151,60 +106,32 @@ export default function GuestPortalPage() {
         setIsLoading(true);
 
         try {
-            const response = await fetch('https://guestportalcheck-jnv36dwygq-ew.a.run.app', {
+            const response = await fetch('/api/guest-portal/public', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    propertySlug: cleanPropertySlug,
-                    reservationNumber: cleanReservationNumber
-                })
+                    action: 'authenticate',
+                    data: {
+                        propertySlug: cleanPropertySlug,
+                        reservationNumber: cleanReservationNumber,
+                    },
+                }),
             });
 
             const data = await response.json();
 
             if (data.success && data.data) {
-                console.log('Full API Response:', data);
-                console.log('Guest Portal Data:', data.data);
-                console.log('Reservation Object:', data.data.reservation);
-                console.log('Reservation Keys:', Object.keys(data.data.reservation || {}));
-                console.log('Adults value:', data.data.reservation?.adults);
-                console.log('Children value:', data.data.reservation?.children);
-                console.log('AdditionalGuests value:', data.data.reservation?.additionalGuests);
                 setGuestData(data.data);
                 setIsAuthenticated(true);
-                
-                // Fetch extras data (services, meal plans, packages)
-                try {
-                    const extrasResponse = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalData', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            propertySlug: cleanPropertySlug
-                        })
-                    });
-                    const extrasInfo = await extrasResponse.json();
-                    if (extrasInfo.success && extrasInfo.data) {
-                        setExtrasData(extrasInfo.data);
-                        // Merge extras data with guest data
-                        setGuestData(prev => {
-                            if (!prev) return prev;
-                            return {
-                                ...prev,
-                                services: extrasInfo.data.services || [],
-                                mealPlans: extrasInfo.data.mealPlans || [],
-                                packages: extrasInfo.data.packages || [],
-                                menus: extrasInfo.data.menus || [],
-                                propertyInfo: extrasInfo.data.property
-                            };
-                        });
-                    }
-                } catch (extrasError) {
-                    // Silent fail - extras are optional
-                }
+                setExtrasData({
+                    services: data.data.services || [],
+                    mealPlans: data.data.mealPlans || [],
+                    packages: data.data.packages || [],
+                    menus: data.data.menus || [],
+                    property: data.data.propertyInfo || data.data.property,
+                });
                 
                 toast({
                     title: "Welcome!",

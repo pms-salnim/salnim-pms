@@ -461,6 +461,9 @@ export async function POST(req: NextRequest) {
       case 'delete':
         return await handleDelete(propertyId, data);
 
+      case 'deletePermanently':
+        return await handleDeletePermanently(propertyId, data);
+
       case 'restore':
         return await handleRestore(propertyId, data);
 
@@ -593,48 +596,10 @@ async function handleSyncEmails(
     const messages = await connection.search(searchCriteria, fetchOptions);
     const selectedMessages = messages.slice(0, maxNew);
 
-    const { data: unreadRows } = await supabase
-      .from('property_emails')
-      .select('id, uid')
-      .eq('property_id', propertyId)
-      .eq('is_unread', true)
-      .not('uid', 'is', null)
-      .order('date_ms', { ascending: false })
-      .limit(250);
-
-    const unreadUids = (unreadRows || [])
-      .map((row: any) => Number(row.uid))
-      .filter((uid: number) => Number.isFinite(uid) && uid > 0);
-
-    if (unreadUids.length > 0) {
-      const chunkSize = 50;
-      for (let index = 0; index < unreadUids.length; index += chunkSize) {
-        const chunk = unreadUids.slice(index, index + chunkSize);
-        const uidList = chunk.join(',');
-        const unreadFetchOptions = {
-          bodies: [],
-          markSeen: false,
-          struct: false,
-        };
-
-        const unseenMessages = await connection.search(['UNSEEN', ['UID', uidList]], unreadFetchOptions);
-        const unseenUidSet = new Set(
-          (unseenMessages || [])
-            .map((item: any) => Number(item.attributes?.uid))
-            .filter((uid: number) => Number.isFinite(uid) && uid > 0)
-        );
-
-        const newlyReadUids = chunk.filter((uid: number) => !unseenUidSet.has(uid));
-
-        if (newlyReadUids.length > 0) {
-          await supabase
-            .from('property_emails')
-            .update({ is_unread: false, updated_at: new Date().toISOString() })
-            .eq('property_id', propertyId)
-            .in('uid', newlyReadUids);
-        }
-      }
-    }
+    // Do not auto-flip existing unread messages to read during background sync.
+    // Some IMAP providers can return inconsistent UNSEEN+UID search results,
+    // which causes unrelated threads to lose unread status when new mail arrives.
+    // Read state is updated explicitly via app actions (open/markRead/markUnread).
 
     const parsedEmails = await Promise.all(
       selectedMessages.map(async (item: any) => {
@@ -1442,6 +1407,39 @@ async function handleDelete(
     console.error('Error deleting email:', error);
     return NextResponse.json(
       { error: 'Failed to delete email' },
+      { status: 500 }
+    );
+  }
+}
+
+async function handleDeletePermanently(
+  propertyId: string,
+  data: any
+): Promise<NextResponse> {
+  try {
+    const { emailIds } = data;
+
+    if (!Array.isArray(emailIds) || emailIds.length === 0) {
+      return NextResponse.json(
+        { error: 'emailIds array is required' },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabase
+      .from('property_emails')
+      .delete()
+      .eq('property_id', propertyId)
+      .eq('is_trash', true)
+      .in('id', emailIds);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error permanently deleting email:', error);
+    return NextResponse.json(
+      { error: 'Failed to permanently delete email' },
       { status: 500 }
     );
   }

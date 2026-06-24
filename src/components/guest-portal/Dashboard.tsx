@@ -45,8 +45,6 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { GuestPortalData } from './types';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 interface DashboardProps {
   data: GuestPortalData;
@@ -78,8 +76,6 @@ const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const { property, reservation, rooms, services, mealPlans, packages, summary } = data;
 
-  const [fetchedLogoUrl, setFetchedLogoUrl] = useState<string | null | undefined>(undefined);
-  const [fetchedPhone, setFetchedPhone] = useState<string | null | undefined>(undefined);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -114,106 +110,52 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [showCheckInModal]);
 
   useEffect(() => {
-    let mounted = true;
-    const fetchLogo = async () => {
-      try {
-        if (!property?.id) return;
-        const propDoc = await getDoc(doc(db, 'properties', property.id));
-        if (!mounted) return;
-        if (!propDoc.exists()) {
-          setFetchedLogoUrl(undefined);
-          return;
-        }
-        const d: any = propDoc.data();
-        // accept either camelCase or PascalCase keys
-        const logoFromDoc = d?.bookingPageSettings?.logoUrl ?? d?.BookingPageSettings?.logoUrl ?? undefined;
-        const phoneFromDoc = d?.phone ?? undefined;
-        // Firestore may store explicit null for logo; keep null to mean "use app default"
-        if (logoFromDoc === undefined) {
-          setFetchedLogoUrl(undefined);
-        } else {
-          setFetchedLogoUrl(logoFromDoc);
-        }
-        // Treat explicit null as undefined for phone (use property.phone fallback)
-        if (phoneFromDoc === null || phoneFromDoc === undefined) {
-          setFetchedPhone(undefined);
-        } else {
-          setFetchedPhone(phoneFromDoc);
-        }
-      } catch (err) {
-        // don't block UI on fetch errors
-         
-        console.error('Failed to fetch property bookingPageSettings.logoUrl', err);
-        if (mounted) setFetchedLogoUrl(undefined);
-      }
-    };
-    fetchLogo();
-    return () => { mounted = false; };
-  }, [property?.id]);
-
-  // Fetch room type images for check-in modal
-  useEffect(() => {
-    let mounted = true;
-    const fetchCheckInRoomImages = async () => {
+    const fetchCheckInRoomImages = () => {
       if (!showCheckInModal) return;
       
       const rooms = (reservation as any)?.rooms || [];
       const newRoomImagesMap: { [roomIndex: number]: string[] } = {};
+      const roomTypes = Array.isArray((data as any)?.roomTypes) ? (data as any).roomTypes : [];
       
       for (let idx = 0; idx < rooms.length; idx++) {
         const room = rooms[idx];
-        if (!room?.roomTypeId) continue;
-        
-        try {
-          const roomTypeDoc = await getDoc(doc(db, 'roomTypes', room.roomTypeId));
-          if (!mounted) return;
-          if (!roomTypeDoc.exists()) continue;
-          
-          const roomTypeData: any = roomTypeDoc.data();
-          const imagesArray: string[] = [];
-          
-          // Add thumbnail as the first/default image
-          if (roomTypeData?.thumbnailImageUrl) {
-            imagesArray.push(roomTypeData.thumbnailImageUrl);
-          }
-          
-          // Add gallery images after the thumbnail
-          const galleryImages = roomTypeData?.galleryImageUrls || [];
-          if (Array.isArray(galleryImages) && galleryImages.length > 0) {
-            imagesArray.push(...galleryImages);
-          }
-          
-          if (imagesArray.length > 0) {
-            newRoomImagesMap[idx] = imagesArray;
-          }
-        } catch (err) {
-          console.error(`Failed to fetch images for room ${idx}:`, err);
+        const roomTypeId = room?.roomTypeId || room?.room_type_id;
+        if (!roomTypeId) continue;
+
+        const roomTypeData = roomTypes.find((rt: any) => rt?.id === roomTypeId);
+        if (!roomTypeData) continue;
+
+        const imagesArray: string[] = [];
+        if (roomTypeData?.thumbnailImageUrl) {
+          imagesArray.push(roomTypeData.thumbnailImageUrl);
+        }
+
+        const galleryImages = roomTypeData?.galleryImageUrls || [];
+        if (Array.isArray(galleryImages) && galleryImages.length > 0) {
+          imagesArray.push(...galleryImages);
+        }
+
+        if (imagesArray.length > 0) {
+          newRoomImagesMap[idx] = imagesArray;
         }
       }
-      
-      if (mounted) {
-        setRoomImagesMap(newRoomImagesMap);
-        // Initialize image indices for each room to 0 (showing thumbnail/first image)
-        const newIndices: { [roomIndex: number]: number } = {};
-        Object.keys(newRoomImagesMap).forEach(idx => {
-          newIndices[parseInt(idx)] = 0;
-        });
-        setRoomImageIndices(newIndices);
-      }
+
+      setRoomImagesMap(newRoomImagesMap);
+      const newIndices: { [roomIndex: number]: number } = {};
+      Object.keys(newRoomImagesMap).forEach(idx => {
+        newIndices[parseInt(idx)] = 0;
+      });
+      setRoomImageIndices(newIndices);
     };
     
     fetchCheckInRoomImages();
-    return () => { mounted = false; };
-  }, [showCheckInModal, reservation]);
+  }, [showCheckInModal, reservation, data]);
 
   const effectiveLogo = (() => {
-    // If Firestore explicitly returned null -> use app default `/logo.webp`
-    if (fetchedLogoUrl === null) return '/logo.webp';
-    // Prefer Firestore value when present, otherwise fall back to property fields, finally app default
-    return fetchedLogoUrl || property?.bookingPageSettings?.logoUrl || property?.logoUrl || property?.logo || '/logo.webp';
+    return property?.bookingPageSettings?.logoUrl || property?.logoUrl || property?.logo || '/logo.webp';
   })();
 
-  const effectivePhone = fetchedPhone ?? property?.phone ?? '';
+  const effectivePhone = property?.phone ?? '';
 
   // Computed values
   const guestName = useMemo(() => reservation.guestName || 'Guest', [reservation.guestName]);

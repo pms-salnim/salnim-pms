@@ -55,10 +55,16 @@ export default function GuestExtrasGrid({ extras, propertySlug, property, onOpen
     const fetchExtras = async () => {
       setLoading(true);
       try {
-        const res = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalData', {
+        const res = await fetch('/api/guest-portal/public', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ propertySlug })
+          body: JSON.stringify({
+            action: 'getExtras',
+            data: {
+              propertySlug,
+              reservationNumber: (property as any)?.reservationNumber || '',
+            },
+          }),
         });
         const json = await res.json();
         if (json && json.success && json.data) {

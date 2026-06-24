@@ -83,6 +83,10 @@ export const emailApi = {
     return this.fetch('delete', { propertyId, emailIds });
   },
 
+  async deletePermanently(propertyId: string, emailIds: string[]) {
+    return this.fetch('deletePermanently', { propertyId, emailIds });
+  },
+
   async restore(propertyId: string, emailIds: string[]) {
     return this.fetch('restore', { propertyId, emailIds });
   },

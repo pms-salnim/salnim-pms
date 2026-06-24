@@ -9,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { Archive, Mail, MessageSquare, Bot, Settings, Bell, MessageCircle, RefreshCw, MailPlus, Inbox, Paperclip, ChevronLeft, ChevronRight, Send, MailWarning, AlertCircle, Trash2, Users, UserCheck, CalendarClock, LogOut, CheckCircle2, X, Search, Star, Pin, PinOff, ArchiveRestore, Info } from 'lucide-react';
+import { Archive, Mail, MessageSquare, Bot, Settings, Bell, MessageCircle, RefreshCw, MailPlus, Inbox, Paperclip, ChevronLeft, ChevronRight, Send, MailWarning, AlertCircle, Trash2, Users, UserCheck, CalendarClock, LogOut, CheckCircle2, X, Search, Star, Pin, PinOff, ArchiveRestore, Info, Clock, BedDouble, ChevronsUp, CheckSquare, Square, ArrowDownCircle, Reply } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -50,6 +50,19 @@ import type { Guest } from '@/types/guest';
 import type { Reservation } from '@/types/reservation';
 import { createClient } from '@/utils/supabase/client';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import GuestPortalChatView from '@/components/guests/communication/GuestPortalChatView';
+import WhatsAppChatView from '@/components/guests/communication/WhatsAppChatView';
+
 type ActiveView = 
     | 'inbox_all' 
     | 'inbox_unread' 
@@ -80,7 +93,12 @@ type EmailConversation = {
 };
 
 type ThreadChannel = 'all' | ConversationChannel;
-type ThreadMailbox = 'all' | 'pinned' | 'archived' | 'trash';
+type ThreadMailbox = 'all' | 'pinned' | 'archived' | 'trash' | 'needs_reply';
+type PendingThreadAction = {
+  type: 'archive' | 'move_to_trash' | 'permanent_delete';
+  conversationKeys: string[];
+  isBulk: boolean;
+} | null;
 
 const GuestProfile = dynamic(() => import('@/components/guests/guest-profile'), {
   loading: () => <div className="flex h-full items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
@@ -185,9 +203,6 @@ const ViewPlaceholder = ({ title, description, icon }: { title: string; descript
     </div>
 );
 
-import GuestPortalChatView from '@/components/guests/communication/GuestPortalChatView';
-import WhatsAppChatView from '@/components/guests/communication/WhatsAppChatView';
-
 // Guest Portal state and handlers will be managed at the page level (see below).
 
 export default function CommunicationHubPage() {
@@ -234,6 +249,18 @@ export default function CommunicationHubPage() {
   const [starredConversationKeys, setStarredConversationKeys] = useState<string[]>([]);
   
   const [initialFetchDone, setInitialFetchDone] = useState(false);
+  const [bulkSelectedKeys, setBulkSelectedKeys] = useState<string[]>([]);
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [pendingThreadAction, setPendingThreadAction] = useState<PendingThreadAction>(null);
+  const unreadAnchorRef = useRef<HTMLDivElement | null>(null);
+  const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
+  const threadListRef = useRef<HTMLDivElement | null>(null);
+  const filterChipsScrollRef = useRef<HTMLDivElement | null>(null);
+  const filterScrollbarTrackRef = useRef<HTMLDivElement | null>(null);
+  const [hasFilterChipsOverflow, setHasFilterChipsOverflow] = useState(false);
+  const [filterScrollbarThumbWidthPct, setFilterScrollbarThumbWidthPct] = useState(0);
+  const [filterScrollbarThumbLeftPct, setFilterScrollbarThumbLeftPct] = useState(0);
+  const [isFilterScrollbarDragging, setIsFilterScrollbarDragging] = useState(false);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
@@ -263,6 +290,120 @@ export default function CommunicationHubPage() {
     if (senderName) return `name:${senderName}`;
     return `fallback:${getEmailIdentity(email)}`;
   };
+
+  const syncFilterScrollbar = useCallback(() => {
+    const el = filterChipsScrollRef.current;
+    if (!el) {
+      setHasFilterChipsOverflow(false);
+      setFilterScrollbarThumbWidthPct(0);
+      setFilterScrollbarThumbLeftPct(0);
+      return;
+    }
+
+    const { scrollWidth, clientWidth, scrollLeft } = el;
+    const hasOverflow = scrollWidth - clientWidth > 1;
+    setHasFilterChipsOverflow(hasOverflow);
+
+    if (!hasOverflow || scrollWidth <= 0) {
+      setFilterScrollbarThumbWidthPct(0);
+      setFilterScrollbarThumbLeftPct(0);
+      return;
+    }
+
+    const thumbWidthPct = Math.max((clientWidth / scrollWidth) * 100, 18);
+    const maxScrollLeft = Math.max(scrollWidth - clientWidth, 1);
+    const thumbLeftPct = (scrollLeft / maxScrollLeft) * (100 - thumbWidthPct);
+
+    setFilterScrollbarThumbWidthPct(thumbWidthPct);
+    setFilterScrollbarThumbLeftPct(thumbLeftPct);
+  }, []);
+
+  const handleFilterScrollbarTrackMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+
+    const scrollEl = filterChipsScrollRef.current;
+    const trackEl = event.currentTarget;
+    if (!scrollEl) return;
+
+    event.preventDefault();
+
+    const rect = trackEl.getBoundingClientRect();
+    const trackWidth = rect.width;
+    if (trackWidth <= 0) return;
+
+    const thumbWidthPx = (filterScrollbarThumbWidthPct / 100) * trackWidth;
+    const maxThumbLeft = Math.max(trackWidth - thumbWidthPx, 1);
+    const clickedX = event.clientX - rect.left;
+    const thumbLeftPx = Math.min(
+      Math.max(clickedX - thumbWidthPx / 2, 0),
+      maxThumbLeft
+    );
+
+    const ratio = thumbLeftPx / maxThumbLeft;
+    const maxScrollLeft = Math.max(scrollEl.scrollWidth - scrollEl.clientWidth, 0);
+    scrollEl.scrollLeft = ratio * maxScrollLeft;
+    syncFilterScrollbar();
+  }, [filterScrollbarThumbWidthPct, syncFilterScrollbar]);
+
+  const handleFilterScrollbarThumbMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+
+    const scrollEl = filterChipsScrollRef.current;
+    const trackEl = filterScrollbarTrackRef.current;
+    if (!scrollEl || !trackEl) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = trackEl.getBoundingClientRect();
+    const trackWidth = rect.width;
+    const thumbWidthPx = (filterScrollbarThumbWidthPct / 100) * trackWidth;
+    const maxThumbTravelPx = Math.max(trackWidth - thumbWidthPx, 1);
+    const maxScrollLeft = Math.max(scrollEl.scrollWidth - scrollEl.clientWidth, 0);
+
+    if (maxScrollLeft <= 0) return;
+
+    const startClientX = event.clientX;
+    const startScrollLeft = scrollEl.scrollLeft;
+    setIsFilterScrollbarDragging(true);
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startClientX;
+      const deltaScroll = (deltaX / maxThumbTravelPx) * maxScrollLeft;
+      const nextScrollLeft = Math.min(Math.max(startScrollLeft + deltaScroll, 0), maxScrollLeft);
+      scrollEl.scrollLeft = nextScrollLeft;
+      syncFilterScrollbar();
+    };
+
+    const onMouseUp = () => {
+      setIsFilterScrollbarDragging(false);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [filterScrollbarThumbWidthPct, syncFilterScrollbar]);
+
+  useEffect(() => {
+    syncFilterScrollbar();
+
+    const el = filterChipsScrollRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver(() => {
+      syncFilterScrollbar();
+    });
+
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    window.addEventListener('resize', syncFilterScrollbar);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncFilterScrollbar);
+    };
+  }, [syncFilterScrollbar, sidebarCollapsed, selectedEmail]);
 
   const getConversationChannels = (conversation: EmailConversation) => {
     const detected = new Set<string>();
@@ -298,13 +439,17 @@ export default function CommunicationHubPage() {
     }
   };
 
-  const getStatusBadgeClassName = (email: Email) => {
+  const getStatusBadgeClassName = (email: Email, isTrashed = false) => {
+    if (isTrashed) {
+      return 'border-red-200 bg-red-50 text-red-600 hover:bg-red-50';
+    }
+
     return isSentEmail(email)
       ? 'border-emerald-200 bg-emerald-600 text-white hover:bg-emerald-600'
       : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-100';
   };
 
-  const getLastMessageStatus = (email: Email) => (isSentEmail(email) ? 'replied' : 'not replied');
+  const getLastMessageStatus = (email: Email, isTrashed = false) => (isTrashed ? 'trash' : (isSentEmail(email) ? 'replied' : 'not replied'));
 
   const isSentEmail = useCallback((email: Email) => {
     // DB-persisted outgoing emails are stored with null uid and are mapped to uid 0 in client state.
@@ -462,6 +607,23 @@ export default function CommunicationHubPage() {
     });
   }, [emails, optimisticallyReadEmailKeys, optimisticSentEmails]);
 
+  const conversationHistoryByKey = useMemo(() => {
+    const map = new Map<string, Email[]>();
+
+    displayEmails.forEach((email) => {
+      const key = getConversationKey(email);
+      const current = map.get(key) || [];
+      current.push(email);
+      map.set(key, current);
+    });
+
+    map.forEach((messages, key) => {
+      map.set(key, [...messages].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    });
+
+    return map;
+  }, [displayEmails]);
+
   const { currentList, totalPages, totalConversationCount } = useMemo<{ currentList: EmailConversation[]; totalPages: number; totalConversationCount: number }>(() => {
     // Always show all conversations by default (inbound + outbound).
     let sourceList: Email[] = [...displayEmails];
@@ -520,13 +682,27 @@ export default function CommunicationHubPage() {
 
     conversations = conversations.filter((conversation) => {
       const key = conversation.key;
-      const isArchived = archivedConversationKeys.includes(key);
-      const isTrashed = trashedConversationKeys.includes(key);
+      const messages = conversationHistoryByKey.get(key) || conversation.messages;
+      const isDbTrashed = messages.length > 0 && messages.every((message) => !!(message as any).trash);
+      const isTrashed = isDbTrashed || trashedConversationKeys.includes(key);
+      const isDbArchived = !isDbTrashed && messages.length > 0 && messages.every((message) => !!message.archived);
+      const isArchived = !isTrashed && (isDbArchived || archivedConversationKeys.includes(key));
       const isPinned = pinnedConversationKeys.includes(key);
 
       if (threadMailbox === 'archived') return isArchived && !isTrashed;
       if (threadMailbox === 'trash') return isTrashed;
       if (threadMailbox === 'pinned') return isPinned && !isArchived && !isTrashed;
+      if (threadMailbox === 'needs_reply') {
+        if (isArchived || isTrashed) return false;
+        // Last message must be inbound (not sent by us)
+        const msgs = conversationHistoryByKey.get(key);
+        const latest = msgs?.[0] || conversation.latestEmail;
+        const uid = Number(latest.uid || 0);
+        const fromEmail = String(latest.from?.email || '').trim().toLowerCase();
+        const userEmailLower = String(user?.email || '').trim().toLowerCase();
+        const isSent = !uid || uid <= 0 || (!!fromEmail && fromEmail === userEmailLower);
+        return !isSent;
+      }
       return !isArchived && !isTrashed;
     });
 
@@ -545,7 +721,7 @@ export default function CommunicationHubPage() {
       totalPages: Math.ceil(conversations.length / itemsPerPage) || 1,
       totalConversationCount: conversations.length,
     };
-  }, [archivedConversationKeys, conversationDisplayNames, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, itemsPerPage, pinnedConversationKeys, searchQuery, threadMailbox, trashedConversationKeys]);
+  }, [archivedConversationKeys, conversationDisplayNames, conversationHistoryByKey, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, itemsPerPage, pinnedConversationKeys, searchQuery, threadMailbox, trashedConversationKeys, user?.email]);
 
   const groupedConversations = useMemo(() => {
     const groups: { label: string; items: EmailConversation[] }[] = [];
@@ -575,23 +751,6 @@ export default function CommunicationHubPage() {
     return groups;
   }, [currentList]);
 
-  const conversationHistoryByKey = useMemo(() => {
-    const map = new Map<string, Email[]>();
-
-    displayEmails.forEach((email) => {
-      const key = getConversationKey(email);
-      const current = map.get(key) || [];
-      current.push(email);
-      map.set(key, current);
-    });
-
-    map.forEach((messages, key) => {
-      map.set(key, [...messages].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    });
-
-    return map;
-  }, [displayEmails]);
-
   const selectedConversationHistory = useMemo(() => {
     if (!selectedEmail) return [] as Email[];
     // Always include optimistic sent emails in the thread if they match the conversation
@@ -605,6 +764,35 @@ export default function CommunicationHubPage() {
     });
     return Array.from(dedupedByIdentity.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [conversationHistoryByKey, selectedEmail, optimisticSentEmails]);
+
+  // SLA: minutes since last inbound message when it hasn't been replied to yet
+  const getSlaInfo = useCallback((conversation: EmailConversation): { label: string; urgent: boolean } | null => {
+    const latestMsg = conversationHistoryByKey.get(conversation.key)?.[0];
+    if (!latestMsg || isSentEmail(latestMsg)) return null; // last msg was sent by us — no SLA pending
+    const minutesAgo = Math.floor((Date.now() - new Date(latestMsg.date).getTime()) / 60000);
+    if (minutesAgo < 30) return null; // not overdue yet
+    const urgent = minutesAgo >= 120;
+    if (minutesAgo < 60) return { label: `${minutesAgo}m`, urgent };
+    if (minutesAgo < 1440) return { label: `${Math.floor(minutesAgo / 60)}h`, urgent };
+    return { label: `${Math.floor(minutesAgo / 1440)}d`, urgent };
+  }, [conversationHistoryByKey, isSentEmail]);
+
+  // Current stay indicator: find checked-in reservation matching conversation contact
+  const getActiveStay = useCallback((conversation: EmailConversation): Reservation | null => {
+    const contactEmail = String(conversation.contactEmail || '').trim().toLowerCase();
+    const contactName = String(conversation.contactName || '').trim().toLowerCase();
+    const today = new Date();
+    return guestReservations.find((res) => {
+      const matchEmail = contactEmail && String(res.guestEmail || '').trim().toLowerCase() === contactEmail;
+      const matchName = contactName && String(res.guestName || '').trim().toLowerCase() === contactName;
+      if (!matchEmail && !matchName) return false;
+      const start = res.startDate instanceof Date ? res.startDate : new Date(res.startDate);
+      const end = res.endDate instanceof Date ? res.endDate : new Date(res.endDate);
+      // Only show as checked-in if status is explicitly 'Checked-in' AND within stay dates
+      return start <= today && end >= today && res.status === 'Checked-in';
+    }) || null;
+  }, [guestReservations]);
+
 
   const safeRefetchEmails = useCallback(() => {
     if (user?.propertyId && hasImapChannelConfigured()) {
@@ -766,8 +954,22 @@ export default function CommunicationHubPage() {
   }, [conversationHistoryByKey]);
 
   const isConversationPinned = useCallback((conversationKey: string) => pinnedConversationKeys.includes(conversationKey), [pinnedConversationKeys]);
-  const isConversationArchived = useCallback((conversationKey: string) => archivedConversationKeys.includes(conversationKey), [archivedConversationKeys]);
-  const isConversationTrashed = useCallback((conversationKey: string) => trashedConversationKeys.includes(conversationKey), [trashedConversationKeys]);
+  const isConversationArchived = useCallback((conversationKey: string, fallback?: Email[]) => {
+    if (archivedConversationKeys.includes(conversationKey)) return true;
+
+    const messages = fallback || conversationHistoryByKey.get(conversationKey) || [];
+    if (messages.length === 0) return false;
+    const isTrashed = messages.every((message) => !!(message as any).trash);
+    if (isTrashed) return false;
+    return messages.every((message) => !!message.archived);
+  }, [archivedConversationKeys, conversationHistoryByKey]);
+  const isConversationTrashed = useCallback((conversationKey: string, fallback?: Email[]) => {
+    if (trashedConversationKeys.includes(conversationKey)) return true;
+
+    const messages = fallback || conversationHistoryByKey.get(conversationKey) || [];
+    if (messages.length === 0) return false;
+    return messages.every((message) => !!(message as any).trash);
+  }, [conversationHistoryByKey, trashedConversationKeys]);
   const isConversationStarred = useCallback((conversationKey: string, fallback?: Email[]) => {
     if (starredConversationKeys.includes(conversationKey)) return true;
     const messages = fallback || conversationHistoryByKey.get(conversationKey) || [];
@@ -869,6 +1071,24 @@ export default function CommunicationHubPage() {
     safeRefetchEmails();
   }, [getThreadMessageRefs, safeRefetchEmails, selectedEmail, user?.propertyId]);
 
+  const handlePermanentDeleteThread = useCallback(async (conversationKey: string) => {
+    const { emailIds } = getThreadMessageRefs(conversationKey);
+
+    if (selectedEmail && getConversationKey(selectedEmail) === conversationKey) {
+      setSelectedEmail(null);
+    }
+
+    if (!user?.propertyId || emailIds.length === 0) return;
+
+    const response = await emailApi.deletePermanently(user.propertyId, emailIds);
+    if (!response?.success) {
+      toast({ title: 'Permanent delete failed', description: 'Could not permanently delete this thread.', variant: 'destructive' });
+      return;
+    }
+
+    safeRefetchEmails();
+  }, [getThreadMessageRefs, safeRefetchEmails, selectedEmail, user?.propertyId]);
+
   const handleRestoreThread = useCallback(async (conversationKey: string) => {
     const { emailIds } = getThreadMessageRefs(conversationKey);
 
@@ -897,6 +1117,27 @@ export default function CommunicationHubPage() {
     const response = await emailApi.markUnread(user.propertyId, emailIds);
     if (!response?.success) {
       toast({ title: 'Update failed', description: 'Could not mark this thread as unread.', variant: 'destructive' });
+      return;
+    }
+
+    safeRefetchEmails();
+  }, [getThreadMessageRefs, safeRefetchEmails, user?.propertyId]);
+
+  const handleMarkThreadRead = useCallback(async (conversationKey: string) => {
+    const { threadMessages, emailIds, emailUids } = getThreadMessageRefs(conversationKey);
+
+    const threadOptimisticKeys = threadMessages.map(getOptimisticEmailKey);
+    setOptimisticallyReadEmailKeys((prev) => {
+      const merged = new Set(prev);
+      threadOptimisticKeys.forEach((key) => merged.add(key));
+      return Array.from(merged);
+    });
+
+    if (!user?.propertyId || (emailIds.length === 0 && emailUids.length === 0)) return;
+
+    const response = await emailApi.markRead(user.propertyId, emailIds, emailUids);
+    if (!response?.success) {
+      toast({ title: 'Update failed', description: 'Could not mark this thread as read.', variant: 'destructive' });
       return;
     }
 
@@ -1042,6 +1283,97 @@ export default function CommunicationHubPage() {
     toast({ title: 'SMS channel', description: 'SMS channel view will be available soon.' });
   };
   
+  // ── Bulk actions ──────────────────────────────────────────────────────────
+  const handleBulkToggleSelect = useCallback((key: string) => {
+    setBulkSelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  }, []);
+
+  const handleBulkSelectAll = useCallback(() => {
+    setBulkSelectedKeys(currentList.map((c) => c.key));
+  }, [currentList]);
+
+  const handleBulkClear = useCallback(() => {
+    setBulkSelectedKeys([]);
+    setIsBulkMode(false);
+  }, []);
+
+  const openThreadActionConfirm = useCallback((type: 'archive' | 'move_to_trash' | 'permanent_delete', conversationKeys: string[], isBulk = false) => {
+    const uniqueKeys = Array.from(new Set(conversationKeys.filter(Boolean)));
+    if (uniqueKeys.length === 0) return;
+    setPendingThreadAction({ type, conversationKeys: uniqueKeys, isBulk });
+  }, []);
+
+  const handleBulkArchive = useCallback(() => {
+    openThreadActionConfirm('archive', bulkSelectedKeys, true);
+  }, [bulkSelectedKeys, openThreadActionConfirm]);
+
+  const handleBulkDelete = useCallback(() => {
+    const deleteType = threadMailbox === 'trash' ? 'permanent_delete' : 'move_to_trash';
+    openThreadActionConfirm(deleteType, bulkSelectedKeys, true);
+  }, [bulkSelectedKeys, openThreadActionConfirm, threadMailbox]);
+
+  const handleBulkRestore = useCallback(async () => {
+    for (const key of bulkSelectedKeys) await handleRestoreThread(key);
+    toast({ title: `Recovered ${bulkSelectedKeys.length} thread(s)` });
+    handleBulkClear();
+  }, [bulkSelectedKeys, handleBulkClear, handleRestoreThread]);
+
+  const handleBulkMarkRead = useCallback(async () => {
+    for (const key of bulkSelectedKeys) await handleMarkThreadRead(key);
+    toast({ title: `Marked ${bulkSelectedKeys.length} thread(s) as read` });
+    handleBulkClear();
+  }, [bulkSelectedKeys, handleBulkClear, handleMarkThreadRead]);
+
+  const handleBulkMarkUnread = useCallback(async () => {
+    for (const key of bulkSelectedKeys) await handleMarkThreadUnread(key);
+    toast({ title: `Marked ${bulkSelectedKeys.length} thread(s) as unread` });
+    handleBulkClear();
+  }, [bulkSelectedKeys, handleBulkClear, handleMarkThreadUnread]);
+
+  const handleBulkStar = useCallback(async () => {
+    for (const key of bulkSelectedKeys) await handleToggleStarThread(key);
+    toast({ title: `Starred ${bulkSelectedKeys.length} thread(s)` });
+    handleBulkClear();
+  }, [bulkSelectedKeys, handleToggleStarThread, handleBulkClear]);
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return;
+
+      if (e.key === 'j') {
+        setCurrentPage((p) => {
+          const idx = currentList.findIndex((c) => selectedEmail && getConversationKey(selectedEmail) === c.key);
+          const next = currentList[idx + 1];
+          if (next) handleSelectEmail(next.latestEmail, 'all', { markReadOnOpen: true });
+          return p;
+        });
+      }
+      if (e.key === 'k') {
+        setCurrentPage((p) => {
+          const idx = currentList.findIndex((c) => selectedEmail && getConversationKey(selectedEmail) === c.key);
+          const prev = currentList[idx - 1];
+          if (prev) handleSelectEmail(prev.latestEmail, 'all', { markReadOnOpen: true });
+          return p;
+        });
+      }
+      if (e.key === 'e' && selectedEmail) {
+        e.preventDefault();
+        handleArchive(selectedEmail);
+      }
+      if (e.key === '#' && selectedEmail) {
+        e.preventDefault();
+        handleDelete(selectedEmail);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentList, selectedEmail]);
+
   // Email action handlers
   const handleStar = async (email: Email) => {
     const conversationKey = getConversationKey(email);
@@ -1050,13 +1382,42 @@ export default function CommunicationHubPage() {
 
   const handleArchive = async (email: Email) => {
     const conversationKey = getConversationKey(email);
-    await handleArchiveThread(conversationKey);
+    openThreadActionConfirm('archive', [conversationKey]);
   };
 
   const handleDelete = async (email: Email) => {
     const conversationKey = getConversationKey(email);
-    await handleDeleteThread(conversationKey);
+    const deleteType = isConversationTrashed(conversationKey) ? 'permanent_delete' : 'move_to_trash';
+    openThreadActionConfirm(deleteType, [conversationKey]);
   };
+
+  const executePendingThreadAction = useCallback(async () => {
+    if (!pendingThreadAction) return;
+
+    const { type, conversationKeys, isBulk } = pendingThreadAction;
+    setPendingThreadAction(null);
+
+    if (type === 'archive') {
+      for (const key of conversationKeys) {
+        await handleArchiveThread(key);
+      }
+      toast({ title: `Archived ${conversationKeys.length} thread(s)` });
+    } else if (type === 'move_to_trash') {
+      for (const key of conversationKeys) {
+        await handleDeleteThread(key);
+      }
+      toast({ title: `Moved ${conversationKeys.length} thread(s) to trash` });
+    } else {
+      for (const key of conversationKeys) {
+        await handlePermanentDeleteThread(key);
+      }
+      toast({ title: `Permanently deleted ${conversationKeys.length} thread(s)` });
+    }
+
+    if (isBulk) {
+      handleBulkClear();
+    }
+  }, [handleArchiveThread, handleBulkClear, handleDeleteThread, handlePermanentDeleteThread, pendingThreadAction]);
 
   const handleMarkUnread = async (email: Email) => {
     const conversationKey = getConversationKey(email);
@@ -1087,17 +1448,19 @@ export default function CommunicationHubPage() {
   const handleSelectEmail = async (
     emailToSelect: Email,
     initialChannel: ThreadChannel = 'all',
-    options?: { promptSubjectForEmail?: boolean }
+    options?: { promptSubjectForEmail?: boolean; markReadOnOpen?: boolean }
   ) => {
     const selectedConversationKey = getConversationKey(emailToSelect);
-    const readOptimistically = { ...emailToSelect, unread: false };
+    const isSameSelectedConversation = !!selectedEmail && getConversationKey(selectedEmail) === selectedConversationKey;
+    const shouldMarkRead = Boolean(options?.markReadOnOpen);
+    const readOptimistically = shouldMarkRead ? { ...emailToSelect, unread: false } : emailToSelect;
     setSelectedEmail(readOptimistically);
     setSelectedThreadChannel(initialChannel);
     setIsSelectedThreadNewConversation(false);
     setShouldPromptSubjectForSelectedThread(Boolean(options?.promptSubjectForEmail));
     setSelectedThreadContactPhone('');
 
-    if (emailToSelect.unread) {
+    if (shouldMarkRead && emailToSelect.unread && !isSameSelectedConversation) {
       const threadKey = selectedConversationKey;
       const threadMessages = conversationHistoryByKey.get(threadKey) || [emailToSelect];
       const unreadThreadMessages = threadMessages.filter((message) => message.unread);
@@ -1183,6 +1546,7 @@ export default function CommunicationHubPage() {
       }
       await handleSelectEmail(existing, channel, {
         promptSubjectForEmail: channel === 'email',
+        markReadOnOpen: true,
       });
       return;
     }
@@ -1248,7 +1612,7 @@ export default function CommunicationHubPage() {
   };
 
   const openGuestInfoFromEmail = useCallback(async (email: Email) => {
-    await handleSelectEmail(email);
+    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
     setIsGuestInfoPanelOpen(true);
   }, [handleSelectEmail]);
 
@@ -1351,33 +1715,76 @@ export default function CommunicationHubPage() {
           )}
         >
           <div className="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h1 className="text-sm font-semibold text-slate-900">{t('nav.inbox_header')}</h1>
-                <p className="text-[11px] text-slate-500">Conversation list</p>
+            {isBulkMode && bulkSelectedKeys.length > 0 ? (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleBulkClear} title="Cancel selection">
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-medium text-slate-700">{bulkSelectedKeys.length} selected</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={handleBulkMarkRead} title="Mark selected as read">
+                    <Mail className="h-3.5 w-3.5" /> Mark read
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={handleBulkMarkUnread} title="Mark selected as unread">
+                    <MailWarning className="h-3.5 w-3.5" /> Mark unread
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={handleBulkStar} title="Star selected">
+                    <Star className="h-3.5 w-3.5" /> Star
+                  </Button>
+                  {threadMailbox === 'trash' ? (
+                    <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-emerald-600 hover:text-emerald-700" onClick={handleBulkRestore} title="Recover selected">
+                      <ArchiveRestore className="h-3.5 w-3.5" /> Recover
+                    </Button>
+                  ) : (
+                    <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={handleBulkArchive} title="Archive selected">
+                      <Archive className="h-3.5 w-3.5" /> Archive
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-red-500 hover:text-red-600" onClick={handleBulkDelete} title="Delete selected">
+                    <Trash2 className="h-3.5 w-3.5" /> {threadMailbox === 'trash' ? 'Delete forever' : 'Delete'}
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setIsNewConversationOpen(true)}
-                  title="Start new conversation"
-                >
-                  <MailPlus className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => safeRefetchEmails()}
-                  disabled={isLoadingEmails || isSyncingEmails || isEmailSyncOnCooldown}
-                  title="Refresh"
-                >
-                  {(isLoadingEmails || isSyncingEmails) ? <Icons.Spinner className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                </Button>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h1 className="text-sm font-semibold text-slate-900">{t('nav.inbox_header')}</h1>
+                  <p className="text-[11px] text-slate-500">Conversation list</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setIsBulkMode((v) => !v)}
+                    title="Select conversations"
+                  >
+                    <CheckSquare className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setIsNewConversationOpen(true)}
+                    title="Start new conversation"
+                  >
+                    <MailPlus className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => safeRefetchEmails()}
+                    disabled={isLoadingEmails || isSyncingEmails || isEmailSyncOnCooldown}
+                    title="Refresh"
+                  >
+                    {(isLoadingEmails || isSyncingEmails) ? <Icons.Spinner className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="mt-3 space-y-3">
               <div className="relative">
@@ -1405,43 +1812,63 @@ export default function CommunicationHubPage() {
                 <span className="text-[10px] text-slate-400">{totalConversationCount} threads</span>
               </div>
 
-              <div className="flex flex-wrap gap-1">
-                <Button
-                  type="button"
-                  variant={threadMailbox === 'all' ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 rounded-full px-3 text-xs"
-                  onClick={() => setThreadMailbox('all')}
+              <div className="group/filters relative">
+                <div
+                  id="conversation-filters-scroll"
+                  ref={filterChipsScrollRef}
+                  onScroll={syncFilterScrollbar}
+                  onMouseEnter={syncFilterScrollbar}
+                  className="overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:h-0"
                 >
-                  All
-                </Button>
-                <Button
-                  type="button"
-                  variant={threadMailbox === 'pinned' ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 rounded-full px-3 text-xs"
-                  onClick={() => setThreadMailbox('pinned')}
-                >
-                  Pinned
-                </Button>
-                <Button
-                  type="button"
-                  variant={threadMailbox === 'archived' ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 rounded-full px-3 text-xs"
-                  onClick={() => setThreadMailbox('archived')}
-                >
-                  Archived
-                </Button>
-                <Button
-                  type="button"
-                  variant={threadMailbox === 'trash' ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 rounded-full px-3 text-xs"
-                  onClick={() => setThreadMailbox('trash')}
-                >
-                  Trash
-                </Button>
+                  <div className="flex gap-1 pb-1">
+                    {(
+                      [['all','Primary'],['needs_reply','Needs Reply'],['pinned','Pinned'],['archived','Archived'],['trash','Trash']] as [ThreadMailbox, string][]
+                    ).map(([val, label]) => (
+                      <Button
+                        key={val}
+                        type="button"
+                        variant={threadMailbox === val ? 'default' : 'outline'}
+                        size="sm"
+                        className={cn(
+                          'h-7 rounded-full px-3 text-xs shrink-0',
+                          val === 'needs_reply' && threadMailbox !== val && 'border-orange-200 bg-orange-50 text-orange-700 font-semibold'
+                        )}
+                        onClick={() => { setThreadMailbox(val); setCurrentPage(1); }}
+                      >
+                        {val === 'needs_reply' && <Reply className="mr-1 h-3 w-3" />}
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                {hasFilterChipsOverflow && (
+                  <div className="absolute bottom-0 left-0 right-0 hidden opacity-0 transition-opacity duration-150 md:block md:group-hover/filters:opacity-100">
+                    <div
+                      ref={filterScrollbarTrackRef}
+                      className={cn(
+                        'h-1.5 rounded-full bg-slate-200/80',
+                        isFilterScrollbarDragging ? 'cursor-grabbing' : 'cursor-pointer'
+                      )}
+                      onMouseDown={handleFilterScrollbarTrackMouseDown}
+                      role="scrollbar"
+                      aria-label="Conversation filters horizontal scrollbar"
+                      aria-controls="conversation-filters-scroll"
+                      aria-orientation="horizontal"
+                    >
+                      <div
+                        className={cn(
+                          'h-full rounded-full bg-slate-500/90',
+                          isFilterScrollbarDragging ? 'cursor-grabbing' : 'cursor-grab'
+                        )}
+                        onMouseDown={handleFilterScrollbarThumbMouseDown}
+                        style={{
+                          width: `${filterScrollbarThumbWidthPct}%`,
+                          marginLeft: `${filterScrollbarThumbLeftPct}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1466,167 +1893,148 @@ export default function CommunicationHubPage() {
                         const previewText = getThreadPreviewText(latestThreadEmail);
                         const previewLabel = getThreadPreviewLabel(latestThreadEmail);
                         const isLatestSent = isSentEmail(latestThreadEmail);
+                        const slaInfo = getSlaInfo(conversation);
+                        const activeStay = getActiveStay(conversation);
+                        const isChecked = bulkSelectedKeys.includes(conversation.key);
 
                         return (
                           <div
                             key={conversation.key}
                             role="button"
                             tabIndex={0}
-                            onClick={() => handleSelectEmail(email)}
+                            onClick={() => {
+                              if (isBulkMode) { handleBulkToggleSelect(conversation.key); return; }
+                              handleSelectEmail(email, 'all', { markReadOnOpen: true });
+                            }}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault();
-                                handleSelectEmail(email);
+                                if (isBulkMode) { handleBulkToggleSelect(conversation.key); return; }
+                                handleSelectEmail(email, 'all', { markReadOnOpen: true });
                               }
                             }}
                             className={cn(
                               'group block w-full min-w-0 overflow-hidden cursor-pointer border-b border-slate-100 px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50',
-                              isSelected && 'bg-slate-50',
-                              conversation.unreadCount > 0 && 'bg-blue-50/40'
+                              isSelected && 'bg-blue-50',
+                              isChecked && 'bg-blue-50',
+                              conversation.unreadCount > 0 && !isSelected && 'bg-blue-50/30'
                             )}
                           >
-                            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 overflow-hidden">
+                            {/* Top row: checkbox/dot + name + time */}
+                            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 overflow-hidden">
                               <div className="min-w-0 flex-1 overflow-hidden">
                                 <div className="flex min-w-0 items-center gap-2">
-                                {conversation.unreadCount > 0 && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-600" />}
-                                {pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
-                                {starred && <Star className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
-                                <span className={cn('block min-w-0 truncate text-sm', conversation.unreadCount > 0 ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
-                                  {conversation.contactName}
-                                </span>
+                                  {isBulkMode ? (
+                                    <span className="shrink-0">
+                                      {isChecked
+                                        ? <CheckSquare className="h-4 w-4 text-blue-600" />
+                                        : <Square className="h-4 w-4 text-slate-400" />}
+                                    </span>
+                                  ) : (
+                                    conversation.unreadCount > 0 && <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
+                                  )}
+                                  {pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                                  {starred && <Star className="h-3.5 w-3.5 shrink-0 text-amber-400 fill-amber-400" />}
+                                  <span className={cn('block min-w-0 truncate text-sm', conversation.unreadCount > 0 ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
+                                    {conversation.contactName}
+                                  </span>
                                 </div>
-                                <div className="mt-1.5 flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-xs">
-                                  <span
-                                    className={cn(
-                                      'shrink-0 font-medium',
-                                      isLatestSent ? 'text-emerald-600' : 'text-blue-600'
-                                    )}
-                                  >
+
+                                {/* Preview line */}
+                                <div className="mt-1 flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-xs">
+                                  <span className={cn('shrink-0 font-medium', isLatestSent ? 'text-emerald-600' : 'text-blue-600')}>
                                     {previewLabel}:
                                   </span>
                                   <span className="block min-w-0 flex-1 truncate text-slate-500">
                                     {previewText}
                                   </span>
                                 </div>
-                                <div className="mt-2 flex flex-wrap gap-1.5">
+
+                                {/* Channel badges + indicator row */}
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                   {getConversationChannels(conversation).map((channel) => (
                                     <Badge key={channel} variant="outline" className={cn('h-5 rounded-full px-2 text-[10px] font-medium', getChannelBadgeClassName(channel))}>
                                       {channel}
                                     </Badge>
                                   ))}
+                                  {activeStay && (
+                                    <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10px] font-medium text-emerald-700">
+                                      <BedDouble className="h-3 w-3" /> Checked in
+                                    </span>
+                                  )}
+                                  {slaInfo && (
+                                    <span className={cn(
+                                      'flex items-center gap-1 rounded-full border px-2 py-0 text-[10px] font-medium',
+                                      slaInfo.urgent
+                                        ? 'border-red-200 bg-red-50 text-red-600'
+                                        : 'border-amber-200 bg-amber-50 text-amber-600'
+                                    )}>
+                                      <Clock className="h-3 w-3" /> {slaInfo.label}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
-                              <div className="flex min-w-[96px] shrink-0 flex-col items-end gap-1 pl-2">
+
+                              {/* Right column: time + quick actions + status */}
+                              <div className="flex min-w-[80px] shrink-0 flex-col items-end gap-1">
                                 <span className="text-[11px] font-medium text-slate-400">{formattedDate}</span>
-                                <div className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={async (event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      await openGuestInfoFromEmail(email);
-                                    }}
-                                    title="Guest info"
-                                  >
-                                    <Info className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      handleTogglePin(conversation.key);
-                                    }}
-                                    title={pinned ? 'Unpin thread' : 'Pin thread'}
-                                  >
-                                    {pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={async (event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      await handleToggleStarThread(conversation.key);
-                                    }}
-                                    title={starred ? 'Unstar thread' : 'Star thread'}
-                                  >
-                                    <Star className={cn('h-3.5 w-3.5', starred && 'fill-amber-400 text-amber-500')} />
-                                  </Button>
-                                  {threadMailbox === 'trash' || trashed ? (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={async (event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        await handleRestoreThread(conversation.key);
-                                      }}
-                                      title="Restore thread"
-                                    >
-                                      <ArchiveRestore className="h-3.5 w-3.5" />
+                                {!isBulkMode && (
+                                  <div className="flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (event) => { event.preventDefault(); event.stopPropagation(); await openGuestInfoFromEmail(email); }} title="Guest info">
+                                      <Info className="h-3.5 w-3.5" />
                                     </Button>
-                                  ) : archived ? (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={async (event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        await handleUnarchiveThread(conversation.key);
-                                      }}
-                                      title="Unarchive thread"
-                                    >
-                                      <ArchiveRestore className="h-3.5 w-3.5" />
+                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={(event) => { event.preventDefault(); event.stopPropagation(); handleTogglePin(conversation.key); }} title={pinned ? 'Unpin' : 'Pin'}>
+                                      {pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
                                     </Button>
-                                  ) : (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={async (event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        await handleArchiveThread(conversation.key);
-                                      }}
-                                      title="Archive thread"
-                                    >
-                                      <Archive className="h-3.5 w-3.5" />
+                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (event) => { event.preventDefault(); event.stopPropagation(); await handleToggleStarThread(conversation.key); }} title={starred ? 'Unstar' : 'Star'}>
+                                      <Star className={cn('h-3.5 w-3.5', starred && 'fill-amber-400 text-amber-500')} />
                                     </Button>
-                                  )}
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-red-500 hover:text-red-600"
-                                    onClick={async (event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      await handleDeleteThread(conversation.key);
-                                    }}
-                                    title="Move thread to trash"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                                <Badge
-                                  variant="outline"
-                                  className={cn('h-5 rounded-full px-2 text-[10px] font-medium', getStatusBadgeClassName(latestThreadEmail))}
-                                >
-                                  {getLastMessageStatus(latestThreadEmail)}
+                                    {conversation.unreadCount > 0 && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={async (event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          await handleMarkThreadRead(conversation.key);
+                                        }}
+                                        title="Mark as read"
+                                      >
+                                        <Mail className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                    {conversation.unreadCount === 0 && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={async (event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          await handleMarkThreadUnread(conversation.key);
+                                        }}
+                                        title="Mark as unread"
+                                      >
+                                        <MailWarning className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                    {(threadMailbox === 'trash' || trashed) ? (
+                                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => { e.preventDefault(); e.stopPropagation(); await handleRestoreThread(conversation.key); }} title="Restore"><ArchiveRestore className="h-3.5 w-3.5" /></Button>
+                                    ) : archived ? (
+                                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => { e.preventDefault(); e.stopPropagation(); await handleUnarchiveThread(conversation.key); }} title="Unarchive"><ArchiveRestore className="h-3.5 w-3.5" /></Button>
+                                    ) : (
+                                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openThreadActionConfirm('archive', [conversation.key]); }} title="Archive"><Archive className="h-3.5 w-3.5" /></Button>
+                                    )}
+                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-600" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openThreadActionConfirm(threadMailbox === 'trash' || trashed ? 'permanent_delete' : 'move_to_trash', [conversation.key]); }} title={threadMailbox === 'trash' || trashed ? 'Delete permanently' : 'Move to trash'}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                )}
+                                <Badge variant="outline" className={cn('h-5 rounded-full px-2 text-[10px] font-medium', getStatusBadgeClassName(latestThreadEmail, trashed))}>
+                                  {getLastMessageStatus(latestThreadEmail, trashed)}
                                 </Badge>
                               </div>
                             </div>
@@ -1638,16 +2046,59 @@ export default function CommunicationHubPage() {
                 ))
               ) : (
                 <div className="p-8 text-center text-sm text-muted-foreground">No conversations</div>
-              )}
-            </div>
+              )}            </div>
           </ScrollArea>
+          {/* Bulk select-all bar at bottom */}
+          {isBulkMode && (
+            <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-white px-4 py-2 text-xs text-slate-500">
+              <button className="underline hover:text-slate-700" onClick={handleBulkSelectAll}>Select all {currentList.length}</button>
+              <button className="underline hover:text-slate-700" onClick={handleBulkClear}>Cancel</button>
+            </div>
+          )}
         </aside>
 
         <main className={cn('min-w-0 flex-1 bg-white', selectedEmail ? 'block' : 'hidden md:block')}>
           <div className="relative h-full min-w-0">
             {selectedEmail ? (
               <>
-                <div className="absolute right-3 top-3 z-10">
+                <div className="absolute right-3 top-3 z-10 flex max-w-[calc(100%-4.5rem)] items-center gap-2">
+                  {(() => {
+                    const selKey = getConversationKey(selectedEmail);
+                    const conv = currentList.find((c) => c.key === selKey);
+                    const stay = conv ? getActiveStay(conv) : null;
+                    if (!stay) return null;
+
+                    const roomLabel = Array.isArray(stay.rooms) && stay.rooms.length > 0
+                      ? stay.rooms
+                        .map((room: any) => {
+                          const roomType = String(room?.roomTypeName || room?.typeName || 'Room').trim();
+                          const roomNumber = String(room?.roomName || room?.name || room?.roomId || '').trim();
+                          return `${roomType}${roomNumber ? ` ${roomNumber}` : ''}`.trim();
+                        })
+                        .filter(Boolean)
+                        .join(', ')
+                      : String(stay.roomTypeName || stay.roomName || 'Room').trim();
+
+                    const checkOutLabel = isValid(new Date(stay.endDate))
+                      ? format(new Date(stay.endDate), 'MMM d')
+                      : '—';
+
+                    const totalGuests = Array.isArray(stay.rooms) && stay.rooms.length > 0
+                      ? stay.rooms.reduce((sum: number, room: any) => sum + Number(room?.adults || 0) + Number(room?.children || 0), 0)
+                      : Number(stay.adults || 0) + Number(stay.children || 0);
+
+                    const details = `Currently checked in - ${roomLabel} - Check-out: ${checkOutLabel} - Guests: ${totalGuests}`;
+
+                    return (
+                      <span
+                        className="hidden max-w-[720px] items-center truncate rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 lg:inline-flex"
+                        title={details}
+                      >
+                        <BedDouble className="mr-1.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        {details}
+                      </span>
+                    );
+                  })()}
                   <Button
                     type="button"
                     variant="outline"
@@ -1795,6 +2246,42 @@ export default function CommunicationHubPage() {
         currentLabels={emailForLabeling?.labels || []}
         onApplyLabels={handleApplyLabels}
       />
+
+      <AlertDialog open={!!pendingThreadAction} onOpenChange={(open) => { if (!open) setPendingThreadAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingThreadAction?.type === 'archive'
+                ? 'Archive thread(s)?'
+                : pendingThreadAction?.type === 'move_to_trash'
+                  ? 'Move thread(s) to trash?'
+                  : 'Permanently delete thread(s)?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingThreadAction
+                ? pendingThreadAction.type === 'archive'
+                  ? `You are about to archive ${pendingThreadAction.conversationKeys.length} conversation thread(s). This action requires confirmation to avoid accidental archival.`
+                  : pendingThreadAction.type === 'move_to_trash'
+                    ? `You are about to move ${pendingThreadAction.conversationKeys.length} conversation thread(s) to trash. This action requires confirmation to avoid accidental deletion.`
+                    : `You are about to permanently delete ${pendingThreadAction.conversationKeys.length} conversation thread(s) from trash. This action cannot be undone.`
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={pendingThreadAction?.type === 'move_to_trash' || pendingThreadAction?.type === 'permanent_delete' ? 'bg-red-600 text-white hover:bg-red-700' : ''}
+              onClick={executePendingThreadAction}
+            >
+              {pendingThreadAction?.type === 'archive'
+                ? 'Archive'
+                : pendingThreadAction?.type === 'move_to_trash'
+                  ? 'Move to trash'
+                  : 'Delete permanently'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

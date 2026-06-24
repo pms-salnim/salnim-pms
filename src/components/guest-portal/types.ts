@@ -1,11 +1,10 @@
-import { Firestore } from "firebase/firestore";
-
 export interface Property {
-  address: ReactI18NextChildren | Iterable<ReactI18NextChildren>;
+  address: string;
   phone: string | null | undefined;
   bookingPageSettings: any;
   logoUrl: any;
-  id(db: Firestore, arg1: string, id: any): import("@firebase/firestore").DocumentReference<import("@firebase/firestore").DocumentData, import("@firebase/firestore").DocumentData>;
+  id: string;
+  slug?: string;
   name?: string;
   primaryColor?: string;
   secondaryColor?: string;

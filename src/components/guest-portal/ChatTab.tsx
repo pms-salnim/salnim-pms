@@ -38,6 +38,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { property, reservation } = data;
+  const propertySlug = property?.slug;
+
+  const buildPortalPayload = useCallback((payload: Record<string, any>) => ({
+    propertySlug,
+    reservationNumber: reservation.reservationNumber || reservation.id,
+    ...payload,
+  }), [propertySlug, reservation.reservationNumber, reservation.id]);
 
   const convertTimestamp = (timestamp: any): Date => {
     if (!timestamp) return new Date();
@@ -100,22 +107,16 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
     try {
       setIsLoadingChat(true);
       
-      const propertyId = property?.id || data.property?.id;
-      const reservationNum = reservation.reservationNumber || reservation.id;
+      if (!propertySlug) return;
       
-      if (!propertyId || !reservationNum) return;
-      
-      const response = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalChat', {
+      const response = await fetch('/api/guest-portal/public', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           action: 'getConversations',
-          data: {
-            propertyId,
-            reservationNumber: reservationNum
-          }
+          data: buildPortalPayload({}),
         })
       });
 
@@ -132,27 +133,20 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
     } finally {
       setIsLoadingChat(false);
     }
-  }, [property?.id, data.property?.id, reservation.reservationNumber, reservation.id]);
+  }, [propertySlug, buildPortalPayload]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     try {
-      const propertyId = property?.id || data.property?.id;
-      const reservationNum = reservation.reservationNumber || reservation.id;
+      if (!propertySlug || !conversationId) return;
       
-      if (!propertyId || !reservationNum || !conversationId) return;
-      
-      const response = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalChat', {
+      const response = await fetch('/api/guest-portal/public', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           action: 'getMessages',
-          data: {
-            conversationId,
-            propertyId,
-            reservationNumber: reservationNum
-          }
+          data: buildPortalPayload({ conversationId }),
         })
       });
 
@@ -175,25 +169,21 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
         });
         
         // Mark as read
-        await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalChat', {
+        await fetch('/api/guest-portal/public', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             action: 'markAsRead',
-            data: {
-              conversationId,
-              propertyId,
-              reservationNumber: reservationNum
-            }
+            data: buildPortalPayload({ conversationId }),
           })
         });
       }
     } catch (error) {
       console.error('Error loading messages:', error);
     }
-  }, [property?.id, data.property?.id, reservation.reservationNumber, reservation.id, scrollToBottom]);
+  }, [propertySlug, scrollToBottom, buildPortalPayload]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
@@ -256,8 +246,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
   const sendFileMessage = async (file: File) => {
     try {
       const conversationId = conversation?.id;
-      const propertyId = property?.id || data.property?.id;
-      const reservationNum = reservation.reservationNumber || reservation.id;
+      if (!propertySlug) return;
       
       // Convert file to base64
       const base64File = await new Promise<string>((resolve) => {
@@ -271,16 +260,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
 
       // If no conversation exists, create one first
       if (!conversation) {
-        const createResponse = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalChat', {
+        const createResponse = await fetch('/api/guest-portal/public', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             action: 'createConversation',
-            data: {
-              propertyId,
-              reservationNumber: reservationNum,
+            data: buildPortalPayload({
               message: `📎 ${file.name}`,
               fileAttachment: {
                 fileName: file.name,
@@ -288,7 +275,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
                 fileSize: file.size,
                 fileData: base64File
               }
-            }
+            }),
           })
         });
 
@@ -305,25 +292,23 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
       }
 
       // Send file to existing conversation
-      const response = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalChat', {
+      const response = await fetch('/api/guest-portal/public', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           action: 'sendMessage',
-          data: {
+          data: buildPortalPayload({
             conversationId,
             message: `📎 ${file.name}`,
-            propertyId,
-            reservationNumber: reservationNum,
             fileAttachment: {
               fileName: file.name,
               fileType: file.type,
               fileSize: file.size,
               fileData: base64File
             }
-          }
+          }),
         })
       });
 
@@ -353,23 +338,20 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
       setIsSending(true);
       
       const conversationId = conversation?.id;
-      const propertyId = property?.id || data.property?.id;
-      const reservationNum = reservation.reservationNumber || reservation.id;
+      if (!propertySlug) return;
       
       // If no conversation exists, create one first
       if (!conversation) {
-        const createResponse = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalChat', {
+        const createResponse = await fetch('/api/guest-portal/public', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             action: 'createConversation',
-            data: {
-              propertyId,
-              reservationNumber: reservationNum,
+            data: buildPortalPayload({
               message: newMessage.trim()
-            }
+            }),
           })
         });
 
@@ -387,19 +369,17 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
       }
 
       // Send message to existing conversation
-      const response = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalChat', {
+      const response = await fetch('/api/guest-portal/public', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           action: 'sendMessage',
-          data: {
+          data: buildPortalPayload({
             conversationId,
-            message: newMessage.trim(),
-            propertyId,
-            reservationNumber: reservationNum
-          }
+            message: newMessage.trim()
+          }),
         })
       });
 
@@ -418,7 +398,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
     } finally {
       setIsSending(false);
     }
-  }, [newMessage, isSending, conversation, property?.id, data.property?.id, reservation.reservationNumber, reservation.id, scrollToBottom, triggerToast]);
+  }, [newMessage, isSending, conversation, propertySlug, scrollToBottom, triggerToast, buildPortalPayload]);
 
   // Load conversation on mount
   useEffect(() => {

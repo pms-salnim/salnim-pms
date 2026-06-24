@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { GuestPortalData } from './types';
 import { format } from 'date-fns';
-import { createClient } from '@/utils/supabase/client';
 
 interface Review {
   id: string;
@@ -99,17 +98,24 @@ const ReviewsTab: React.FC<ReviewsTabProps> = ({
     const loadReviews = async () => {
       setIsLoadingReviews(true);
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from('reviews')
-          .select('*')
-          .eq('property_id', property.id)
-          .eq('reservation_id', reservation.id)
-          .order('created_at', { ascending: false });
+        const response = await fetch('/api/guest-portal/public', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'listReviews',
+            data: {
+              propertySlug: property?.slug,
+              reservationNumber: reservation?.reservationNumber || reservation?.id,
+            },
+          }),
+        });
 
-        if (error) throw error;
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Failed to fetch reviews');
+        }
 
-        setExistingReviews((data || []).map(normalizeReviewRow));
+        setExistingReviews((result.reviews || []).map(normalizeReviewRow));
       } catch (error) {
         console.error('Error fetching reviews:', error);
       } finally {
@@ -135,30 +141,23 @@ const ReviewsTab: React.FC<ReviewsTabProps> = ({
     setIsSubmitting(true);
 
     try {
-      // Call Cloud Function to submit review
-      const base = process.env.NEXT_PUBLIC_FUNCTIONS_BASE || 'https://europe-west1-protrack-hub.cloudfunctions.net';
-      const url = `${base}/submitGuestReview`;
-      
-      const reviewData = {
-        propertyId: property?.id,
-        reservationId: reservation?.id,
-        reservationNumber: reservation?.reservationNumber,
-        guestName: guestName,
-        guestEmail: reservation?.guestEmail,
-        ratings: {
-          overall: overallRating,
-          cleanliness: cleanlinessRating,
-          service: serviceRating,
-          amenities: amenitiesRating,
-        },
-        reviewText: reviewText.trim(),
-        submittedAt: new Date().toISOString(),
-      };
-
-      const response = await fetch(url, {
+      const response = await fetch('/api/guest-portal/public', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reviewData),
+        body: JSON.stringify({
+          action: 'submitReview',
+          data: {
+            propertySlug: property?.slug,
+            reservationNumber: reservation?.reservationNumber || reservation?.id,
+            ratings: {
+              overall: overallRating,
+              cleanliness: cleanlinessRating,
+              service: serviceRating,
+              amenities: amenitiesRating,
+            },
+            reviewText: reviewText.trim(),
+          },
+        }),
       });
 
       const result = await response.json();

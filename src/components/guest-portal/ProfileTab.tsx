@@ -71,18 +71,17 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   // Helper to call the server-side profile update function when no prop handler is provided
   async function doSaveUpdates(updates: Record<string, any>, singleField?: string) {
     try {
-      const base = process.env.NEXT_PUBLIC_FUNCTIONS_BASE || 'https://europe-west1-protrack-hub.cloudfunctions.net';
-      const url = `${base}/guestPortalProfileUpdate`;
-      const body = {
-        propertySlug: (data as any)?.property?.slug || (data as any)?.property?.id,
-        reservationNumber: reservation.reservationNumber || reservation.id,
-        updates
-      };
-
-      const resp = await fetch(url, {
+      const resp = await fetch('/api/guest-portal/public', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify({
+          action: 'updateGuestProfile',
+          data: {
+            propertySlug: (data as any)?.property?.slug,
+            reservationNumber: reservation.reservationNumber || reservation.id,
+            updates,
+          },
+        }),
       });
 
       const json = await resp.json();
