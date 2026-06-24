@@ -181,6 +181,7 @@ async function mirrorGuestPortalMessageToInbox(params: {
     await supabase
       .from("property_emails")
       .update({
+        is_in_trash: false,
         is_trash: false,
         is_archived: false,
         is_spam: false,
@@ -206,6 +207,7 @@ async function mirrorGuestPortalMessageToInbox(params: {
       is_starred: false,
       is_archived: false,
       is_spam: false,
+      is_in_trash: false,
       is_trash: false,
       has_attachments: hasAttachments,
       source: "guest_portal",

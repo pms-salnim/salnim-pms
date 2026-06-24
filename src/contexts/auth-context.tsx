@@ -31,6 +31,7 @@ export interface Email {
   body: string;
   bodyText?: string;
   bodyHtml?: string;
+  trash?: boolean;
   unread: boolean;
   starred?: boolean;
   archived?: boolean;
@@ -187,6 +188,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           body: row.body_text || row.body_html || '',
           bodyText: row.body_text || '',
           bodyHtml: row.body_html || '',
+          trash: Boolean(row.is_in_trash ?? row.is_trash),
           unread: !!row.is_unread,
           starred: !!row.is_starred,
           archived: !!row.is_archived,

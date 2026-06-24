@@ -257,7 +257,7 @@ async function resolveThreadEmailIds(
       .eq('source_conversation_id', sourceConversationId);
 
     if (options?.trashOnly) {
-      query = query.eq('is_trash', true);
+      query = query.eq('is_in_trash', true);
     }
 
     const { data: threadRows, error: threadError } = await query;
@@ -279,7 +279,7 @@ async function resolveThreadEmailIds(
       .eq('from_email', fromEmail);
 
     if (options?.trashOnly) {
-      query = query.eq('is_trash', true);
+      query = query.eq('is_in_trash', true);
     }
 
     const { data: threadRows, error: threadError } = await query;
@@ -313,6 +313,7 @@ async function reviveThreadForIncomingMessage(params: {
     await supabase
       .from('property_emails')
       .update({
+        is_in_trash: false,
         is_trash: false,
         is_archived: false,
         is_spam: false,
@@ -329,6 +330,7 @@ async function reviveThreadForIncomingMessage(params: {
   await supabase
     .from('property_emails')
     .update({
+      is_in_trash: false,
       is_trash: false,
       is_archived: false,
       is_spam: false,
@@ -495,6 +497,7 @@ async function persistSentEmail(params: {
       is_starred: false,
       is_archived: false,
       is_spam: false,
+      is_in_trash: false,
       is_trash: false,
       has_attachments: Array.isArray(params.attachments) && params.attachments.length > 0,
       updated_at: new Date().toISOString(),
@@ -984,13 +987,13 @@ async function handleListEmails(
       query = query
         .eq('is_archived', false)
         .eq('is_spam', false)
-        .eq('is_trash', false);
+        .eq('is_in_trash', false);
     } else if (folder === 'unread') {
       query = query
         .eq('is_unread', true)
         .eq('is_archived', false)
         .eq('is_spam', false)
-        .eq('is_trash', false);
+        .eq('is_in_trash', false);
     } else if (folder === 'starred') {
       query = query.eq('is_starred', true);
     } else if (folder === 'archived') {
@@ -998,13 +1001,13 @@ async function handleListEmails(
     } else if (folder === 'spam') {
       query = query.eq('is_spam', true);
     } else if (folder === 'trash') {
-      query = query.eq('is_trash', true);
+      query = query.eq('is_in_trash', true);
     } else if (folder === 'sent') {
       // Outgoing emails persisted by this API are stored with null UID.
       query = query
         .is('uid', null)
         .eq('is_spam', false)
-        .eq('is_trash', false);
+        .eq('is_in_trash', false);
     }
 
     // Search in subject and body
@@ -1525,6 +1528,7 @@ async function handleArchive(
       .update({ 
         is_archived: true, 
         is_spam: false,
+        is_in_trash: false,
         is_trash: false,
         updated_at: new Date().toISOString() 
       })
@@ -1594,6 +1598,7 @@ async function handleSpam(
       .update({ 
         is_spam: true,
         is_archived: false,
+        is_in_trash: false,
         is_trash: false,
         updated_at: new Date().toISOString() 
       })
@@ -1663,6 +1668,7 @@ async function handleDelete(
     const { error } = await supabase
       .from('property_emails')
       .update({ 
+        is_in_trash: true,
         is_trash: true,
         is_archived: false,
         is_spam: false,
@@ -1791,7 +1797,7 @@ async function handleDeletePermanently(
       .from('property_emails')
       .delete()
       .eq('property_id', propertyId)
-      .eq('is_trash', true)
+      .eq('is_in_trash', true)
       .in('id', threadEmailIds);
 
     if (error) throw error;
@@ -1822,7 +1828,7 @@ async function handleRestore(
 
     const { error } = await supabase
       .from('property_emails')
-      .update({ is_trash: false, updated_at: new Date().toISOString() })
+      .update({ is_in_trash: false, is_trash: false, updated_at: new Date().toISOString() })
       .eq('property_id', propertyId)
       .in('id', emailIds);
 
