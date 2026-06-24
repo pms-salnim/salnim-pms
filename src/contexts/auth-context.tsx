@@ -253,7 +253,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // If we get a 401 and have retries left, wait and try again
         // This handles the race condition where middleware hasn't set cookies yet
         if (response.status === 401 && retries > 0 && !accessToken) {
-          console.log(`Session not ready, retrying in ${delayMs}ms (${retries} retries left)`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
           return fetchAndSetUser(userId, undefined, retries - 1, delayMs * 1.5);
         }
@@ -273,9 +272,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // CHECK USER STATUS - Block inactive users from logging in
-      console.log('Checking user status:', { email: userData.email, status: userData.status });
       if (userData.status === 'Inactive') {
-        console.warn('User account is disabled:', userData.email);
+        console.warn('User account is disabled');
         // Sign out the user
         await supabase.auth.signOut();
         setUser(null);
@@ -289,12 +287,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.error('Throwing disabled account error:', disabledError.message);
         throw disabledError;
       }
-
-      console.log('API response:', { 
-        userId: userData.id, 
-        propertyId: userData.property_id,
-        hasPropertyData: !!propertyData 
-      });
 
       // Build user object with permissions
       let finalPermissions = { ...defaultPermissions, ...(userData.permissions || {}) };
@@ -381,7 +373,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         // If user status is now Inactive, sign out and notify
         if (userData?.status === 'Inactive') {
-          console.warn('User account has been disabled, logging out:', userData.email);
+          console.warn('User account has been disabled, logging out');
           
           // ✅ Store the logout reason so login page can display it
           localStorage.setItem('disabledAccountLogout', 'true');
@@ -506,8 +498,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const login = async (email: string, password: string) => {
-    console.log('Login attempt initiated for:', email);
-    
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -519,13 +509,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw error;
       }
 
-      console.log('Auth sign in successful, checking account status...');
-      
       // ✅ Immediately fetch user profile and check if account is disabled
       // This is done BEFORE the useEffect, so the form catches the error directly
       if (data.session?.user) {
         await fetchAndSetUser(data.session.user.id, data.session.access_token);
-        console.log('User profile fetched and verified - login complete');
       }
     } catch (error: any) {
       console.error('Login error:', error.message);

@@ -176,14 +176,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   const stayDates = useMemo(() => `${format(new Date(reservation.startDate), 'dd MMM')} – ${format(new Date(reservation.endDate), 'dd MMM yyyy')}`, [reservation.startDate, reservation.endDate]);
   const isCheckedIn = useMemo(() => !!reservation.actualCheckInTime, [reservation.actualCheckInTime]);
   
-  // Debug logging
-  useEffect(() => {
-    console.log('Dashboard received reservation:', reservation);
-    console.log('Reservation.adults:', reservation.adults);
-    console.log('Reservation.children:', reservation.children);
-    console.log('Reservation.additionalGuests:', reservation.additionalGuests);
-  }, [reservation]);
-  
   // Get the real-time reservation status
   const reservationStatus = useMemo(() => {
     // Use the actual reservation status from Firestore

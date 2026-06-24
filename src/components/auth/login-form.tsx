@@ -40,7 +40,6 @@ export function LoginForm() {
   useEffect(() => {
     const wasDisabledWhileLoggedIn = localStorage.getItem('disabledAccountLogout');
     if (wasDisabledWhileLoggedIn) {
-      console.log('Displaying disabled account logout message');
       setError('Your account has been disabled by an administrator. You have been logged out.');
       // Clean up the flag so it only shows once
       localStorage.removeItem('disabledAccountLogout');
@@ -58,18 +57,15 @@ export function LoginForm() {
   async function onSubmit(values: LoginFormValues) {
     setIsLoading(true);
     setError(null);
-    console.log('Login attempt for:', values.email);
     
     try {
       await login(values.email, values.password);
-      console.log('Login successful');
       // Successful login will trigger redirection via AuthContext's onAuthStateChanged.
     } catch (err: any) {
       console.error('Login error caught:', err);
       let errorMessage = t('login_error_generic');
 
       if (err instanceof FirebaseError) {
-        console.log('FirebaseError:', err.code);
         switch (err.code) {
           case 'auth/invalid-credential':
             errorMessage = t('login_error_invalid_credentials');
@@ -85,15 +81,12 @@ export function LoginForm() {
         }
       } else if (err.message?.includes('disabled')) {
         // Handle account disabled message from our custom auth
-        console.log('Account disabled detected');
         errorMessage = 'Your account has been disabled. Please contact your administrator.';
       } else if (err.message?.includes('Invalid') || err.message?.includes('invalid')) {
         errorMessage = t('login_error_invalid_credentials');
       } else {
         errorMessage = err.message || t('login_error_generic');
       }
-
-      console.log('Setting error message:', errorMessage);
       setError(errorMessage);
     } finally {
       setIsLoading(false);
