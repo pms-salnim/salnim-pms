@@ -23,6 +23,17 @@ function isMissingSlugColumnError(error: any): boolean {
   );
 }
 
+function isMissingTableError(error: any, tableName: string): boolean {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("could not find the table") && message.includes(tableName.toLowerCase())
+  ) || (
+    message.includes("relation") &&
+    message.includes(tableName.toLowerCase()) &&
+    message.includes("does not exist")
+  );
+}
+
 function normalizeSlug(value: string): string {
   return String(value || "")
     .trim()
@@ -186,6 +197,48 @@ function normalizeService(row: JsonRecord) {
   };
 }
 
+function mapPortalSettings(portalRow: JsonRecord | null) {
+  if (!portalRow) return null;
+
+  return {
+    general: {
+      portalName: portalRow.portal_name,
+      welcomeTitle: portalRow.welcome_title,
+      welcomeMessage: portalRow.welcome_message,
+      primaryColor: portalRow.primary_color,
+      accentColor: portalRow.accent_color,
+    },
+    branding: {
+      welcomeTitle: portalRow.welcome_title,
+      welcomeMessage: portalRow.welcome_message,
+      primaryColor: portalRow.primary_color,
+      accentColor: portalRow.accent_color,
+      backgroundColor: portalRow.background_color,
+      footerText: portalRow.footer_text,
+      copyrightText: portalRow.copyright_text,
+    },
+  };
+}
+
+async function getOptionalPortalSettings(propertyId: string): Promise<JsonRecord | null> {
+  const { data, error } = await supabase
+    .from("guest_portals")
+    .select("*")
+    .eq("property_id", propertyId)
+    .eq("default_portal", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingTableError(error, "guest_portals")) {
+      return null;
+    }
+    throw error;
+  }
+
+  return data || null;
+}
+
 async function getPropertyBySlug(propertySlug: string) {
   const inputSlug = normalizeSlug(decodeURIComponent(String(propertySlug || "")));
   if (!inputSlug) return null;
@@ -255,14 +308,8 @@ async function buildGuestPortalPayload(
     .map((r: JsonRecord) => r.roomTypeId || r.room_type_id)
     .filter(Boolean);
 
-  const [portalResp, roomTypesResp, servicesResp, mealPlansResp, packagesResp] = await Promise.all([
-    supabase
-      .from("guest_portals")
-      .select("*")
-      .eq("property_id", propertyId)
-      .eq("default_portal", true)
-      .limit(1)
-      .maybeSingle(),
+  const [portalSettingsRow, roomTypesResp, servicesResp, mealPlansResp, packagesResp] = await Promise.all([
+    getOptionalPortalSettings(propertyId),
     roomTypeIds.length > 0
       ? supabase
           .from("room_types")
@@ -289,7 +336,6 @@ async function buildGuestPortalPayload(
       .order("created_at", { ascending: false }),
   ]);
 
-  if (portalResp.error) throw portalResp.error;
   if (roomTypesResp.error) throw roomTypesResp.error;
   if (servicesResp.error) throw servicesResp.error;
   if (mealPlansResp.error) throw mealPlansResp.error;
@@ -320,26 +366,7 @@ async function buildGuestPortalPayload(
       name: property.name,
       currency: property.currency,
     },
-    portalSettings: portalResp.data
-      ? {
-          general: {
-            portalName: portalResp.data.portal_name,
-            welcomeTitle: portalResp.data.welcome_title,
-            welcomeMessage: portalResp.data.welcome_message,
-            primaryColor: portalResp.data.primary_color,
-            accentColor: portalResp.data.accent_color,
-          },
-          branding: {
-            welcomeTitle: portalResp.data.welcome_title,
-            welcomeMessage: portalResp.data.welcome_message,
-            primaryColor: portalResp.data.primary_color,
-            accentColor: portalResp.data.accent_color,
-            backgroundColor: portalResp.data.background_color,
-            footerText: portalResp.data.footer_text,
-            copyrightText: portalResp.data.copyright_text,
-          },
-        }
-      : null,
+    portalSettings: mapPortalSettings(portalSettingsRow),
     summary: {
       totalAmount,
       totalPaid,
@@ -373,22 +400,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, propertyExists: false }, { status: 200 });
       }
 
-      const payload = await buildGuestPortalPayload(propertyRow, {
-        id: "",
-        reservation_number: "",
-        guest_name: "",
-        start_date: new Date().toISOString(),
-        end_date: new Date().toISOString(),
-        rooms_data: [],
-        payment_status: "pending",
-        total_price: 0,
-      }, propertySlug);
+      const portalSettingsRow = await getOptionalPortalSettings(propertyRow.id);
 
       return NextResponse.json({
         success: true,
         propertyExists: true,
-        property: payload.property,
-        portalSettings: payload.portalSettings,
+        property: normalizeProperty(propertyRow, propertySlug),
+        portalSettings: mapPortalSettings(portalSettingsRow),
       });
     }
 
