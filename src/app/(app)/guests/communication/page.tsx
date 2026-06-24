@@ -1718,33 +1718,15 @@ export default function CommunicationHubPage() {
     return resolveThreadReservation(selectedEmail);
   }, [resolveThreadReservation, selectedEmail]);
 
-  const openGuestInfoFromEmail = useCallback(async (email: Email) => {
-    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
-    const reservation = resolveThreadReservation(email);
-    if (isGuestPortalOnlyThread(email) && reservation) {
-      setSelectedReservationForDetails(reservation);
-      setIsReservationDetailsOpen(true);
-      setIsGuestInfoPanelOpen(false);
-      return;
-    }
-
-    setIsGuestInfoPanelOpen(true);
-  }, [handleSelectEmail, isGuestPortalOnlyThread, resolveThreadReservation]);
-
-  const selectedGuestForPanel = useMemo(() => {
-    if (!selectedEmail) return null;
-
-    const selectedEmailValue = String(selectedEmail.from?.email || '').trim().toLowerCase();
-    const selectedPhoneValue = normalizePhone(selectedThreadContactPhone || '');
-    const selectedNameValue = String(selectedEmail.from?.name || '').trim().toLowerCase();
+  const resolveGuestForEmail = useCallback((email: Email): Guest | null => {
+    const selectedEmailValue = String(email.from?.email || '').trim().toLowerCase();
+    const selectedNameValue = String(email.from?.name || '').trim().toLowerCase();
 
     const matchedGuest = guestDirectory.find((guest) => {
       const guestEmail = String(guest.email || '').trim().toLowerCase();
-      const guestPhone = normalizePhone(guest.phone || '');
       const guestName = String(guest.fullName || '').trim().toLowerCase();
 
       if (selectedEmailValue && guestEmail && selectedEmailValue === guestEmail) return true;
-      if (selectedPhoneValue && guestPhone && selectedPhoneValue === guestPhone) return true;
       if (selectedNameValue && guestName && selectedNameValue === guestName) return true;
       return false;
     });
@@ -1753,10 +1735,8 @@ export default function CommunicationHubPage() {
 
     const linkedGuestId = guestReservations.find((reservation) => {
       const reservationEmail = String(reservation.guestEmail || '').trim().toLowerCase();
-      const reservationPhone = normalizePhone(reservation.guestPhone || '');
       const reservationName = String(reservation.guestName || '').trim().toLowerCase();
       if (selectedEmailValue && reservationEmail && selectedEmailValue === reservationEmail) return true;
-      if (selectedPhoneValue && reservationPhone && selectedPhoneValue === reservationPhone) return true;
       if (selectedNameValue && reservationName && selectedNameValue === reservationName) return true;
       return false;
     })?.guestId;
@@ -1767,7 +1747,34 @@ export default function CommunicationHubPage() {
     }
 
     return null;
-  }, [guestDirectory, guestReservations, selectedEmail, selectedThreadContactPhone]);
+  }, [guestDirectory, guestReservations]);
+
+  const openGuestInfoFromEmail = useCallback(async (email: Email) => {
+    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
+    const reservation = resolveThreadReservation(email);
+    const matchedGuest = resolveGuestForEmail(email);
+
+    if (!matchedGuest && reservation) {
+      setSelectedReservationForDetails(reservation);
+      setIsReservationDetailsOpen(true);
+      setIsGuestInfoPanelOpen(false);
+      return;
+    }
+
+    if (isGuestPortalOnlyThread(email) && reservation) {
+      setSelectedReservationForDetails(reservation);
+      setIsReservationDetailsOpen(true);
+      setIsGuestInfoPanelOpen(false);
+      return;
+    }
+
+    setIsGuestInfoPanelOpen(true);
+  }, [handleSelectEmail, isGuestPortalOnlyThread, resolveGuestForEmail, resolveThreadReservation]);
+
+  const selectedGuestForPanel = useMemo(() => {
+    if (!selectedEmail) return null;
+    return resolveGuestForEmail(selectedEmail);
+  }, [resolveGuestForEmail, selectedEmail]);
 
   if (isLoadingAuth) {
     return <div className="flex h-screen items-center justify-center"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
