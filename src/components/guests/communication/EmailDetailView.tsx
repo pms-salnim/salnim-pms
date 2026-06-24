@@ -242,6 +242,18 @@ export default function EmailDetailView({
     return '';
   }, [email, threadMessages]);
 
+  const sourceMessageIdFromThread = useMemo(() => {
+    const fromSelected = String((email as any).sourceMessageId || (email as any).source_message_id || '').trim();
+    if (fromSelected) return fromSelected;
+
+    for (let i = threadMessages.length - 1; i >= 0; i -= 1) {
+      const item = threadMessages[i] as any;
+      const id = String(item?.sourceMessageId || item?.source_message_id || '').trim();
+      if (id) return id;
+    }
+    return '';
+  }, [email, threadMessages]);
+
   const contactPhone = useMemo(() => normalizePhone(guestContext?.guest?.phone), [guestContext?.guest?.phone]);
 
   const handleSwitchChannel = (channel: ChannelKey) => {
@@ -511,7 +523,8 @@ export default function EmailDetailView({
           email.id,
           undefined,
           sourceReservationIdFromThread || undefined,
-          sourceConversationIdFromThread || undefined
+          sourceConversationIdFromThread || undefined,
+          sourceMessageIdFromThread || undefined
         );
         const context = result?.context || null;
         setGuestContext(context);
@@ -524,7 +537,7 @@ export default function EmailDetailView({
     };
 
     loadGuestContext();
-  }, [email.id, email.from?.email, latestIncoming, sourceConversationIdFromThread, sourceReservationIdFromThread, user?.propertyId]);
+  }, [email.id, email.from?.email, latestIncoming, sourceConversationIdFromThread, sourceMessageIdFromThread, sourceReservationIdFromThread, user?.propertyId]);
 
   useEffect(() => {
     const loadChannelHistory = async () => {

@@ -1079,16 +1079,18 @@ async function handleGetEmailGuestContext(
     const emailId = typeof data?.emailId === 'string' ? data.emailId : '';
     const rawReservationId = typeof data?.reservationId === 'string' ? data.reservationId.trim() : '';
     const rawSourceConversationId = typeof data?.sourceConversationId === 'string' ? data.sourceConversationId.trim() : '';
+    const rawSourceMessageId = typeof data?.sourceMessageId === 'string' ? data.sourceMessageId.trim() : '';
 
     let guestEmail = rawEmail;
     let guestPhone = rawPhone;
     let reservationId = rawReservationId;
     let sourceConversationId = rawSourceConversationId;
+    let sourceMessageId = rawSourceMessageId;
 
     if (emailId) {
       const { data: emailRow } = await supabase
         .from('property_emails')
-        .select('from_email, source_reservation_id, source_conversation_id')
+        .select('from_email, source_reservation_id, source_conversation_id, source_message_id')
         .eq('property_id', propertyId)
         .eq('id', emailId)
         .maybeSingle();
@@ -1102,6 +1104,20 @@ async function handleGetEmailGuestContext(
       if (!sourceConversationId) {
         sourceConversationId = String((emailRow as any)?.source_conversation_id || '').trim();
       }
+      if (!sourceMessageId) {
+        sourceMessageId = String((emailRow as any)?.source_message_id || '').trim();
+      }
+    }
+
+    if (!sourceConversationId && sourceMessageId) {
+      const { data: messageRow } = await supabase
+        .from('guest_portal_messages')
+        .select('conversation_id')
+        .eq('property_id', propertyId)
+        .eq('id', sourceMessageId)
+        .maybeSingle();
+
+      sourceConversationId = String((messageRow as any)?.conversation_id || '').trim();
     }
 
     if (!reservationId && sourceConversationId) {
@@ -1221,23 +1237,86 @@ async function handleGetEmailGuestContext(
       guestPhone = String(primaryGuest.phone);
     }
 
-    const { data: reservationRows, error: reservationsError } = await supabase
-      .from('reservations')
-      .select('*')
-      .eq('property_id', propertyId)
-      .order('start_date', { ascending: false })
-      .limit(300);
+    const matchedReservationsById = new Map<string, any>();
+    const pushMatchedReservations = (rows: any[] | null | undefined) => {
+      (rows || []).forEach((reservation: any) => {
+        const id = String(reservation?.id || '').trim();
+        if (!id || matchedReservationsById.has(id)) return;
+        matchedReservationsById.set(id, reservation);
+      });
+    };
 
-    if (reservationsError) throw reservationsError;
-
-    const guestIdSet = new Set(matchingGuests.map((guest: any) => String(guest.id)));
+    const guestIdSet = new Set(matchingGuests.map((guest: any) => String(guest.id || '').trim()).filter(Boolean));
     const normalizedEmail = guestEmail.trim().toLowerCase();
     const normalizedGuestPhone = guestPhone.replace(/\s+/g, '');
 
-    const matchedReservations = (reservationRows || []).filter((reservation: any) => {
+    if (matchedReservationById) {
+      pushMatchedReservations([matchedReservationById]);
+    }
+
+    if (guestIdSet.size > 0) {
+      const guestIds = Array.from(guestIdSet);
+      const { data: reservationsByGuestIds, error: reservationsByGuestIdsError } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('property_id', propertyId)
+        .in('guest_id', guestIds)
+        .order('start_date', { ascending: false })
+        .limit(300);
+      if (reservationsByGuestIdsError) throw reservationsByGuestIdsError;
+      pushMatchedReservations(reservationsByGuestIds || []);
+    }
+
+    if (normalizedEmail) {
+      const { data: reservationsByGuestEmail, error: reservationsByGuestEmailError } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('guest_email', normalizedEmail)
+        .order('start_date', { ascending: false })
+        .limit(300);
+      if (reservationsByGuestEmailError) throw reservationsByGuestEmailError;
+
+      const { data: reservationsByContactEmail, error: reservationsByContactEmailError } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('contact_email', normalizedEmail)
+        .order('start_date', { ascending: false })
+        .limit(300);
+      if (reservationsByContactEmailError) throw reservationsByContactEmailError;
+
+      pushMatchedReservations(reservationsByGuestEmail || []);
+      pushMatchedReservations(reservationsByContactEmail || []);
+    }
+
+    if (normalizedGuestPhone) {
+      const { data: reservationsByGuestPhone, error: reservationsByGuestPhoneError } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('guest_phone', normalizedGuestPhone)
+        .order('start_date', { ascending: false })
+        .limit(300);
+      if (reservationsByGuestPhoneError) throw reservationsByGuestPhoneError;
+
+      const { data: reservationsByContactPhone, error: reservationsByContactPhoneError } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('contact_phone', normalizedGuestPhone)
+        .order('start_date', { ascending: false })
+        .limit(300);
+      if (reservationsByContactPhoneError) throw reservationsByContactPhoneError;
+
+      pushMatchedReservations(reservationsByGuestPhone || []);
+      pushMatchedReservations(reservationsByContactPhone || []);
+    }
+
+    const matchedReservations = Array.from(matchedReservationsById.values()).filter((reservation: any) => {
       if (reservationId && reservationTokenMatches(reservation, reservationId)) return true;
 
-      const reservationGuestId = String(reservation?.guest_id || '');
+      const reservationGuestId = String(reservation?.guest_id || '').trim();
       const reservationEmails = [reservation?.guest_email, reservation?.contact_email]
         .map((value: any) => String(value || '').trim().toLowerCase())
         .filter(Boolean);
@@ -1248,7 +1327,7 @@ async function handleGetEmailGuestContext(
       if (reservationGuestId && guestIdSet.has(reservationGuestId)) return true;
       if (normalizedEmail && reservationEmails.includes(normalizedEmail)) return true;
       if (normalizedGuestPhone && reservationPhones.includes(normalizedGuestPhone)) return true;
-      return false;
+      return Boolean(matchedReservationById && String(reservation?.id || '').trim() === String(matchedReservationById?.id || '').trim());
     });
 
     if (matchedReservationById) {
