@@ -1713,22 +1713,27 @@ export default function CommunicationHubPage() {
     return null;
   }, [conversationHistoryByKey, getConversationKey, guestReservations]);
 
-  const openGuestInfoFromEmail = useCallback(async (email: Email) => {
-    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
+  const openGuestInfoFromEmail = useCallback((email: Email) => {
+    // Never block modal opening on read-mark network calls.
+    void handleSelectEmail(email, 'all', { markReadOnOpen: true });
 
-    const source = String((email as any)?.source || '').trim().toLowerCase();
-    const sourceEmail = String(email?.from?.email || '').trim().toLowerCase();
-    const hasRealEmail = !!sourceEmail && !sourceEmail.endsWith('@guest-portal.local');
-    const hasPhone = !!String(selectedThreadContactPhone || '').trim();
+    try {
+      const source = String((email as any)?.source || '').trim().toLowerCase();
+      const sourceEmail = String(email?.from?.email || '').trim().toLowerCase();
+      const hasRealEmail = !!sourceEmail && !sourceEmail.endsWith('@guest-portal.local');
+      const hasPhone = !!String(selectedThreadContactPhone || '').trim();
 
-    if (source === 'guest_portal' && !hasRealEmail && !hasPhone) {
-      const reservation = resolveGuestPortalReservation(email);
-      if (reservation) {
-        setSelectedReservationForDetails(reservation);
-        setIsReservationDetailsOpen(true);
-        setIsGuestInfoPanelOpen(false);
-        return;
+      if (source === 'guest_portal' && !hasRealEmail && !hasPhone) {
+        const reservation = resolveGuestPortalReservation(email);
+        if (reservation) {
+          setSelectedReservationForDetails(reservation);
+          setIsReservationDetailsOpen(true);
+          setIsGuestInfoPanelOpen(false);
+          return;
+        }
       }
+    } catch (error) {
+      console.warn('Failed to resolve guest info target modal:', error);
     }
 
     setSelectedReservationForDetails(null);
@@ -2100,7 +2105,7 @@ export default function CommunicationHubPage() {
                                 <span className="text-[11px] font-medium text-slate-400">{formattedDate}</span>
                                 {!isBulkMode && (
                                   <div className="flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (event) => { event.preventDefault(); event.stopPropagation(); await openGuestInfoFromEmail(email); }} title="Guest info">
+                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openGuestInfoFromEmail(email); }} title="Guest info">
                                       <Info className="h-3.5 w-3.5" />
                                     </Button>
                                     <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={(event) => { event.preventDefault(); event.stopPropagation(); handleTogglePin(conversation.key); }} title={pinned ? 'Unpin' : 'Pin'}>
@@ -2224,9 +2229,9 @@ export default function CommunicationHubPage() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8 bg-white"
-                    onClick={async () => {
+                    onClick={() => {
                       if (!selectedEmail) return;
-                      await openGuestInfoFromEmail(selectedEmail);
+                      openGuestInfoFromEmail(selectedEmail);
                     }}
                     title="Guest info"
                   >
