@@ -35,12 +35,6 @@ type GuestContextPayload = {
     room?: string | null;
     outstandingBalance?: number | null;
   }>;
-  trace?: {
-    request?: Record<string, boolean>;
-    lookup?: Record<string, boolean>;
-    match?: Record<string, number>;
-    result?: Record<string, boolean>;
-  };
 };
 
 type UnifiedMessage = {
@@ -155,7 +149,6 @@ export default function EmailDetailView({
 
   const [guestContext, setGuestContext] = useState<GuestContextPayload | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState(false);
-  const loggedGuestContextTraceKeys = React.useRef<Set<string>>(new Set());
 
   const orderedHistory = useMemo(() => {
     const source = Array.isArray(conversationHistory) && conversationHistory.length > 0
@@ -200,15 +193,10 @@ export default function EmailDetailView({
 
   const contactLine = useMemo(() => {
     if (threadPrimarySource === 'guest_portal') {
-      const preferredReservation = (guestContext?.reservations || []).find((reservation) =>
-        Boolean(String(reservation?.reservationNumber || '').trim())
-      ) || guestContext?.reservations?.[0];
-      const reservationNumber = String(preferredReservation?.reservationNumber || '').trim();
-      if (reservationNumber) return `Res. N° ${reservationNumber}`;
-      return 'Res. N° -';
+      return '';
     }
     return recipientEmail || 'Unknown contact';
-  }, [guestContext?.reservations, recipientEmail, threadPrimarySource]);
+  }, [recipientEmail, threadPrimarySource]);
 
   const recipientPhone = useMemo(() => {
     return normalizePhone(guestContext?.guest?.phone || initialContactPhone || '');
@@ -244,18 +232,6 @@ export default function EmailDetailView({
     for (let i = threadMessages.length - 1; i >= 0; i -= 1) {
       const item = threadMessages[i] as any;
       const id = String(item?.sourceReservationId || item?.source_reservation_id || '').trim();
-      if (id) return id;
-    }
-    return '';
-  }, [email, threadMessages]);
-
-  const sourceMessageIdFromThread = useMemo(() => {
-    const fromSelected = String((email as any).sourceMessageId || (email as any).source_message_id || '').trim();
-    if (fromSelected) return fromSelected;
-
-    for (let i = threadMessages.length - 1; i >= 0; i -= 1) {
-      const item = threadMessages[i] as any;
-      const id = String(item?.sourceMessageId || item?.source_message_id || '').trim();
       if (id) return id;
     }
     return '';
@@ -529,29 +505,9 @@ export default function EmailDetailView({
           lookupEmail,
           email.id,
           undefined,
-          sourceReservationIdFromThread || undefined,
-          sourceConversationIdFromThread || undefined,
-          sourceMessageIdFromThread || undefined
+          sourceReservationIdFromThread || undefined
         );
-        const context = result?.context ? { ...result.context, trace: result?.trace } : null;
-        if (threadPrimarySource === 'guest_portal') {
-          const hasReservationNumber = Boolean(
-            (context?.reservations || []).some((reservation) => Boolean(String(reservation?.reservationNumber || '').trim()))
-          );
-          if (!hasReservationNumber && result?.trace) {
-            const traceKey = [
-              String(email.id || ''),
-              String(sourceReservationIdFromThread || ''),
-              String(sourceConversationIdFromThread || ''),
-              String(sourceMessageIdFromThread || ''),
-            ].join('|');
-
-            if (!loggedGuestContextTraceKeys.current.has(traceKey)) {
-              loggedGuestContextTraceKeys.current.add(traceKey);
-              console.info(`Guest context trace (sanitized, key=${traceKey}):\n${JSON.stringify(result.trace, null, 2)}`);
-            }
-          }
-        }
+        const context = result?.context || null;
         setGuestContext(context);
       } catch (error) {
         console.warn('Failed to load guest context', error);
@@ -562,7 +518,7 @@ export default function EmailDetailView({
     };
 
     loadGuestContext();
-  }, [email.id, email.from?.email, latestIncoming, sourceConversationIdFromThread, sourceMessageIdFromThread, sourceReservationIdFromThread, threadPrimarySource, user?.propertyId]);
+  }, [email.id, email.from?.email, latestIncoming, sourceReservationIdFromThread, user?.propertyId]);
 
   useEffect(() => {
     const loadChannelHistory = async () => {
@@ -707,7 +663,7 @@ export default function EmailDetailView({
               </Button>
               <div className="min-w-0">
                 <h2 className="truncate text-base font-semibold text-slate-900">{guestDisplayName}</h2>
-                <p className="truncate text-xs text-slate-500">{contactLine}</p>
+                {contactLine ? <p className="truncate text-xs text-slate-500">{contactLine}</p> : null}
               </div>
             </div>
           </div>
