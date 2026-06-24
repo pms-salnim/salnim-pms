@@ -524,6 +524,48 @@ export default function EmailDetailView({
     loadChannelHistory();
   }, [guestContext, recipientPhone, user?.propertyId]);
 
+  useEffect(() => {
+    if (!user?.propertyId) return;
+
+    const hasGuestPortalContext =
+      threadPrimarySource === 'guest_portal' ||
+      Boolean(
+        sourceConversationIdFromThread ||
+        guestPortalConversationId ||
+        sourceReservationIdFromThread ||
+        guestContext?.reservations?.[0]?.id
+      );
+
+    if (!hasGuestPortalContext) return;
+
+    let disposed = false;
+
+    const pollGuestPortalHistory = async () => {
+      try {
+        await loadGuestPortalHistory(user.propertyId!);
+      } catch (error) {
+        if (!disposed) {
+          console.warn('Failed to poll guest portal history', error);
+        }
+      }
+    };
+
+    pollGuestPortalHistory();
+    const interval = window.setInterval(pollGuestPortalHistory, 3500);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [
+    user?.propertyId,
+    guestContext?.reservations,
+    guestPortalConversationId,
+    sourceConversationIdFromThread,
+    sourceReservationIdFromThread,
+    threadPrimarySource,
+  ]);
+
   const mappedEmailMessages = useMemo<UnifiedMessage[]>(() => {
     return threadMessages
       .filter((message) => normalizeMessageSource(message) === 'email')
