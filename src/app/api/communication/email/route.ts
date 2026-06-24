@@ -211,6 +211,8 @@ function dedupeEmailsByUid<T extends { uid?: number | null; id?: string; date_ms
 
 const normalizeText = (value: any): string => String(value || '').trim();
 const isUuid = (value: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+const normalizeToken = (value: any): string => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const normalizeName = (value: any): string => String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 async function resolveThreadEmailIds(
   propertyId: string,
@@ -1103,6 +1105,8 @@ async function handleGetEmailGuestContext(
         usedAliasToReservationFallback: false,
         usedAliasToConversationFallback: false,
         matchedReservationById: false,
+        usedReservationTokenLooseFallback: false,
+        usedConversationGuestNameFallback: false,
       },
       match: {
         matchingGuestsCount: 0,
@@ -1261,6 +1265,67 @@ async function handleGetEmailGuestContext(
           guestPhone = String(matchedReservationById.guest_phone || matchedReservationById.contact_phone || '').trim();
         }
       }
+
+      if (!matchedReservationById) {
+        const reservationToken = normalizeToken(reservationId);
+        if (reservationToken) {
+          const { data: candidateReservations, error: candidateReservationsError } = await supabase
+            .from('reservations')
+            .select('id, reservation_number, guest_name, guest_email, contact_email, guest_phone, contact_phone, start_date, end_date')
+            .eq('property_id', propertyId)
+            .order('start_date', { ascending: false })
+            .limit(1000);
+
+          if (candidateReservationsError) throw candidateReservationsError;
+
+          const looseReservationMatch = (candidateReservations || []).find((reservation: any) => {
+            const candidateTokens = [reservation?.id, reservation?.reservation_number]
+              .map((value: any) => normalizeToken(value))
+              .filter(Boolean);
+
+            return candidateTokens.some((candidateToken: string) => {
+              if (candidateToken === reservationToken) return true;
+              if (reservationToken.length >= 6 && candidateToken.includes(reservationToken)) return true;
+              if (candidateToken.length >= 6 && reservationToken.includes(candidateToken)) return true;
+              return false;
+            });
+          });
+
+          if (looseReservationMatch) {
+            matchedReservationById = looseReservationMatch;
+            trace.lookup.matchedReservationById = true;
+            trace.lookup.usedReservationTokenLooseFallback = true;
+          }
+        }
+      }
+    }
+
+    if (!matchedReservationById && conversationGuestName) {
+      const { data: reservationsByGuestName, error: reservationsByGuestNameError } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('property_id', propertyId)
+        .ilike('guest_name', conversationGuestName)
+        .order('start_date', { ascending: false })
+        .limit(50);
+
+      if (reservationsByGuestNameError) throw reservationsByGuestNameError;
+
+      const normalizedConversationGuestName = normalizeName(conversationGuestName);
+      const exactNameMatch = (reservationsByGuestName || []).find(
+        (reservation: any) => normalizeName(reservation?.guest_name) === normalizedConversationGuestName
+      );
+      const selectedByName = exactNameMatch || (reservationsByGuestName || [])[0] || null;
+
+      if (selectedByName) {
+        matchedReservationById = selectedByName;
+        trace.lookup.matchedReservationById = true;
+        trace.lookup.usedConversationGuestNameFallback = true;
+      }
+    }
+
+    if (matchedReservationById && !reservationId) {
+      reservationId = String(matchedReservationById.id || '').trim() || String(matchedReservationById.reservation_number || '').trim();
     }
 
     const { data: guestRows, error: guestRowsError } = await supabase
