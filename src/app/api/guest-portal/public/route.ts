@@ -14,6 +14,15 @@ const supabase = createClient(
 
 type JsonRecord = Record<string, any>;
 
+function isMissingSlugColumnError(error: any): boolean {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("column") &&
+    message.includes("slug") &&
+    (message.includes("does not exist") || message.includes("could not find"))
+  );
+}
+
 function normalizeSlug(value: string): string {
   return String(value || "")
     .trim()
@@ -188,13 +197,16 @@ async function getPropertyBySlug(propertySlug: string) {
     .limit(1)
     .maybeSingle();
 
-  if (direct.error) throw direct.error;
+  const slugColumnMissing = !!direct.error && isMissingSlugColumnError(direct.error);
+  if (direct.error && !slugColumnMissing) throw direct.error;
   if (direct.data) return direct.data;
 
   // Backward-compatible fallback: derive slug from property name.
-  const { data: candidates, error } = await supabase
-    .from("properties")
-    .select("id,name,slug");
+  const candidatesQuery = slugColumnMissing
+    ? supabase.from("properties").select("id,name")
+    : supabase.from("properties").select("id,name,slug");
+
+  const { data: candidates, error } = await candidatesQuery;
 
   if (error) throw error;
 
