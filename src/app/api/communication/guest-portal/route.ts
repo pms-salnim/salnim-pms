@@ -443,6 +443,7 @@ async function handleSendMessage(
         last_message_sender_type: 'property',
         last_message_sender_name: 'Property Staff',
         last_message_timestamp: new Date().toISOString(),
+        guest_unread_count: (conversation.guest_unread_count || 0) + 1,
         updated_at: new Date().toISOString(),
       })
       .eq('id', conversationId);
@@ -564,6 +565,8 @@ async function handleStartConversation(
         last_message_sender_type: 'property',
         last_message_sender_name: 'Property Staff',
         last_message_timestamp: new Date().toISOString(),
+        guest_unread_count: (conversation.guest_unread_count || 0) + 1,
+        updated_at: new Date().toISOString(),
       })
       .eq('id', conversation.id);
 
