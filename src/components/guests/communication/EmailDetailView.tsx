@@ -193,7 +193,10 @@ export default function EmailDetailView({
 
   const contactLine = useMemo(() => {
     if (threadPrimarySource === 'guest_portal') {
-      const reservationNumber = String(guestContext?.reservations?.[0]?.reservationNumber || '').trim();
+      const preferredReservation = (guestContext?.reservations || []).find((reservation) =>
+        Boolean(String(reservation?.reservationNumber || '').trim())
+      ) || guestContext?.reservations?.[0];
+      const reservationNumber = String(preferredReservation?.reservationNumber || '').trim();
       if (reservationNumber) return `Res. N° ${reservationNumber}`;
       return 'Res. N° -';
     }

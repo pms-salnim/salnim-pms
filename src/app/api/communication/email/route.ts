@@ -1290,9 +1290,12 @@ async function handleGetEmailGuestContext(
       );
     });
 
+    const preferredReservationToken = String(reservationId || matchedReservationById?.id || '').trim();
+
     const reservations = matchedReservations
       .map((reservation: any) => {
         const reservationId = String(reservation?.id || '');
+        const reservationNumber = String(reservation?.reservation_number || reservation?.reservationNumber || '').trim() || null;
         const totalPrice = Number(reservation?.total_price ?? reservation?.net_amount ?? NaN);
         const paidAmount = paidAmountByReservationId.get(reservationId) || 0;
         const outstandingBalance = Number.isFinite(totalPrice)
@@ -1307,7 +1310,7 @@ async function handleGetEmailGuestContext(
 
         return {
           id: reservationId,
-          reservationNumber: reservation?.reservation_number || reservation?.reservationNumber || null,
+          reservationNumber,
           status: reservation?.status || 'Unknown',
           arrival: reservation?.start_date || null,
           departure: reservation?.end_date || null,
@@ -1316,6 +1319,16 @@ async function handleGetEmailGuestContext(
         };
       })
       .sort((a: any, b: any) => {
+        const aIsPreferred = preferredReservationToken && (a?.id === preferredReservationToken || a?.reservationNumber === preferredReservationToken);
+        const bIsPreferred = preferredReservationToken && (b?.id === preferredReservationToken || b?.reservationNumber === preferredReservationToken);
+        if (aIsPreferred && !bIsPreferred) return -1;
+        if (bIsPreferred && !aIsPreferred) return 1;
+
+        const aHasReservationNumber = Boolean(String(a?.reservationNumber || '').trim());
+        const bHasReservationNumber = Boolean(String(b?.reservationNumber || '').trim());
+        if (aHasReservationNumber && !bHasReservationNumber) return -1;
+        if (bHasReservationNumber && !aHasReservationNumber) return 1;
+
         const aStart = new Date(a?.arrival || 0).getTime();
         const bStart = new Date(b?.arrival || 0).getTime();
         return bStart - aStart;
