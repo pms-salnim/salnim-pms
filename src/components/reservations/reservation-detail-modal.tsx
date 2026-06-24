@@ -1774,7 +1774,7 @@ export default function ReservationDetailModal({ isOpen, onClose, initialData, p
     }
   };
 
-  const handlePrintReceipt = useCallback((payment: any) => {
+  const handlePrintReceipt = (payment: any) => {
     // Create print HTML for payment receipt
     const receiptContent = `
       <!DOCTYPE html>
@@ -1946,7 +1946,7 @@ export default function ReservationDetailModal({ isOpen, onClose, initialData, p
         printWindow.print();
       }, 250);
     }
-  }, [reservation, propertySettings, currencySymbol]);
+  };
 
   const handleSavePayment = async (paymentData: any) => {
     if (!reservation || !reservation.propertyId) {
