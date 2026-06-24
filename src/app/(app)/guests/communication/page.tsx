@@ -956,6 +956,28 @@ export default function CommunicationHubPage() {
     window.localStorage.setItem(`${threadStoragePrefix}:starred`, JSON.stringify(starredConversationKeys));
   }, [starredConversationKeys, threadStoragePrefix]);
 
+  useEffect(() => {
+    setTrashedConversationKeys((prev) => {
+      const next = prev.filter((conversationKey) => {
+        const messages = conversationHistoryByKey.get(conversationKey) || [];
+        if (messages.length === 0) return true;
+        return messages.every((message) => !!(message as any).trash);
+      });
+      return next.length === prev.length ? prev : next;
+    });
+
+    setArchivedConversationKeys((prev) => {
+      const next = prev.filter((conversationKey) => {
+        const messages = conversationHistoryByKey.get(conversationKey) || [];
+        if (messages.length === 0) return true;
+        const isTrashed = messages.every((message) => !!(message as any).trash);
+        if (isTrashed) return false;
+        return messages.every((message) => !!message.archived);
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [conversationHistoryByKey]);
+
   const getThreadMessageRefs = useCallback((conversationKey: string) => {
     const threadMessages = conversationHistoryByKey.get(conversationKey) || [];
     const emailIds = Array.from(

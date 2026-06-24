@@ -734,6 +734,7 @@ export async function POST(req: NextRequest) {
           last_message_sender_type: "guest",
           last_message_sender_name: reservationRow.guest_name || "Guest",
           last_message_timestamp: new Date().toISOString(),
+          is_active: true,
           unread_count: (conversation.unread_count || 0) + 1,
           updated_at: new Date().toISOString(),
         })
@@ -830,6 +831,7 @@ export async function POST(req: NextRequest) {
           last_message_sender_type: "guest",
           last_message_sender_name: reservationRow.guest_name || "Guest",
           last_message_timestamp: new Date().toISOString(),
+          is_active: true,
           unread_count: (conversation.unread_count || 0) + 1,
           updated_at: new Date().toISOString(),
         })
