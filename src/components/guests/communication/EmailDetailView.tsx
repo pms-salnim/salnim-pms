@@ -103,6 +103,14 @@ const isSentMessage = (message: Email) => {
   if (source === 'guest_portal') {
     const senderType = String((message as any).sourceSenderType || (message as any).source_sender_type || '').trim().toLowerCase();
     if (senderType) return senderType === 'property';
+
+    // Legacy mirrored guest-portal rows may miss sender_type metadata.
+    // Use unread as a pragmatic signal: inbound guest messages are unread,
+    // while property-origin rows are persisted as read.
+    if (Boolean((message as any).unread)) return false;
+
+    const fromEmail = String(message.from?.email || '').trim().toLowerCase();
+    if (fromEmail.includes('@guest-portal.local')) return false;
   }
   return !message.uid || Number(message.uid) <= 0;
 };
@@ -181,7 +189,12 @@ export default function EmailDetailView({
 
   const threadPrimarySource = useMemo<'email' | 'whatsapp' | 'guest_portal' | 'sms'>(() => {
     const latest = latestIncoming || email;
-    return normalizeMessageSource(latest as any);
+    const normalized = normalizeMessageSource(latest as any);
+    if (normalized === 'email') {
+      const fromEmail = String((latest as any)?.from?.email || '').trim().toLowerCase();
+      if (fromEmail.includes('@guest-portal.local')) return 'guest_portal';
+    }
+    return normalized;
   }, [latestIncoming, email]);
 
   const contactLine = useMemo(() => {
