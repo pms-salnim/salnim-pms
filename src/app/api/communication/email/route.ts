@@ -662,8 +662,27 @@ async function handleSyncEmails(
       throw storedError;
     }
 
-    return dedupeEmailsByUid(storedEmails || [])
+    const deduped = dedupeEmailsByUid(storedEmails || [])
       .sort((a: any, b: any) => Number(b?.date_ms || 0) - Number(a?.date_ms || 0));
+
+    const sourceStats = deduped.reduce((acc: Record<string, number>, row: any) => {
+      const key = normalizeText(row?.source).toLowerCase() || 'email';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    console.info('[CommunicationSync][stored-emails]', {
+      propertyId,
+      total: deduped.length,
+      sourceStats,
+      sampleGuestPortalConversationIds: deduped
+        .filter((row: any) => normalizeText(row?.source).toLowerCase() === 'guest_portal')
+        .slice(0, 5)
+        .map((row: any) => normalizeText(row?.source_conversation_id))
+        .filter(Boolean),
+    });
+
+    return deduped;
   };
 
   try {

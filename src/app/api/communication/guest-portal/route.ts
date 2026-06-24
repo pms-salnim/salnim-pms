@@ -75,6 +75,17 @@ async function mirrorGuestPortalMessageToInbox(params: {
     const dateMs = new Date(createdAt).getTime();
     const emailId = `gp-${String(messageRow.id || `${threadIdentity}-${createdAt}`)}`;
     const hasAttachments = Array.isArray(params.attachments) && params.attachments.length > 0;
+    const traceId = `gp-mirror:${String(conversation.id || messageRow.conversation_id || 'unknown')}:${String(messageRow.id || 'unknown')}`;
+
+    console.info('[GuestPortalMirror][start]', {
+      traceId,
+      propertyId: conversation.property_id,
+      conversationId: String(conversation.id || messageRow.conversation_id || ''),
+      reservationId: String(conversation.reservation_id || ''),
+      senderType,
+      emailId,
+      hasAttachments,
+    });
 
     await supabase
       .from('property_emails')
@@ -88,41 +99,56 @@ async function mirrorGuestPortalMessageToInbox(params: {
       .eq('source', 'guest_portal')
       .eq('source_conversation_id', String(conversation.id || messageRow.conversation_id || ''));
 
-    const { error: emailError } = await supabase
+    const emailPayload: any = {
+      id: emailId,
+      property_id: conversation.property_id,
+      uid: null,
+      from_name: guestName,
+      from_email: threadEmail,
+      subject: `Guest Portal • ${guestName}`,
+      date: createdAt,
+      date_ms: Number.isFinite(dateMs) ? dateMs : Date.now(),
+      snippet: bodyText.slice(0, 150),
+      body_text: bodyText,
+      body_html: '',
+      is_unread: senderType === 'guest',
+      is_starred: false,
+      is_archived: false,
+      is_spam: false,
+      is_trash: false,
+      has_attachments: hasAttachments,
+      source: 'guest_portal',
+      source_sender_type: senderType,
+      source_reservation_id: String(conversation.reservation_id || ''),
+      source_conversation_id: String(conversation.id || messageRow.conversation_id || ''),
+      source_message_id: String(messageRow.id || ''),
+      updated_at: new Date().toISOString(),
+    };
+
+    let { error: emailError } = await supabase
       .from('property_emails')
-      .upsert(
-        {
-          id: emailId,
-          property_id: conversation.property_id,
-          uid: null,
-          from_name: guestName,
-          from_email: threadEmail,
-          subject: `Guest Portal • ${guestName}`,
-          date: createdAt,
-          date_ms: Number.isFinite(dateMs) ? dateMs : Date.now(),
-          snippet: bodyText.slice(0, 150),
-          body_text: bodyText,
-          body_html: '',
-          is_unread: senderType === 'guest',
-          is_starred: false,
-          is_archived: false,
-          is_spam: false,
-          is_trash: false,
-          has_attachments: hasAttachments,
-          source: 'guest_portal',
-          source_sender_type: senderType,
-          source_reservation_id: String(conversation.reservation_id || ''),
-          source_conversation_id: String(conversation.id || messageRow.conversation_id || ''),
-          source_message_id: String(messageRow.id || ''),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      );
+      .upsert(emailPayload, { onConflict: 'id' });
+
+    const isMissingReservationColumn = String((emailError as any)?.message || '').toLowerCase().includes('source_reservation_id');
+    if (emailError && isMissingReservationColumn) {
+      console.warn('[GuestPortalMirror][fallback-without-source-reservation-id]', {
+        traceId,
+        reason: (emailError as any)?.message,
+      });
+
+      const { source_reservation_id: _dropped, ...fallbackPayload } = emailPayload;
+      const retry = await supabase
+        .from('property_emails')
+        .upsert(fallbackPayload, { onConflict: 'id' });
+      emailError = retry.error;
+    }
 
     if (emailError) {
-      console.warn('Failed to mirror guest portal message to inbox email row', emailError);
+      console.warn('[GuestPortalMirror][failed]', { traceId, error: emailError });
       return;
     }
+
+    console.info('[GuestPortalMirror][upserted]', { traceId, emailId });
 
     if (hasAttachments) {
       await supabase.from('email_attachments').delete().eq('email_id', emailId);
@@ -139,7 +165,7 @@ async function mirrorGuestPortalMessageToInbox(params: {
           .insert(rows);
 
         if (attachmentError) {
-          console.warn('Failed to mirror guest portal attachments to inbox', attachmentError);
+          console.warn('[GuestPortalMirror][attachment-failed]', { traceId, error: attachmentError });
         }
       }
     }
