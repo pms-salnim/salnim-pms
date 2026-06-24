@@ -225,6 +225,16 @@ export default function NewConversationDialog({ open, onOpenChange, propertyId, 
   };
 
   const escapedQuery = useMemo(() => searchQuery.trim().replace(/%/g, ''), [searchQuery]);
+  const hasActiveSearch = escapedQuery.length >= 2;
+  const reservationResults = useMemo(
+    () => results.filter((result) => result.type === 'reservation'),
+    [results]
+  );
+  const guestResults = useMemo(
+    () => results.filter((result) => result.type === 'guest'),
+    [results]
+  );
+  const totalResults = results.length;
 
   useEffect(() => {
     setIsQueryEmpty(escapedQuery.length === 0);
@@ -274,197 +284,261 @@ export default function NewConversationDialog({ open, onOpenChange, propertyId, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-3xl border-slate-200 bg-slate-50 p-0">
         <DialogHeader>
-          <DialogTitle>Start new conversation</DialogTitle>
-          <DialogDescription>
-            Search guests, reservation names, or reservation IDs. Select a contact, then choose channel.
-          </DialogDescription>
+          <div className="border-b border-slate-200 bg-white px-6 py-5">
+            <DialogTitle className="text-xl text-slate-900">Start new conversation</DialogTitle>
+            <DialogDescription className="mt-1 text-sm text-slate-500">
+              Search guests, reservation names, or reservation IDs. Select a contact, then choose channel.
+            </DialogDescription>
+          </div>
         </DialogHeader>
 
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search guest name, reservation name, reservation ID..."
-              className="pl-10"
-            />
-          </div>
-          <Button
-            type="button"
-            variant={showManualStarter ? 'default' : 'outline'}
-            size="icon"
-            className="h-10 w-10"
-            onClick={() => setShowManualStarter((value) => !value)}
-            title="Add new contact"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {showManualStarter && (
-          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">New contact</p>
-              <Badge variant="outline" className="h-5 px-2 text-[10px]">No existing guest needed</Badge>
-            </div>
-
-            <Input
-              value={manualGuestName}
-              onChange={(event) => setManualGuestName(event.target.value)}
-              placeholder="Guest name (optional)"
-            />
-
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {CHANNELS.map((channel) => (
-                <Button
-                  key={channel.key}
-                  type="button"
-                  variant={manualChannel === channel.key ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 text-xs"
-                  onClick={() => setManualChannel(channel.key)}
-                  disabled={channel.key === 'guest_portal'}
-                  title={channel.key === 'guest_portal' ? 'Guest portal needs an existing reservation' : undefined}
-                >
-                  {channel.label}
-                </Button>
-              ))}
-            </div>
-
-            {manualChannel === 'email' && (
+        <div className="space-y-3 px-6 pb-5 pt-4">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
-                value={manualEmail}
-                onChange={(event) => setManualEmail(event.target.value)}
-                placeholder="Email address"
-                type="email"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search guest name, reservation name, reservation ID..."
+                className="h-11 rounded-xl border-slate-300 bg-white pl-10 shadow-sm"
               />
-            )}
-
-            {(manualChannel === 'whatsapp' || manualChannel === 'sms') && (
-              <Input
-                value={manualPhone}
-                onChange={(event) => setManualPhone(event.target.value)}
-                placeholder={manualChannel === 'whatsapp' ? 'WhatsApp number' : 'Phone number'}
-              />
-            )}
-
-            {manualChannel === 'guest_portal' && (
-              <p className="text-xs text-slate-500">Use search results for guest portal, since it requires an existing reservation.</p>
-            )}
-
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleManualStart}
-                disabled={
-                  (manualChannel === 'email' && !manualEmail.trim()) ||
-                  ((manualChannel === 'whatsapp' || manualChannel === 'sms') && !manualPhone.trim()) ||
-                  manualChannel === 'guest_portal'
-                }
-              >
-                Start conversation
-              </Button>
             </div>
+            <Button
+              type="button"
+              variant={showManualStarter ? 'default' : 'outline'}
+              size="icon"
+              className="h-11 w-11 rounded-xl"
+              onClick={() => setShowManualStarter((value) => !value)}
+              title="Add new contact"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
-        )}
 
-        <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
-          {isLoadingRecent && !searchQuery.trim() && (
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading recent guests and reservations...
-            </div>
-          )}
+          <div className="flex items-center justify-between px-1 text-xs text-slate-500">
+            <span>
+              {hasActiveSearch
+                ? `${totalResults} match${totalResults === 1 ? '' : 'es'} found`
+                : 'Showing recent guests and reservations'}
+            </span>
+            <span>{showManualStarter ? 'Manual contact enabled' : 'Select a result to choose channel'}</span>
+          </div>
 
-          {isSearching && (
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Searching...
-            </div>
-          )}
-
-          {!isSearching && !isLoadingRecent && searchQuery.trim().length >= 2 && results.length === 0 && (
-            <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-              No matches found for "{searchQuery.trim()}".
-            </div>
-          )}
-
-          {!isSearching && !isLoadingRecent && isQueryEmpty && results.length === 0 && (
-            <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-              No recent guests or reservations found.
-            </div>
-          )}
-
-          {results.length > 0 && (
-            <>
-              {isQueryEmpty && (
-                <div className="px-1 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Recent Guests & Reservations
-                </div>
-              )}
-            </>
-          )}
-
-          {results.map((result) => {
-            const isSelected = selectedResultId === result.id;
-            return (
-              <div
-                key={result.id}
-                className={cn(
-                  'rounded-lg border border-slate-200 p-3 transition-colors',
-                  isSelected ? 'bg-slate-50' : 'bg-white hover:bg-slate-50/70'
-                )}
-              >
-                <button
-                  type="button"
-                  className="w-full text-left"
-                  onClick={() => setSelectedResultId(result.id)}
-                >
-                  <div className="mb-1 flex items-center gap-2">
-                    {result.type === 'reservation' ? (
-                      <CalendarClock className="h-4 w-4 text-blue-500" />
-                    ) : (
-                      <User className="h-4 w-4 text-slate-500" />
-                    )}
-                    <span className="text-sm font-semibold text-slate-800">{result.guestName}</span>
-                    <Badge variant="outline" className="h-5 px-2 text-[10px]">
-                      {result.type === 'reservation' ? 'Reservation' : 'Guest'}
-                    </Badge>
-                    {result.reservationNumber && (
-                      <Badge variant="outline" className="h-5 px-2 text-[10px]">
-                        {result.reservationNumber}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="space-y-0.5 text-xs text-slate-500">
-                    <p>{result.email || '-'}</p>
-                    <p>{result.phone || '-'}</p>
-                    {result.reservationId && <p>ID: {result.reservationId}</p>}
-                  </div>
-                </button>
-
-                {isSelected && (
-                  <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
-                    {CHANNELS.map((channel) => (
-                      <Button
-                        key={channel.key}
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => onStartConversation(result, channel.key)}
-                      >
-                        {channel.label}
-                      </Button>
-                    ))}
-                  </div>
-                )}
+          {showManualStarter && (
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">New contact</p>
+                <Badge variant="outline" className="h-5 px-2 text-[10px]">No existing guest needed</Badge>
               </div>
-            );
-          })}
+
+              <Input
+                value={manualGuestName}
+                onChange={(event) => setManualGuestName(event.target.value)}
+                placeholder="Guest name (optional)"
+              />
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {CHANNELS.map((channel) => (
+                  <Button
+                    key={channel.key}
+                    type="button"
+                    variant={manualChannel === channel.key ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => setManualChannel(channel.key)}
+                    disabled={channel.key === 'guest_portal'}
+                    title={channel.key === 'guest_portal' ? 'Guest portal needs an existing reservation' : undefined}
+                  >
+                    {channel.label}
+                  </Button>
+                ))}
+              </div>
+
+              {manualChannel === 'email' && (
+                <Input
+                  value={manualEmail}
+                  onChange={(event) => setManualEmail(event.target.value)}
+                  placeholder="Email address"
+                  type="email"
+                />
+              )}
+
+              {(manualChannel === 'whatsapp' || manualChannel === 'sms') && (
+                <Input
+                  value={manualPhone}
+                  onChange={(event) => setManualPhone(event.target.value)}
+                  placeholder={manualChannel === 'whatsapp' ? 'WhatsApp number' : 'Phone number'}
+                />
+              )}
+
+              {manualChannel === 'guest_portal' && (
+                <p className="text-xs text-slate-500">Use search results for guest portal, since it requires an existing reservation.</p>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleManualStart}
+                  disabled={
+                    (manualChannel === 'email' && !manualEmail.trim()) ||
+                    ((manualChannel === 'whatsapp' || manualChannel === 'sms') && !manualPhone.trim()) ||
+                    manualChannel === 'guest_portal'
+                  }
+                >
+                  Start conversation
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="max-h-[430px] space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 pr-2">
+            {isLoadingRecent && !searchQuery.trim() && (
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading recent guests and reservations...
+              </div>
+            )}
+
+            {isSearching && (
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Searching...
+              </div>
+            )}
+
+            {!isSearching && !isLoadingRecent && searchQuery.trim().length >= 2 && results.length === 0 && (
+              <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                No matches found for "{searchQuery.trim()}".
+              </div>
+            )}
+
+            {!isSearching && !isLoadingRecent && isQueryEmpty && results.length === 0 && (
+              <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                No recent guests or reservations found.
+              </div>
+            )}
+
+            {results.length > 0 && isQueryEmpty && (
+              <div className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Recent Guests & Reservations
+              </div>
+            )}
+
+            {reservationResults.length > 0 && (
+              <div className="space-y-2">
+                <div className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reservations</div>
+                {reservationResults.map((result) => {
+                  const isSelected = selectedResultId === result.id;
+                  return (
+                    <div
+                      key={result.id}
+                      className={cn(
+                        'rounded-xl border p-3 transition-all',
+                        isSelected
+                          ? 'border-blue-300 bg-blue-50/50 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70'
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="w-full text-left"
+                        onClick={() => setSelectedResultId(result.id)}
+                      >
+                        <div className="mb-2 flex items-center gap-2">
+                          <CalendarClock className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm font-semibold text-slate-900">{result.guestName}</span>
+                          <Badge variant="outline" className="h-5 border-blue-200 bg-blue-50 px-2 text-[10px] text-blue-700">Reservation</Badge>
+                          {result.reservationNumber && (
+                            <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                              #{result.reservationNumber}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-1 text-xs text-slate-600 sm:grid-cols-2">
+                          <p className="truncate"><span className="text-slate-400">Email:</span> {result.email || 'Not set'}</p>
+                          <p className="truncate"><span className="text-slate-400">Phone:</span> {result.phone || 'Not set'}</p>
+                          <p className="truncate sm:col-span-2"><span className="text-slate-400">Reservation ID:</span> {result.reservationId || 'Not set'}</p>
+                        </div>
+                      </button>
+
+                      {isSelected && (
+                        <div className="mt-3 flex flex-wrap gap-2 border-t border-blue-200 pt-3">
+                          {CHANNELS.map((channel) => (
+                            <Button
+                              key={channel.key}
+                              variant="outline"
+                              size="sm"
+                              className="h-7 rounded-full text-xs"
+                              onClick={() => onStartConversation(result, channel.key)}
+                            >
+                              {channel.label}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {guestResults.length > 0 && (
+              <div className="space-y-2">
+                <div className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Guests</div>
+                {guestResults.map((result) => {
+                  const isSelected = selectedResultId === result.id;
+                  return (
+                    <div
+                      key={result.id}
+                      className={cn(
+                        'rounded-xl border p-3 transition-all',
+                        isSelected
+                          ? 'border-slate-400 bg-slate-50 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70'
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="w-full text-left"
+                        onClick={() => setSelectedResultId(result.id)}
+                      >
+                        <div className="mb-2 flex items-center gap-2">
+                          <User className="h-4 w-4 text-slate-500" />
+                          <span className="text-sm font-semibold text-slate-900">{result.guestName}</span>
+                          <Badge variant="outline" className="h-5 px-2 text-[10px]">Guest</Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-1 text-xs text-slate-600 sm:grid-cols-2">
+                          <p className="truncate"><span className="text-slate-400">Email:</span> {result.email || 'Not set'}</p>
+                          <p className="truncate"><span className="text-slate-400">Phone:</span> {result.phone || 'Not set'}</p>
+                        </div>
+                      </button>
+
+                      {isSelected && (
+                        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
+                          {CHANNELS.map((channel) => (
+                            <Button
+                              key={channel.key}
+                              variant="outline"
+                              size="sm"
+                              className="h-7 rounded-full text-xs"
+                              onClick={() => onStartConversation(result, channel.key)}
+                            >
+                              {channel.label}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
