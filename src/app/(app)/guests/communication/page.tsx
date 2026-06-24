@@ -284,6 +284,12 @@ export default function CommunicationHubPage() {
   };
 
   const getConversationKey = (email: Email) => {
+    const source = String((email as any)?.source || '').trim().toLowerCase();
+    if (source === 'guest_portal') {
+      const sourceConversationId = String((email as any)?.sourceConversationId || (email as any)?.source_conversation_id || '').trim();
+      if (sourceConversationId) return `guest_portal:${sourceConversationId}`;
+    }
+
     const senderEmail = String(email.from?.email || '').trim().toLowerCase();
     if (senderEmail) return `email:${senderEmail}`;
     const senderName = String(email.from?.name || '').trim().toLowerCase();
@@ -452,6 +458,12 @@ export default function CommunicationHubPage() {
   const getLastMessageStatus = (email: Email, isTrashed = false) => (isTrashed ? 'trash' : (isSentEmail(email) ? 'replied' : 'not replied'));
 
   const isSentEmail = useCallback((email: Email) => {
+    const source = String((email as any)?.source || '').trim().toLowerCase();
+    if (source === 'guest_portal') {
+      const senderType = String((email as any)?.sourceSenderType || (email as any)?.source_sender_type || '').trim().toLowerCase();
+      if (senderType) return senderType === 'property';
+    }
+
     // DB-persisted outgoing emails are stored with null uid and are mapped to uid 0 in client state.
     if (!email.uid || Number(email.uid) <= 0) return true;
 
@@ -1219,13 +1231,19 @@ export default function CommunicationHubPage() {
     }
 
     try {
-      const response = await fetch('https://europe-west1-protrack-hub.cloudfunctions.net/guestPortalChat', {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch('/api/communication/guest-portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ 
-          action: 'getConversations', 
+          action: 'listConversations', 
           data: { propertyId: user.propertyId },
-          authToken: await auth.currentUser?.getIdToken()
         })
       });
       
@@ -1234,7 +1252,7 @@ export default function CommunicationHubPage() {
         if (result.conversations) {
           // Calculate total unread count from all conversations
           const totalUnread = result.conversations.reduce((total: number, conv: any) => {
-            return total + (conv.unreadCount || 0);
+            return total + (conv.unreadCount || conv.unread_count || 0);
           }, 0);
           setGuestPortalUnreadCount(totalUnread);
         }

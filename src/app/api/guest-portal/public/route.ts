@@ -151,6 +151,88 @@ function mapMessage(row: JsonRecord) {
   };
 }
 
+async function mirrorGuestPortalMessageToInbox(params: {
+  conversation: JsonRecord;
+  messageRow: JsonRecord;
+  senderType: "guest" | "property";
+  guestName?: string;
+  attachments?: Array<{ file_name: string; content_type: string; file_size: number | null }>;
+}) {
+  try {
+    const conversation = params.conversation || {};
+    const messageRow = params.messageRow || {};
+    const senderType = params.senderType;
+    const guestName = String(
+      params.guestName
+      || conversation.guest_name
+      || messageRow.sender_name
+      || "Guest"
+    ).trim() || "Guest";
+    const threadIdentity = String(conversation.reservation_id || conversation.id || messageRow.conversation_id || messageRow.id || "guest").trim();
+    const threadEmail = `guest-portal+${threadIdentity}@guest-portal.local`;
+    const bodyText = String(messageRow.message || "").trim();
+    const createdAt = String(messageRow.created_at || new Date().toISOString());
+    const dateMs = new Date(createdAt).getTime();
+    const emailId = `gp-${String(messageRow.id || `${threadIdentity}-${createdAt}`)}`;
+    const hasAttachments = Array.isArray(params.attachments) && params.attachments.length > 0;
+
+    const { error: emailError } = await supabase
+      .from("property_emails")
+      .upsert(
+        {
+          id: emailId,
+          property_id: conversation.property_id,
+          uid: null,
+          from_name: guestName,
+          from_email: threadEmail,
+          subject: `Guest Portal • ${guestName}`,
+          date: createdAt,
+          date_ms: Number.isFinite(dateMs) ? dateMs : Date.now(),
+          snippet: bodyText.slice(0, 150),
+          body_text: bodyText,
+          body_html: "",
+          is_unread: senderType === "guest",
+          is_starred: false,
+          is_archived: false,
+          is_spam: false,
+          is_trash: false,
+          has_attachments: hasAttachments,
+          source: "guest_portal",
+          source_sender_type: senderType,
+          source_conversation_id: String(conversation.id || messageRow.conversation_id || ""),
+          source_message_id: String(messageRow.id || ""),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+
+    if (emailError) {
+      console.warn("Failed to mirror guest portal message to inbox email row", emailError);
+      return;
+    }
+
+    if (hasAttachments) {
+      await supabase.from("email_attachments").delete().eq("email_id", emailId);
+      const rows = (params.attachments || []).map((att) => ({
+        email_id: emailId,
+        file_name: att.file_name,
+        content_type: att.content_type,
+        file_size: att.file_size,
+      }));
+      if (rows.length > 0) {
+        const { error: attachmentError } = await supabase
+          .from("email_attachments")
+          .insert(rows);
+        if (attachmentError) {
+          console.warn("Failed to mirror guest portal attachments to inbox", attachmentError);
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Unexpected inbox mirror error for guest portal message", error);
+  }
+}
+
 function normalizeMealPlan(row: JsonRecord) {
   return {
     id: row.id,
@@ -616,6 +698,20 @@ export async function POST(req: NextRequest) {
         if (attachmentError) throw attachmentError;
       }
 
+      await mirrorGuestPortalMessageToInbox({
+        conversation,
+        messageRow,
+        senderType: "guest",
+        guestName: reservationRow.guest_name || "Guest",
+        attachments: fileAttachment && fileAttachment.fileName
+          ? [{
+              file_name: fileAttachment.fileName,
+              content_type: fileAttachment.fileType || "application/octet-stream",
+              file_size: Number(fileAttachment.fileSize || 0) || null,
+            }]
+          : [],
+      });
+
       await supabase
         .from("guest_portal_conversations")
         .update({
@@ -697,6 +793,20 @@ export async function POST(req: NextRequest) {
 
         if (attachmentError) throw attachmentError;
       }
+
+      await mirrorGuestPortalMessageToInbox({
+        conversation,
+        messageRow,
+        senderType: "guest",
+        guestName: reservationRow.guest_name || "Guest",
+        attachments: fileAttachment && fileAttachment.fileName
+          ? [{
+              file_name: fileAttachment.fileName,
+              content_type: fileAttachment.fileType || "application/octet-stream",
+              file_size: Number(fileAttachment.fileSize || 0) || null,
+            }]
+          : [],
+      });
 
       await supabase
         .from("guest_portal_conversations")

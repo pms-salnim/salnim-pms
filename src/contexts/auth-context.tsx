@@ -14,13 +14,14 @@ import i18n from '@/lib/i18n';
 import { createClient } from '@/utils/supabase/client';
 import { emailApi } from '@/lib/communication-api';
 
-// Initialize Supabase client
-const supabase = createClient();
-
 // This type is used across the app, so it's defined here for broader access.
 export interface Email {
   id?: string;
   uid: number;
+  source?: string;
+  sourceSenderType?: string;
+  sourceConversationId?: string;
+  sourceMessageId?: string;
   from: { name: string; email: string };
   subject: string;
   date: string;
@@ -76,6 +77,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const supabase = React.useMemo(() => createClient(), []);
   const [user, setUser] = useState<User | null>(null);
   const [property, setProperty] = useState<Property | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -167,9 +169,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           throw new Error(result?.error || result?.details || result?.message || 'Failed to fetch emails');
         }
 
-        const newEmails: Email[] = result.emails.map((row: any) => ({
+        const newEmails: Email[] = result.emails.map((row: any) => {
+          const normalizedFromEmail = String(row.from_email || '').trim().toLowerCase();
+          const inferredSource = String(row.source || '').trim().toLowerCase()
+            || (normalizedFromEmail.includes('@guest-portal.local') ? 'guest_portal' : 'email');
+
+          return {
           id: row.id ? String(row.id) : undefined,
           uid: Number(row.uid || 0),
+          source: inferredSource,
+          sourceSenderType: row.source_sender_type || undefined,
+          sourceConversationId: row.source_conversation_id || undefined,
+          sourceMessageId: row.source_message_id || undefined,
           from: {
             name: row.from_name || row.from_email || 'Unknown',
             email: row.from_email || 'unknown@example.com',
@@ -191,7 +202,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 size: a.file_size || 0,
               }))
             : [],
-        }));
+          };
+        });
 
         setEmails(newEmails);
 

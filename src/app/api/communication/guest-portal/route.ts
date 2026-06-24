@@ -9,6 +9,133 @@ const jwtSecret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET!);
 
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
+function mapConversation(row: any) {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    reservationId: row.reservation_id,
+    guestName: row.guest_name,
+    guestEmail: row.guest_email,
+    roomName: row.room_name,
+    roomType: row.room_type,
+    reservationStatus: String(row.reservation_status || '').toLowerCase(),
+    unreadCount: row.unread_count || 0,
+    guestUnreadCount: row.guest_unread_count || 0,
+    pinned: !!row.is_pinned,
+    isActive: !!row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastMessage: row.last_message_text
+      ? {
+          text: row.last_message_text,
+          senderType: row.last_message_sender_type,
+          senderName: row.last_message_sender_name,
+          timestamp: row.last_message_timestamp,
+        }
+      : undefined,
+  };
+}
+
+function mapMessage(row: any) {
+  const firstAttachment = Array.isArray(row.attachments) ? row.attachments[0] : null;
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    senderType: row.sender_type,
+    senderId: row.sender_id,
+    senderName: row.sender_name,
+    message: row.message,
+    timestamp: row.created_at,
+    status: row.message_status || 'sent',
+    fileAttachment: firstAttachment
+      ? {
+          fileName: firstAttachment.file_name,
+          fileType: firstAttachment.file_type,
+          fileSize: firstAttachment.file_size,
+          fileUrl: firstAttachment.file_url,
+        }
+      : undefined,
+  };
+}
+
+async function mirrorGuestPortalMessageToInbox(params: {
+  conversation: any;
+  messageRow: any;
+  senderType: 'guest' | 'property';
+  attachments?: Array<{ file_name: string; content_type?: string; file_type?: string; file_size?: number | null }>;
+}) {
+  try {
+    const conversation = params.conversation || {};
+    const messageRow = params.messageRow || {};
+    const senderType = params.senderType;
+    const guestName = String(conversation.guest_name || messageRow.sender_name || 'Guest').trim() || 'Guest';
+    const threadIdentity = String(conversation.reservation_id || conversation.id || messageRow.conversation_id || messageRow.id || 'guest').trim();
+    const threadEmail = `guest-portal+${threadIdentity}@guest-portal.local`;
+    const bodyText = String(messageRow.message || '').trim();
+    const createdAt = String(messageRow.created_at || new Date().toISOString());
+    const dateMs = new Date(createdAt).getTime();
+    const emailId = `gp-${String(messageRow.id || `${threadIdentity}-${createdAt}`)}`;
+    const hasAttachments = Array.isArray(params.attachments) && params.attachments.length > 0;
+
+    const { error: emailError } = await supabase
+      .from('property_emails')
+      .upsert(
+        {
+          id: emailId,
+          property_id: conversation.property_id,
+          uid: null,
+          from_name: guestName,
+          from_email: threadEmail,
+          subject: `Guest Portal • ${guestName}`,
+          date: createdAt,
+          date_ms: Number.isFinite(dateMs) ? dateMs : Date.now(),
+          snippet: bodyText.slice(0, 150),
+          body_text: bodyText,
+          body_html: '',
+          is_unread: senderType === 'guest',
+          is_starred: false,
+          is_archived: false,
+          is_spam: false,
+          is_trash: false,
+          has_attachments: hasAttachments,
+          source: 'guest_portal',
+          source_sender_type: senderType,
+          source_conversation_id: String(conversation.id || messageRow.conversation_id || ''),
+          source_message_id: String(messageRow.id || ''),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+
+    if (emailError) {
+      console.warn('Failed to mirror guest portal message to inbox email row', emailError);
+      return;
+    }
+
+    if (hasAttachments) {
+      await supabase.from('email_attachments').delete().eq('email_id', emailId);
+      const rows = (params.attachments || []).map((att) => ({
+        email_id: emailId,
+        file_name: String(att.file_name || 'attachment'),
+        content_type: String(att.content_type || att.file_type || 'application/octet-stream'),
+        file_size: typeof att.file_size === 'number' ? att.file_size : null,
+      }));
+
+      if (rows.length > 0) {
+        const { error: attachmentError } = await supabase
+          .from('email_attachments')
+          .insert(rows);
+
+        if (attachmentError) {
+          console.warn('Failed to mirror guest portal attachments to inbox', attachmentError);
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Unexpected inbox mirror error for guest portal message', error);
+  }
+}
+
 interface AuthToken {
   sub: string;
   aud: string;
@@ -153,7 +280,10 @@ async function handleListConversations(
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, conversations });
+    return NextResponse.json({
+      success: true,
+      conversations: (conversations || []).map(mapConversation),
+    });
   } catch (error) {
     console.error('Error listing conversations:', error);
     return NextResponse.json(
@@ -219,7 +349,7 @@ async function handleGetMessages(
 
     return NextResponse.json({
       success: true,
-      messages: messages?.reverse() || [],
+      messages: (messages?.reverse() || []).map(mapMessage),
     });
   } catch (error) {
     console.error('Error getting messages:', error);
@@ -281,6 +411,13 @@ async function handleSendMessage(
 
     if (msgError) throw msgError;
 
+    await mirrorGuestPortalMessageToInbox({
+      conversation,
+      messageRow: messageData,
+      senderType: 'property',
+      attachments: Array.isArray(attachments) ? attachments : [],
+    });
+
     // Add attachments if any
     if (attachments && Array.isArray(attachments) && attachments.length > 0) {
       const attachmentData = attachments.map((att: any) => ({
@@ -310,7 +447,16 @@ async function handleSendMessage(
       })
       .eq('id', conversationId);
 
-    return NextResponse.json({ success: true, message: messageData });
+    const { data: hydratedMessage } = await supabase
+      .from('guest_portal_messages')
+      .select('*, attachments:guest_portal_message_attachments(*)')
+      .eq('id', messageData.id)
+      .single();
+
+    return NextResponse.json({
+      success: true,
+      message: hydratedMessage ? mapMessage(hydratedMessage) : mapMessage(messageData),
+    });
   } catch (error) {
     console.error('Error sending message:', error);
     return NextResponse.json(
@@ -387,7 +533,7 @@ async function handleStartConversation(
     if (convError) throw convError;
 
     // Create initial message
-    const { error: msgError } = await supabase
+    const { data: messageData, error: msgError } = await supabase
       .from('guest_portal_messages')
       .insert({
         conversation_id: conversation.id,
@@ -397,9 +543,18 @@ async function handleStartConversation(
         sender_name: 'Property Staff',
         message: initialMessage,
         message_status: 'sent',
-      });
+      })
+      .select()
+      .single();
 
     if (msgError) throw msgError;
+
+    await mirrorGuestPortalMessageToInbox({
+      conversation,
+      messageRow: messageData,
+      senderType: 'property',
+      attachments: [],
+    });
 
     // Update conversation with last message
     await supabase
@@ -412,7 +567,7 @@ async function handleStartConversation(
       })
       .eq('id', conversation.id);
 
-    return NextResponse.json({ success: true, conversation });
+    return NextResponse.json({ success: true, conversation: mapConversation(conversation) });
   } catch (error) {
     console.error('Error starting conversation:', error);
     return NextResponse.json(
@@ -453,7 +608,7 @@ async function handleSetPinned(
       );
     }
 
-    return NextResponse.json({ success: true, conversation: updated });
+    return NextResponse.json({ success: true, conversation: mapConversation(updated) });
   } catch (error) {
     console.error('Error setting pinned:', error);
     return NextResponse.json(
