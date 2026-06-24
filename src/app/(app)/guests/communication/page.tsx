@@ -260,6 +260,8 @@ export default function CommunicationHubPage() {
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [pendingThreadAction, setPendingThreadAction] = useState<PendingThreadAction>(null);
   const unreadAnchorRef = useRef<HTMLDivElement | null>(null);
+  const lastGuestPortalSnapshotRef = useRef('');
+  const lastGuestPortalInboxRefreshAtRef = useRef(0);
   const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
   const threadListRef = useRef<HTMLDivElement | null>(null);
   const filterChipsScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1263,10 +1265,33 @@ export default function CommunicationHubPage() {
       if (response.ok) {
         const result = await response.json();
         if (result.conversations) {
+          const snapshot = result.conversations
+            .map((conv: any) => {
+              const unread = conv.unreadCount || conv.unread_count || 0;
+              const lastTimestamp = conv.lastMessage?.timestamp || conv.last_message_timestamp || '';
+              return `${conv.id}:${unread}:${lastTimestamp}`;
+            })
+            .sort()
+            .join('|');
+
           // Calculate total unread count from all conversations
           const totalUnread = result.conversations.reduce((total: number, conv: any) => {
             return total + (conv.unreadCount || conv.unread_count || 0);
           }, 0);
+
+          const hasConversationChanges =
+            snapshot.length > 0 && snapshot !== lastGuestPortalSnapshotRef.current;
+          if (hasConversationChanges) {
+            lastGuestPortalSnapshotRef.current = snapshot;
+
+            const now = Date.now();
+            // Keep refresh responsive for incoming portal messages, but avoid burst refetches.
+            if (now - lastGuestPortalInboxRefreshAtRef.current >= 4000) {
+              lastGuestPortalInboxRefreshAtRef.current = now;
+              forceRefetchEmails();
+            }
+          }
+
           setGuestPortalUnreadCount(totalUnread);
         }
       }
@@ -1274,7 +1299,7 @@ export default function CommunicationHubPage() {
       // Silently handle errors to avoid console spam
       console.warn('Failed to check guest portal notifications:', error);
     }
-  }, [user?.propertyId, activeView]);
+  }, [user?.propertyId, activeView, forceRefetchEmails]);
 
   useEffect(() => {
     // Check notifications every 5 seconds when not on guest portal tabs
@@ -1286,6 +1311,7 @@ export default function CommunicationHubPage() {
   useEffect(() => {
     if (activeView.startsWith('channel_guest_portal') || activeView.startsWith('portal_')) {
       setGuestPortalUnreadCount(0);
+      lastGuestPortalSnapshotRef.current = '';
     }
   }, [activeView]);
 
