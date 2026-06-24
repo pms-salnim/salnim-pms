@@ -210,6 +210,7 @@ function dedupeEmailsByUid<T extends { uid?: number | null; id?: string; date_ms
 }
 
 const normalizeText = (value: any): string => String(value || '').trim();
+const isUuid = (value: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 
 async function resolveThreadEmailIds(
   propertyId: string,
@@ -1119,13 +1120,19 @@ async function handleGetEmailGuestContext(
       const aliasToken = String(guestPortalAliasMatch?.[1] || '').trim();
 
       if (aliasToken) {
-        const { data: reservationAliasRow } = await supabase
+        let reservationAliasQuery = supabase
           .from('reservations')
           .select('id, reservation_number')
           .eq('property_id', propertyId)
-          .or(`id.eq.${aliasToken},reservation_number.eq.${aliasToken}`)
-          .limit(1)
-          .maybeSingle();
+          .limit(1);
+
+        if (isUuid(aliasToken)) {
+          reservationAliasQuery = reservationAliasQuery.or(`id.eq.${aliasToken},reservation_number.eq.${aliasToken}`);
+        } else {
+          reservationAliasQuery = reservationAliasQuery.eq('reservation_number', aliasToken);
+        }
+
+        const { data: reservationAliasRow } = await reservationAliasQuery.maybeSingle();
 
         if (reservationAliasRow?.id) {
           reservationId = String(reservationAliasRow.id).trim();
@@ -1156,13 +1163,19 @@ async function handleGetEmailGuestContext(
 
     let matchedReservationById: any = null;
     if (reservationId) {
-      const { data: reservationById, error: reservationByIdError } = await supabase
+      let reservationByIdQuery = supabase
         .from('reservations')
         .select('*')
         .eq('property_id', propertyId)
-        .or(`id.eq.${reservationId},reservation_number.eq.${reservationId}`)
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      if (isUuid(reservationId)) {
+        reservationByIdQuery = reservationByIdQuery.or(`id.eq.${reservationId},reservation_number.eq.${reservationId}`);
+      } else {
+        reservationByIdQuery = reservationByIdQuery.eq('reservation_number', reservationId);
+      }
+
+      const { data: reservationById, error: reservationByIdError } = await reservationByIdQuery.maybeSingle();
 
       if (reservationByIdError) throw reservationByIdError;
       matchedReservationById = reservationById || null;
