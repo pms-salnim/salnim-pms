@@ -1747,6 +1747,88 @@ export default function CommunicationHubPage() {
     return resolveThreadReservation(selectedEmail);
   }, [resolveThreadReservation, selectedEmail]);
 
+  const resolveThreadReservationAsync = useCallback(async (email: Email): Promise<Reservation | null> => {
+    const directMatch = resolveThreadReservation(email);
+    if (directMatch) return directMatch;
+
+    if (!user?.propertyId) return null;
+
+    const { reservationNumbers, threadMessages } = extractThreadReservationKeys(email);
+    const conversationIds = new Set<string>();
+
+    threadMessages.forEach((message: any) => {
+      const sourceConversationId = String(message?.sourceConversationId || message?.source_conversation_id || '').trim();
+      if (sourceConversationId) {
+        conversationIds.add(sourceConversationId);
+      }
+    });
+
+    const conversationKey = getConversationKey(email);
+    if (conversationKey.startsWith('guest_portal:')) {
+      const keyConversationId = String(conversationKey.split(':')[1] || '').trim();
+      if (keyConversationId) {
+        conversationIds.add(keyConversationId);
+      }
+    }
+
+    try {
+      const supabase = createClient();
+
+      if (conversationIds.size > 0) {
+        const { data: conversations, error: convError } = await supabase
+          .from('guest_portal_conversations')
+          .select('id, reservation_id')
+          .eq('property_id', user.propertyId)
+          .in('id', Array.from(conversationIds));
+
+        if (!convError && Array.isArray(conversations)) {
+          const reservationIdCandidates = conversations
+            .map((row: any) => String(row?.reservation_id || '').trim())
+            .filter(Boolean);
+
+          for (const reservationId of reservationIdCandidates) {
+            const localReservation = guestReservations.find((reservation) => String(reservation.id || '').trim() === reservationId);
+            if (localReservation) return localReservation;
+
+            const { data: reservationRow, error: reservationError } = await supabase
+              .from('reservations')
+              .select('*')
+              .eq('property_id', user.propertyId)
+              .eq('id', reservationId)
+              .maybeSingle();
+
+            if (!reservationError && reservationRow) {
+              return normalizeReservationFromRow(reservationRow);
+            }
+          }
+        }
+      }
+
+      for (const reservationNumber of reservationNumbers) {
+        const normalizedNumber = String(reservationNumber || '').trim().toLowerCase();
+        if (!normalizedNumber) continue;
+
+        const localReservation = guestReservations.find((reservation) => String(reservation.reservationNumber || '').trim().toLowerCase() === normalizedNumber);
+        if (localReservation) return localReservation;
+
+        const { data: reservationRows, error: reservationError } = await supabase
+          .from('reservations')
+          .select('*')
+          .eq('property_id', user.propertyId)
+          .eq('reservation_number', reservationNumber)
+          .limit(1);
+
+        if (!reservationError && Array.isArray(reservationRows) && reservationRows.length > 0) {
+          return normalizeReservationFromRow(reservationRows[0]);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to resolve reservation for guest info action:', error);
+    }
+
+    return null;
+  }, [extractThreadReservationKeys, getConversationKey, guestReservations, resolveThreadReservation, user?.propertyId]);
+
   const resolveGuestForEmail = useCallback((email: Email, reservation: Reservation | null): Guest | null => {
     const reservationGuestId = String(reservation?.guestId || '').trim();
     if (reservationGuestId) {
@@ -1770,7 +1852,7 @@ export default function CommunicationHubPage() {
 
   const openGuestInfoFromEmail = useCallback(async (email: Email) => {
     await handleSelectEmail(email, 'all', { markReadOnOpen: true });
-    const reservation = resolveThreadReservation(email);
+    const reservation = await resolveThreadReservationAsync(email);
     const matchedGuest = resolveGuestForEmail(email, reservation);
 
     if (isGuestPortalThread(email) && reservation) {
@@ -1788,7 +1870,7 @@ export default function CommunicationHubPage() {
     }
 
     setIsGuestInfoPanelOpen(true);
-  }, [handleSelectEmail, isGuestPortalThread, resolveGuestForEmail, resolveThreadReservation]);
+  }, [handleSelectEmail, isGuestPortalThread, resolveGuestForEmail, resolveThreadReservationAsync]);
 
   const selectedGuestForPanel = useMemo(() => {
     if (!selectedEmail) return null;
