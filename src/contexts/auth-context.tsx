@@ -23,6 +23,7 @@ export interface Email {
   sourceConversationId?: string;
   sourceMessageId?: string;
   sourceReservationId?: string;
+  rawFromEmail?: string;
   from: { name: string; email: string };
   subject: string;
   date: string;
@@ -175,6 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           sourceReservationId: row.source_reservation_id || undefined,
           sourceConversationId: row.source_conversation_id || undefined,
           sourceMessageId: row.source_message_id || undefined,
+          rawFromEmail: normalizedFromEmail || undefined,
           from: {
             name: fromName,
             email: fromEmail,

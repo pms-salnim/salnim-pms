@@ -1573,14 +1573,15 @@ export default function CommunicationHubPage() {
       .find((email) => {
         const source = String((email as any)?.source || '').trim().toLowerCase();
         const senderEmail = String(email.from?.email || '').trim().toLowerCase();
+        const rawSenderEmail = String((email as any)?.rawFromEmail || senderEmail).trim().toLowerCase();
         const sourceReservationId = String((email as any)?.sourceReservationId || (email as any)?.source_reservation_id || '').trim().toLowerCase();
 
-        if (resultEmail && senderEmail && senderEmail === resultEmail) {
+        if (resultEmail && (senderEmail === resultEmail || rawSenderEmail === resultEmail)) {
           return true;
         }
 
         if (resultPhone) {
-          const senderPhone = normalizePhone(email.from?.email || '');
+          const senderPhone = normalizePhone(rawSenderEmail || senderEmail || '');
           if (senderPhone && senderPhone === resultPhone) {
             return true;
           }
@@ -1591,8 +1592,8 @@ export default function CommunicationHubPage() {
             return true;
           }
 
-          if (senderEmail.startsWith('guest-portal+') && senderEmail.endsWith('@guest-portal.local')) {
-            const aliasToken = senderEmail.slice('guest-portal+'.length, senderEmail.indexOf('@guest-portal.local')).trim().toLowerCase();
+          if (rawSenderEmail.startsWith('guest-portal+') && rawSenderEmail.endsWith('@guest-portal.local')) {
+            const aliasToken = rawSenderEmail.slice('guest-portal+'.length, rawSenderEmail.indexOf('@guest-portal.local')).trim().toLowerCase();
             if (aliasToken && reservationTokenCandidates.includes(aliasToken)) {
               return true;
             }
