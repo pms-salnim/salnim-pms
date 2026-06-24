@@ -1604,12 +1604,7 @@ export default function CommunicationHubPage() {
       sourceReservationId: channel === 'guest_portal' ? String(result.reservationId || '').trim() : undefined,
       from: {
         name: result.guestName || 'Guest',
-        email:
-          channel === 'guest_portal'
-            ? (String(result.reservationId || '').trim()
-                ? `guest-portal+${String(result.reservationId || '').trim()}@guest-portal.local`
-                : '')
-            : resultEmail,
+        email: channel === 'guest_portal' ? '' : resultEmail,
       },
       subject: channel === 'guest_portal'
         ? 'Guest portal chat'

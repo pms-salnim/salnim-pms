@@ -74,6 +74,14 @@ const CHANNELS: Array<{ key: ChannelKey; label: string }> = [
 const stripHtml = (value: string) => value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const normalizePhone = (value?: string | null) => String(value || '').replace(/[^\d+]/g, '');
 
+const normalizeMessageSource = (message: any): 'email' | 'whatsapp' | 'guest_portal' | 'sms' => {
+  const source = String(message?.source || '').trim().toLowerCase();
+  if (source === 'guest_portal') return 'guest_portal';
+  if (source === 'whatsapp') return 'whatsapp';
+  if (source === 'sms') return 'sms';
+  return 'email';
+};
+
 const isSentMessage = (message: Email) => {
   const source = String((message as any).source || '').trim().toLowerCase();
   if (source === 'guest_portal') {
@@ -153,6 +161,16 @@ export default function EmailDetailView({
   const recipientEmail = useMemo(() => {
     return String(latestIncoming?.from?.email || email.from?.email || email.from_email || '').trim();
   }, [latestIncoming, email]);
+
+  const threadPrimarySource = useMemo<'email' | 'whatsapp' | 'guest_portal' | 'sms'>(() => {
+    const latest = latestIncoming || email;
+    return normalizeMessageSource(latest as any);
+  }, [latestIncoming, email]);
+
+  const contactLine = useMemo(() => {
+    if (threadPrimarySource === 'guest_portal') return 'Guest portal conversation';
+    return recipientEmail || 'Unknown contact';
+  }, [threadPrimarySource, recipientEmail]);
 
   const recipientPhone = useMemo(() => {
     return normalizePhone(guestContext?.guest?.phone || initialContactPhone || '');
@@ -484,9 +502,11 @@ export default function EmailDetailView({
   }, [guestContext, recipientPhone, user?.propertyId]);
 
   const mappedEmailMessages = useMemo<UnifiedMessage[]>(() => {
-    return threadMessages.map((message) => ({
+    return threadMessages
+      .filter((message) => normalizeMessageSource(message) === 'email')
+      .map((message) => ({
       id: String(message.id || `${message.uid}-${message.date}`),
-      source: String((message as any).source || '').trim().toLowerCase() === 'guest_portal' ? 'guest_portal' : 'email',
+      source: 'email',
       outgoing: isSentMessage(message),
       date: message.date,
       senderName: message.from?.name || message.from?.email || 'Unknown',
@@ -495,6 +515,22 @@ export default function EmailDetailView({
       text: messageText(message),
       attachmentsCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
     }));
+  }, [threadMessages]);
+
+  const mappedGuestPortalThreadMessages = useMemo<UnifiedMessage[]>(() => {
+    return threadMessages
+      .filter((message) => normalizeMessageSource(message) === 'guest_portal')
+      .map((message) => ({
+        id: `gp-thread-${String(message.id || `${message.uid}-${message.date}`)}`,
+        source: 'guest_portal',
+        outgoing: isSentMessage(message),
+        date: message.date,
+        senderName: message.from?.name || message.from?.email || 'Guest Portal User',
+        senderEmail: message.from?.email || undefined,
+        subject: message.subject || undefined,
+        text: messageText(message),
+        attachmentsCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
+      }));
   }, [threadMessages]);
 
   const mappedWhatsAppMessages = useMemo<UnifiedMessage[]>(() => {
@@ -510,7 +546,7 @@ export default function EmailDetailView({
   }, [whatsAppMessages]);
 
   const mappedGuestPortalMessages = useMemo<UnifiedMessage[]>(() => {
-    return (guestPortalMessages || []).map((message: any) => ({
+    const apiMapped = (guestPortalMessages || []).map((message: any) => ({
       id: `gp-${message.id}`,
       source: 'guest_portal',
       outgoing: String(message.sender_type || '') === 'property',
@@ -519,7 +555,13 @@ export default function EmailDetailView({
       text: String(message.message || ''),
       attachmentsCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
     }));
-  }, [guestPortalMessages]);
+
+    const deduped = new Map<string, UnifiedMessage>();
+    [...mappedGuestPortalThreadMessages, ...apiMapped].forEach((message) => {
+      deduped.set(message.id, message);
+    });
+    return Array.from(deduped.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [guestPortalMessages, mappedGuestPortalThreadMessages]);
 
   const displayedMessages = useMemo<UnifiedMessage[]>(() => {
     let source: UnifiedMessage[] = [];
@@ -537,6 +579,24 @@ export default function EmailDetailView({
 
     return source.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [activeChannel, mappedEmailMessages, mappedGuestPortalMessages, mappedWhatsAppMessages]);
+
+  const lastInboundChannel = useMemo<SendChannel | null>(() => {
+    const allMessages = [...mappedEmailMessages, ...mappedWhatsAppMessages, ...mappedGuestPortalMessages];
+    const lastInbound = allMessages
+      .filter((message) => !message.outgoing)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+    if (!lastInbound) return null;
+    if (lastInbound.source === 'whatsapp') return 'whatsapp';
+    if (lastInbound.source === 'guest_portal') return 'guest_portal';
+    if (lastInbound.source === 'sms') return 'sms';
+    return 'email';
+  }, [mappedEmailMessages, mappedGuestPortalMessages, mappedWhatsAppMessages]);
+
+  useEffect(() => {
+    if (!lastInboundChannel) return;
+    setComposerChannel(lastInboundChannel);
+  }, [lastInboundChannel]);
 
   const channelCounts = useMemo(() => {
     const emailCount = mappedEmailMessages.length;
@@ -564,7 +624,7 @@ export default function EmailDetailView({
               </Button>
               <div className="min-w-0">
                 <h2 className="truncate text-base font-semibold text-slate-900">{guestDisplayName}</h2>
-                <p className="truncate text-xs text-slate-500">{recipientEmail || 'Unknown contact'}</p>
+                <p className="truncate text-xs text-slate-500">{contactLine}</p>
               </div>
             </div>
           </div>
