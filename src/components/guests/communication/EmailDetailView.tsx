@@ -155,6 +155,7 @@ export default function EmailDetailView({
 
   const [guestContext, setGuestContext] = useState<GuestContextPayload | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState(false);
+  const loggedGuestContextTraceKeys = React.useRef<Set<string>>(new Set());
 
   const orderedHistory = useMemo(() => {
     const source = Array.isArray(conversationHistory) && conversationHistory.length > 0
@@ -538,7 +539,17 @@ export default function EmailDetailView({
             (context?.reservations || []).some((reservation) => Boolean(String(reservation?.reservationNumber || '').trim()))
           );
           if (!hasReservationNumber && result?.trace) {
-            console.info('Guest context trace (sanitized):', result.trace);
+            const traceKey = [
+              String(email.id || ''),
+              String(sourceReservationIdFromThread || ''),
+              String(sourceConversationIdFromThread || ''),
+              String(sourceMessageIdFromThread || ''),
+            ].join('|');
+
+            if (!loggedGuestContextTraceKeys.current.has(traceKey)) {
+              loggedGuestContextTraceKeys.current.add(traceKey);
+              console.info(`Guest context trace (sanitized, key=${traceKey}):\n${JSON.stringify(result.trace, null, 2)}`);
+            }
           }
         }
         setGuestContext(context);
