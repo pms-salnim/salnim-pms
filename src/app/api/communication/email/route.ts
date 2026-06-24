@@ -1081,6 +1081,40 @@ async function handleGetEmailGuestContext(
     const rawSourceConversationId = typeof data?.sourceConversationId === 'string' ? data.sourceConversationId.trim() : '';
     const rawSourceMessageId = typeof data?.sourceMessageId === 'string' ? data.sourceMessageId.trim() : '';
 
+    const trace: Record<string, any> = {
+      request: {
+        hasEmail: Boolean(rawEmail),
+        hasPhone: Boolean(rawPhone),
+        hasEmailId: Boolean(emailId),
+        hasReservationId: Boolean(rawReservationId),
+        hasSourceConversationId: Boolean(rawSourceConversationId),
+        hasSourceMessageId: Boolean(rawSourceMessageId),
+      },
+      lookup: {
+        loadedEmailRow: false,
+        usedEmailRowFromEmail: false,
+        usedEmailRowReservationId: false,
+        usedEmailRowConversationId: false,
+        usedEmailRowMessageId: false,
+        usedMessageToConversationFallback: false,
+        usedConversationToReservationFallback: false,
+        usedAliasToReservationFallback: false,
+        usedAliasToConversationFallback: false,
+        matchedReservationById: false,
+      },
+      match: {
+        matchingGuestsCount: 0,
+        matchedReservationsCount: 0,
+        reservationsWithNumberCount: 0,
+      },
+      result: {
+        hasContext: false,
+        hasGuest: false,
+        hasReservations: false,
+        selectedReservationHasNumber: false,
+      },
+    };
+
     let guestEmail = rawEmail;
     let guestPhone = rawPhone;
     let reservationId = rawReservationId;
@@ -1095,17 +1129,23 @@ async function handleGetEmailGuestContext(
         .eq('id', emailId)
         .maybeSingle();
 
+      trace.lookup.loadedEmailRow = Boolean(emailRow);
+
       if (!guestEmail) {
         guestEmail = String(emailRow?.from_email || '').trim().toLowerCase();
+        trace.lookup.usedEmailRowFromEmail = Boolean(guestEmail);
       }
       if (!reservationId) {
         reservationId = String((emailRow as any)?.source_reservation_id || '').trim();
+        trace.lookup.usedEmailRowReservationId = Boolean(reservationId);
       }
       if (!sourceConversationId) {
         sourceConversationId = String((emailRow as any)?.source_conversation_id || '').trim();
+        trace.lookup.usedEmailRowConversationId = Boolean(sourceConversationId);
       }
       if (!sourceMessageId) {
         sourceMessageId = String((emailRow as any)?.source_message_id || '').trim();
+        trace.lookup.usedEmailRowMessageId = Boolean(sourceMessageId);
       }
     }
 
@@ -1118,6 +1158,7 @@ async function handleGetEmailGuestContext(
         .maybeSingle();
 
       sourceConversationId = String((messageRow as any)?.conversation_id || '').trim();
+      trace.lookup.usedMessageToConversationFallback = Boolean(sourceConversationId);
     }
 
     if (!reservationId && sourceConversationId) {
@@ -1129,6 +1170,7 @@ async function handleGetEmailGuestContext(
         .maybeSingle();
 
       reservationId = String((conversationRow as any)?.reservation_id || '').trim();
+      trace.lookup.usedConversationToReservationFallback = Boolean(reservationId);
     }
 
     if (!reservationId && guestEmail) {
@@ -1152,6 +1194,7 @@ async function handleGetEmailGuestContext(
 
         if (reservationAliasRow?.id) {
           reservationId = String(reservationAliasRow.id).trim();
+          trace.lookup.usedAliasToReservationFallback = true;
         } else {
           const { data: conversationAliasRow } = await supabase
             .from('guest_portal_conversations')
@@ -1161,12 +1204,13 @@ async function handleGetEmailGuestContext(
             .maybeSingle();
 
           reservationId = String((conversationAliasRow as any)?.reservation_id || '').trim();
+          trace.lookup.usedAliasToConversationFallback = Boolean(reservationId);
         }
       }
     }
 
     if (!guestEmail && !guestPhone && !reservationId) {
-      return NextResponse.json({ success: true, context: null });
+      return NextResponse.json({ success: true, context: null, trace });
     }
 
     const reservationTokenMatches = (reservation: any, token: string): boolean => {
@@ -1195,6 +1239,7 @@ async function handleGetEmailGuestContext(
 
       if (reservationByIdError) throw reservationByIdError;
       matchedReservationById = reservationById || null;
+      trace.lookup.matchedReservationById = Boolean(matchedReservationById);
 
       if (matchedReservationById) {
         if (!guestEmail) {
@@ -1226,11 +1271,12 @@ async function handleGetEmailGuestContext(
     });
 
     const primaryGuest = matchingGuests[0] || null;
+    trace.match.matchingGuestsCount = matchingGuests.length;
 
     const reservationGuestName = String(matchedReservationById?.guest_name || '').trim();
 
     if (!primaryGuest && !matchedReservationById) {
-      return NextResponse.json({ success: true, context: null });
+      return NextResponse.json({ success: true, context: null, trace });
     }
 
     if (!guestPhone && primaryGuest?.phone) {
@@ -1329,6 +1375,7 @@ async function handleGetEmailGuestContext(
       if (normalizedGuestPhone && reservationPhones.includes(normalizedGuestPhone)) return true;
       return Boolean(matchedReservationById && String(reservation?.id || '').trim() === String(matchedReservationById?.id || '').trim());
     });
+    trace.match.matchedReservationsCount = matchedReservations.length;
 
     if (matchedReservationById) {
       const matchedReservationId = String(matchedReservationById.id || '').trim();
@@ -1412,6 +1459,7 @@ async function handleGetEmailGuestContext(
         const bStart = new Date(b?.arrival || 0).getTime();
         return bStart - aStart;
       });
+    trace.match.reservationsWithNumberCount = reservations.filter((reservation: any) => Boolean(String(reservation?.reservationNumber || '').trim())).length;
 
     const fallbackGuestId = reservationId ? `reservation:${reservationId}` : `unknown:${guestEmail || guestPhone || 'guest'}`;
     const context = {
@@ -1431,7 +1479,13 @@ async function handleGetEmailGuestContext(
       reservations,
     };
 
-    return NextResponse.json({ success: true, context });
+    trace.result.hasContext = true;
+    trace.result.hasGuest = Boolean(context?.guest);
+    trace.result.hasReservations = Array.isArray(context?.reservations) && context.reservations.length > 0;
+    const preferredReservation = (context?.reservations || []).find((reservation: any) => Boolean(String(reservation?.reservationNumber || '').trim())) || context?.reservations?.[0];
+    trace.result.selectedReservationHasNumber = Boolean(String(preferredReservation?.reservationNumber || '').trim());
+
+    return NextResponse.json({ success: true, context, trace });
   } catch (error) {
     console.error('Error getting email guest context:', error);
     return NextResponse.json(

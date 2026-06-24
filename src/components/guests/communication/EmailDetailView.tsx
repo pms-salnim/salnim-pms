@@ -35,6 +35,12 @@ type GuestContextPayload = {
     room?: string | null;
     outstandingBalance?: number | null;
   }>;
+  trace?: {
+    request?: Record<string, boolean>;
+    lookup?: Record<string, boolean>;
+    match?: Record<string, number>;
+    result?: Record<string, boolean>;
+  };
 };
 
 type UnifiedMessage = {
@@ -526,7 +532,15 @@ export default function EmailDetailView({
           sourceConversationIdFromThread || undefined,
           sourceMessageIdFromThread || undefined
         );
-        const context = result?.context || null;
+        const context = result?.context ? { ...result.context, trace: result?.trace } : null;
+        if (threadPrimarySource === 'guest_portal') {
+          const hasReservationNumber = Boolean(
+            (context?.reservations || []).some((reservation) => Boolean(String(reservation?.reservationNumber || '').trim()))
+          );
+          if (!hasReservationNumber && result?.trace) {
+            console.info('Guest context trace (sanitized):', result.trace);
+          }
+        }
         setGuestContext(context);
       } catch (error) {
         console.warn('Failed to load guest context', error);
@@ -537,7 +551,7 @@ export default function EmailDetailView({
     };
 
     loadGuestContext();
-  }, [email.id, email.from?.email, latestIncoming, sourceConversationIdFromThread, sourceMessageIdFromThread, sourceReservationIdFromThread, user?.propertyId]);
+  }, [email.id, email.from?.email, latestIncoming, sourceConversationIdFromThread, sourceMessageIdFromThread, sourceReservationIdFromThread, threadPrimarySource, user?.propertyId]);
 
   useEffect(() => {
     const loadChannelHistory = async () => {
