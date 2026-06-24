@@ -461,7 +461,7 @@ export default function NewConversationDialog({ open, onOpenChange, propertyId, 
                         <div className="grid grid-cols-1 gap-1 text-xs text-slate-600 sm:grid-cols-2">
                           <p className="truncate"><span className="text-slate-400">Email:</span> {result.email || 'Not set'}</p>
                           <p className="truncate"><span className="text-slate-400">Phone:</span> {result.phone || 'Not set'}</p>
-                          <p className="truncate sm:col-span-2"><span className="text-slate-400">Reservation ID:</span> {result.reservationId || 'Not set'}</p>
+                          <p className="truncate sm:col-span-2"><span className="text-slate-400">Reservation #:</span> {result.reservationNumber || 'Not set'}</p>
                         </div>
                       </button>
 
