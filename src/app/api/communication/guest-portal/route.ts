@@ -34,6 +34,7 @@ function mapConversation(row: any) {
 }
 
 function mapMessage(row: any) {
+  const timestampMs = row.created_at ? new Date(row.created_at).getTime() : Date.now();
   const firstAttachment = Array.isArray(row.attachments) ? row.attachments[0] : null;
   return {
     id: row.id,
@@ -43,6 +44,7 @@ function mapMessage(row: any) {
     senderName: row.sender_name,
     message: row.message,
     timestamp: row.created_at,
+    timestampMs,
     status: row.message_status || 'sent',
     fileAttachment: firstAttachment
       ? {

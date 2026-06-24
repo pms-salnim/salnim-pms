@@ -33,6 +33,7 @@ type UnifiedMessage = {
   source: 'email' | 'whatsapp' | 'guest_portal' | 'sms';
   outgoing: boolean;
   date: string;
+  timestampMs: number;
   senderName: string;
   senderEmail?: string;
   subject?: string;
@@ -80,6 +81,20 @@ const normalizeMessageSource = (message: any): 'email' | 'whatsapp' | 'guest_por
   if (source === 'whatsapp') return 'whatsapp';
   if (source === 'sms') return 'sms';
   return 'email';
+};
+
+const toTimestampMs = (value: unknown): number => {
+  const asNumber = Number(value);
+  if (Number.isFinite(asNumber) && asNumber > 0) return asNumber;
+  const parsed = new Date(String(value || '')).getTime();
+  return Number.isFinite(parsed) ? parsed : Date.now();
+};
+
+const sortUnifiedMessages = (messages: UnifiedMessage[]): UnifiedMessage[] => {
+  return [...messages].sort((a, b) => {
+    if (a.timestampMs !== b.timestampMs) return a.timestampMs - b.timestampMs;
+    return String(a.id).localeCompare(String(b.id));
+  });
 };
 
 const isSentMessage = (message: Email) => {
@@ -509,6 +524,7 @@ export default function EmailDetailView({
       source: 'email',
       outgoing: isSentMessage(message),
       date: message.date,
+      timestampMs: toTimestampMs((message as any).dateMs || message.date),
       senderName: message.from?.name || message.from?.email || 'Unknown',
       senderEmail: message.from?.email || undefined,
       subject: message.subject || undefined,
@@ -520,17 +536,21 @@ export default function EmailDetailView({
   const mappedGuestPortalThreadMessages = useMemo<UnifiedMessage[]>(() => {
     return threadMessages
       .filter((message) => normalizeMessageSource(message) === 'guest_portal')
-      .map((message) => ({
-        id: `gp-thread-${String(message.id || `${message.uid}-${message.date}`)}`,
+      .map((message: any) => {
+        const sourceMessageId = String(message.sourceMessageId || message.source_message_id || '').trim();
+        return {
+        id: sourceMessageId ? `gp-${sourceMessageId}` : `gp-thread-${String(message.id || `${message.uid}-${message.date}`)}`,
         source: 'guest_portal',
         outgoing: isSentMessage(message),
         date: message.date,
+        timestampMs: toTimestampMs(message.dateMs || message.date),
         senderName: message.from?.name || message.from?.email || 'Guest Portal User',
         senderEmail: message.from?.email || undefined,
         subject: message.subject || undefined,
         text: messageText(message),
         attachmentsCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
-      }));
+      };
+      });
   }, [threadMessages]);
 
   const mappedWhatsAppMessages = useMemo<UnifiedMessage[]>(() => {
@@ -539,6 +559,7 @@ export default function EmailDetailView({
       source: 'whatsapp',
       outgoing: String(message.sender_type || '') === 'property',
       date: String(message.created_at || new Date().toISOString()),
+      timestampMs: toTimestampMs(message.timestampMs || message.created_at),
       senderName: String(message.sender_name || 'WhatsApp User'),
       text: String(message.message || ''),
       attachmentsCount: 0,
@@ -551,6 +572,7 @@ export default function EmailDetailView({
       source: 'guest_portal',
       outgoing: String(message.sender_type || '') === 'property',
       date: String(message.created_at || new Date().toISOString()),
+      timestampMs: toTimestampMs(message.timestampMs || message.created_at),
       senderName: String(message.sender_name || 'Guest Portal User'),
       text: String(message.message || ''),
       attachmentsCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
@@ -560,7 +582,7 @@ export default function EmailDetailView({
     [...mappedGuestPortalThreadMessages, ...apiMapped].forEach((message) => {
       deduped.set(message.id, message);
     });
-    return Array.from(deduped.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return sortUnifiedMessages(Array.from(deduped.values()));
   }, [guestPortalMessages, mappedGuestPortalThreadMessages]);
 
   const displayedMessages = useMemo<UnifiedMessage[]>(() => {
@@ -577,14 +599,14 @@ export default function EmailDetailView({
       source = [];
     }
 
-    return source.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return sortUnifiedMessages(source);
   }, [activeChannel, mappedEmailMessages, mappedGuestPortalMessages, mappedWhatsAppMessages]);
 
   const lastInboundChannel = useMemo<SendChannel | null>(() => {
     const allMessages = [...mappedEmailMessages, ...mappedWhatsAppMessages, ...mappedGuestPortalMessages];
     const lastInbound = allMessages
       .filter((message) => !message.outgoing)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      .sort((a, b) => b.timestampMs - a.timestampMs || String(b.id).localeCompare(String(a.id)))[0];
 
     if (!lastInbound) return null;
     if (lastInbound.source === 'whatsapp') return 'whatsapp';
