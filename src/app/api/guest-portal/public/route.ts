@@ -226,6 +226,15 @@ async function mirrorGuestPortalMessageToInbox(params: {
       return;
     }
 
+    console.info('[GP_TRACE_PUBLIC_MIRROR_WRITE]', {
+      propertyId: String(conversation.property_id || ''),
+      conversationId: String(conversation.id || messageRow.conversation_id || ''),
+      reservationId: String(conversation.reservation_id || ''),
+      sourceMessageId: String(messageRow.id || ''),
+      mirroredEmailId: emailId,
+      senderType,
+    });
+
     if (hasAttachments) {
       await supabase.from("email_attachments").delete().eq("email_id", emailId);
       const rows = (params.attachments || []).map((att) => ({

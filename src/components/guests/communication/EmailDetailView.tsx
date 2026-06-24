@@ -363,6 +363,17 @@ export default function EmailDetailView({
   const loadGuestPortalHistory = async (propertyId: string) => {
     const reservationId = sourceReservationIdFromThread || guestContext?.reservations?.[0]?.id;
     const knownConversationId = sourceConversationIdFromThread || guestPortalConversationId;
+    const selectedThreadKey = sourceReservationIdFromThread
+      ? `guest_portal_reservation:${String(sourceReservationIdFromThread).trim()}`
+      : sourceConversationIdFromThread
+      ? `guest_portal:${String(sourceConversationIdFromThread).trim()}`
+      : (() => {
+          const senderEmail = String(email.from?.email || '').trim().toLowerCase();
+          if (senderEmail) return `email:${senderEmail}`;
+          const senderName = String(email.from?.name || '').trim().toLowerCase();
+          if (senderName) return `name:${senderName}`;
+          return `fallback:${String(email.id || '') || String(email.uid || '') || 'unknown'}`;
+        })();
 
     const listResult = await guestPortalApi.listConversations(propertyId);
     const list = Array.isArray(listResult?.conversations) ? listResult.conversations : [];
@@ -380,6 +391,17 @@ export default function EmailDetailView({
     const freshestConversationId = String(sorted[0]?.id || '').trim();
     const targetConversationId = freshestConversationId || String(knownConversationId || '').trim();
 
+    console.info('[GP_TRACE_DETAIL_LOAD]', {
+      selectedThreadKey,
+      propertyId,
+      reservationId: reservationId ? String(reservationId) : '',
+      knownConversationId: String(knownConversationId || ''),
+      freshestConversationId,
+      targetConversationId,
+      conversationsInList: list.length,
+      filteredByReservation: filtered.length,
+    });
+
     if (!targetConversationId) {
       setGuestPortalMessages([]);
       return;
@@ -395,6 +417,13 @@ export default function EmailDetailView({
     ) {
       const fallbackResult = await guestPortalApi.getMessages(propertyId, String(knownConversationId).trim(), 100);
       if (Array.isArray(fallbackResult?.messages) && fallbackResult.messages.length > 0) {
+        console.info('[GP_TRACE_DETAIL_MESSAGES]', {
+          selectedThreadKey,
+          propertyId,
+          resolvedConversationId: String(knownConversationId).trim(),
+          messageCount: fallbackResult.messages.length,
+          mode: 'fallback_known_conversation',
+        });
         messagesResult = fallbackResult;
         setGuestPortalConversationId(String(knownConversationId).trim());
         setGuestPortalMessages(fallbackResult.messages);
@@ -402,8 +431,17 @@ export default function EmailDetailView({
       }
     }
 
+    const resolvedMessages = Array.isArray(messagesResult?.messages) ? messagesResult.messages : [];
+    console.info('[GP_TRACE_DETAIL_MESSAGES]', {
+      selectedThreadKey,
+      propertyId,
+      resolvedConversationId: targetConversationId,
+      messageCount: resolvedMessages.length,
+      mode: 'target_conversation',
+    });
+
     setGuestPortalConversationId(targetConversationId);
-    setGuestPortalMessages(messagesResult?.messages || []);
+    setGuestPortalMessages(resolvedMessages);
   };
 
   const handleSendEmail = async () => {

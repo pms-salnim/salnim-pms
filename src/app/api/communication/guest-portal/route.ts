@@ -344,6 +344,13 @@ async function handleGetMessages(
   try {
     const { conversationId, lastMessageId, pageSize = 50 } = data;
 
+    console.info('[GP_TRACE_ROUTE_GET_MESSAGES_REQ]', {
+      propertyId,
+      conversationId: String(conversationId || ''),
+      lastMessageId: String(lastMessageId || ''),
+      pageSize,
+    });
+
     if (!conversationId) {
       return NextResponse.json(
         { error: 'conversationId is required' },
@@ -391,9 +398,18 @@ async function handleGetMessages(
 
     if (error) throw error;
 
+    const mapped = (messages?.reverse() || []).map(mapMessage);
+    console.info('[GP_TRACE_ROUTE_GET_MESSAGES_RES]', {
+      propertyId,
+      conversationId: String(conversationId || ''),
+      messageCount: mapped.length,
+      firstMessageId: String(mapped[0]?.id || ''),
+      lastMessageId: String(mapped[mapped.length - 1]?.id || ''),
+    });
+
     return NextResponse.json({
       success: true,
-      messages: (messages?.reverse() || []).map(mapMessage),
+      messages: mapped,
     });
   } catch (error) {
     console.error('Error getting messages:', error);
