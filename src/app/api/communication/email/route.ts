@@ -1079,18 +1079,60 @@ async function handleGetEmailGuestContext(
     let guestEmail = rawEmail;
     let guestPhone = rawPhone;
     let reservationId = rawReservationId;
+    let sourceConversationId = '';
 
-    if (!guestEmail && emailId) {
+    if (emailId) {
       const { data: emailRow } = await supabase
         .from('property_emails')
-        .select('from_email, source_reservation_id')
+        .select('from_email, source_reservation_id, source_conversation_id')
         .eq('property_id', propertyId)
         .eq('id', emailId)
         .maybeSingle();
 
-      guestEmail = String(emailRow?.from_email || '').trim().toLowerCase();
+      if (!guestEmail) {
+        guestEmail = String(emailRow?.from_email || '').trim().toLowerCase();
+      }
       if (!reservationId) {
         reservationId = String((emailRow as any)?.source_reservation_id || '').trim();
+      }
+      sourceConversationId = String((emailRow as any)?.source_conversation_id || '').trim();
+    }
+
+    if (!reservationId && sourceConversationId) {
+      const { data: conversationRow } = await supabase
+        .from('guest_portal_conversations')
+        .select('reservation_id')
+        .eq('property_id', propertyId)
+        .eq('id', sourceConversationId)
+        .maybeSingle();
+
+      reservationId = String((conversationRow as any)?.reservation_id || '').trim();
+    }
+
+    if (!reservationId && guestEmail) {
+      const guestPortalAliasMatch = guestEmail.match(/^guest-portal\+([^@]+)@guest-portal\.local$/i);
+      const aliasToken = String(guestPortalAliasMatch?.[1] || '').trim();
+
+      if (aliasToken) {
+        const { data: reservationAliasRow } = await supabase
+          .from('reservations')
+          .select('id')
+          .eq('property_id', propertyId)
+          .eq('id', aliasToken)
+          .maybeSingle();
+
+        if (reservationAliasRow?.id) {
+          reservationId = String(reservationAliasRow.id).trim();
+        } else {
+          const { data: conversationAliasRow } = await supabase
+            .from('guest_portal_conversations')
+            .select('reservation_id')
+            .eq('property_id', propertyId)
+            .eq('id', aliasToken)
+            .maybeSingle();
+
+          reservationId = String((conversationAliasRow as any)?.reservation_id || '').trim();
+        }
       }
     }
 
