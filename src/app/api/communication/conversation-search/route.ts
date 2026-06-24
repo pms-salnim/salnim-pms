@@ -178,7 +178,6 @@ export async function POST(request: NextRequest) {
     }
 
     const reservationResults: ConversationSearchResult[] = (reservationsResponse.data || [])
-      .filter((reservation: any) => hasCommunicationDetails(reservation?.guest_email, reservation?.guest_phone))
       .filter((reservation: any) => (isSearchMode ? reservationMatchesQuery(reservation, query) : true))
       .map((reservation: any) => ({
         id: `reservation-${reservation.id}`,

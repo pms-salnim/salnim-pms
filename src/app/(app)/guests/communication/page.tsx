@@ -286,6 +286,9 @@ export default function CommunicationHubPage() {
   const getConversationKey = (email: Email) => {
     const source = String((email as any)?.source || '').trim().toLowerCase();
     if (source === 'guest_portal') {
+      const sourceReservationId = String((email as any)?.sourceReservationId || (email as any)?.source_reservation_id || '').trim();
+      if (sourceReservationId) return `guest_portal_reservation:${sourceReservationId}`;
+
       const sourceConversationId = String((email as any)?.sourceConversationId || (email as any)?.source_conversation_id || '').trim();
       if (sourceConversationId) return `guest_portal:${sourceConversationId}`;
     }
@@ -685,7 +688,7 @@ export default function CommunicationHubPage() {
       return {
         key,
         contactName: conversationDisplayNames[key] || latestEmail.from?.name || latestEmail.from?.email || 'Unknown sender',
-        contactEmail: latestEmail.from?.email || 'unknown@example.com',
+        contactEmail: latestEmail.from?.email || '',
         latestEmail,
         messages: sortedMessages,
         unreadCount: sortedMessages.filter((item) => item.unread).length,
@@ -1549,9 +1552,35 @@ export default function CommunicationHubPage() {
 
   const handleStartConversation = async (result: ConversationSearchResult, channel: ConversationChannel) => {
     const resultEmail = String(result.email || '').trim().toLowerCase();
-    const existing = resultEmail
-      ? displayEmails.find((email) => String(email.from?.email || '').trim().toLowerCase() === resultEmail)
-      : undefined;
+    const resultReservationId = String(result.reservationId || '').trim();
+    const existing = displayEmails.find((email) => {
+      if (resultEmail && String(email.from?.email || '').trim().toLowerCase() === resultEmail) {
+        return true;
+      }
+
+      if (channel === 'guest_portal' && resultReservationId) {
+        const sourceReservationId = String((email as any)?.sourceReservationId || (email as any)?.source_reservation_id || '').trim();
+        if (sourceReservationId && sourceReservationId === resultReservationId) {
+          return true;
+        }
+
+        const senderEmail = String(email.from?.email || '').trim().toLowerCase();
+        if (senderEmail === `guest-portal+${resultReservationId.toLowerCase()}@guest-portal.local`) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    if (channel === 'guest_portal' && !resultReservationId) {
+      toast({
+        title: 'Reservation required',
+        description: 'Guest portal chat requires a reservation.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsNewConversationOpen(false);
     setActiveView('inbox_all');
@@ -1571,13 +1600,22 @@ export default function CommunicationHubPage() {
 
     const synthetic: Email = {
       uid: 0,
+      source: channel === 'guest_portal' ? 'guest_portal' : channel,
+      sourceReservationId: channel === 'guest_portal' ? String(result.reservationId || '').trim() : undefined,
       from: {
         name: result.guestName || 'Guest',
-        email: resultEmail || `guest-${Date.now()}@unknown.local`,
+        email:
+          channel === 'guest_portal'
+            ? (String(result.reservationId || '').trim()
+                ? `guest-portal+${String(result.reservationId || '').trim()}@guest-portal.local`
+                : '')
+            : resultEmail,
       },
-      subject: result.reservationNumber
-        ? `Reservation ${result.reservationNumber}`
-        : 'New conversation',
+      subject: channel === 'guest_portal'
+        ? 'Guest portal chat'
+        : (result.reservationNumber
+            ? `Reservation ${result.reservationNumber}`
+            : 'New conversation'),
       date: new Date().toISOString(),
       snippet: '',
       body: '',

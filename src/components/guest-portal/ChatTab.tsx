@@ -410,7 +410,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ data, colors, guestName, triggerToast
     if (conversation?.id && !isLoadingChat) {
       const interval = setInterval(() => {
         loadMessages(conversation.id);
-      }, 5000); // 5 seconds for more real-time feel
+      }, 2000); // 2 seconds for near-instant delivery feedback
       
       return () => clearInterval(interval);
     }

@@ -22,6 +22,7 @@ export interface Email {
   sourceSenderType?: string;
   sourceConversationId?: string;
   sourceMessageId?: string;
+  sourceReservationId?: string;
   from: { name: string; email: string };
   subject: string;
   date: string;

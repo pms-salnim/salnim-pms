@@ -74,7 +74,14 @@ const CHANNELS: Array<{ key: ChannelKey; label: string }> = [
 const stripHtml = (value: string) => value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const normalizePhone = (value?: string | null) => String(value || '').replace(/[^\d+]/g, '');
 
-const isSentMessage = (message: Email) => !message.uid || Number(message.uid) <= 0;
+const isSentMessage = (message: Email) => {
+  const source = String((message as any).source || '').trim().toLowerCase();
+  if (source === 'guest_portal') {
+    const senderType = String((message as any).sourceSenderType || (message as any).source_sender_type || '').trim().toLowerCase();
+    if (senderType) return senderType === 'property';
+  }
+  return !message.uid || Number(message.uid) <= 0;
+};
 
 const messageText = (message: Email) => {
   if (message.bodyText?.trim()) return message.bodyText.trim();
@@ -162,6 +169,30 @@ export default function EmailDetailView({
     return '';
   }, [latestIncoming, email.id]);
 
+  const sourceConversationIdFromThread = useMemo(() => {
+    const fromSelected = String((email as any).sourceConversationId || (email as any).source_conversation_id || '').trim();
+    if (fromSelected) return fromSelected;
+
+    for (let i = threadMessages.length - 1; i >= 0; i -= 1) {
+      const item = threadMessages[i] as any;
+      const id = String(item?.sourceConversationId || item?.source_conversation_id || '').trim();
+      if (id) return id;
+    }
+    return '';
+  }, [email, threadMessages]);
+
+  const sourceReservationIdFromThread = useMemo(() => {
+    const fromSelected = String((email as any).sourceReservationId || (email as any).source_reservation_id || '').trim();
+    if (fromSelected) return fromSelected;
+
+    for (let i = threadMessages.length - 1; i >= 0; i -= 1) {
+      const item = threadMessages[i] as any;
+      const id = String(item?.sourceReservationId || item?.source_reservation_id || '').trim();
+      if (id) return id;
+    }
+    return '';
+  }, [email, threadMessages]);
+
   const contactPhone = useMemo(() => normalizePhone(guestContext?.guest?.phone), [guestContext?.guest?.phone]);
 
   const handleSwitchChannel = (channel: ChannelKey) => {
@@ -220,11 +251,14 @@ export default function EmailDetailView({
   const sendViaGuestPortal = async (body: string): Promise<string> => {
     if (!user?.propertyId) throw new Error('Missing property context');
 
-    const reservationId = guestContext?.reservations?.[0]?.id;
-    if (!reservationId) throw new Error('No reservation linked for guest portal chat.');
+    const reservationId = sourceReservationIdFromThread || guestContext?.reservations?.[0]?.id;
+    let conversationId = guestPortalConversationId || sourceConversationIdFromThread;
 
-    let conversationId = guestPortalConversationId;
     if (!conversationId) {
+      if (!reservationId) {
+        throw new Error('No reservation linked for guest portal chat.');
+      }
+
       const listResult = await guestPortalApi.listConversations(user.propertyId);
       const list = listResult?.conversations || [];
       const existing = list.find((item: any) => String(item?.reservation_id || '') === String(reservationId));
@@ -273,7 +307,16 @@ export default function EmailDetailView({
   };
 
   const loadGuestPortalHistory = async (propertyId: string) => {
-    const reservationId = guestContext?.reservations?.[0]?.id;
+    const reservationId = sourceReservationIdFromThread || guestContext?.reservations?.[0]?.id;
+    const knownConversationId = sourceConversationIdFromThread || guestPortalConversationId;
+
+    if (knownConversationId) {
+      const messagesResult = await guestPortalApi.getMessages(propertyId, knownConversationId, 100);
+      setGuestPortalConversationId(knownConversationId);
+      setGuestPortalMessages(messagesResult?.messages || []);
+      return;
+    }
+
     if (!reservationId) {
       setGuestPortalMessages([]);
       return;
@@ -443,7 +486,7 @@ export default function EmailDetailView({
   const mappedEmailMessages = useMemo<UnifiedMessage[]>(() => {
     return threadMessages.map((message) => ({
       id: String(message.id || `${message.uid}-${message.date}`),
-      source: 'email',
+      source: String((message as any).source || '').trim().toLowerCase() === 'guest_portal' ? 'guest_portal' : 'email',
       outgoing: isSentMessage(message),
       date: message.date,
       senderName: message.from?.name || message.from?.email || 'Unknown',
