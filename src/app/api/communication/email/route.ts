@@ -1098,6 +1098,8 @@ async function handleGetEmailGuestContext(
         usedEmailRowMessageId: false,
         usedMessageToConversationFallback: false,
         usedConversationToReservationFallback: false,
+        usedConversationGuestEmailFallback: false,
+        loadedConversationGuestName: false,
         usedAliasToReservationFallback: false,
         usedAliasToConversationFallback: false,
         matchedReservationById: false,
@@ -1120,6 +1122,8 @@ async function handleGetEmailGuestContext(
     let reservationId = rawReservationId;
     let sourceConversationId = rawSourceConversationId;
     let sourceMessageId = rawSourceMessageId;
+    let conversationGuestEmail = '';
+    let conversationGuestName = '';
 
     if (emailId) {
       const { data: emailRow } = await supabase
@@ -1164,13 +1168,21 @@ async function handleGetEmailGuestContext(
     if (!reservationId && sourceConversationId) {
       const { data: conversationRow } = await supabase
         .from('guest_portal_conversations')
-        .select('reservation_id')
+        .select('reservation_id, guest_email, guest_name')
         .eq('property_id', propertyId)
         .eq('id', sourceConversationId)
         .maybeSingle();
 
       reservationId = String((conversationRow as any)?.reservation_id || '').trim();
+      conversationGuestEmail = String((conversationRow as any)?.guest_email || '').trim().toLowerCase();
+      conversationGuestName = String((conversationRow as any)?.guest_name || '').trim();
       trace.lookup.usedConversationToReservationFallback = Boolean(reservationId);
+      trace.lookup.loadedConversationGuestName = Boolean(conversationGuestName);
+
+      if (!guestEmail && conversationGuestEmail) {
+        guestEmail = conversationGuestEmail;
+        trace.lookup.usedConversationGuestEmailFallback = true;
+      }
     }
 
     if (!reservationId && guestEmail) {
@@ -1273,11 +1285,7 @@ async function handleGetEmailGuestContext(
     const primaryGuest = matchingGuests[0] || null;
     trace.match.matchingGuestsCount = matchingGuests.length;
 
-    const reservationGuestName = String(matchedReservationById?.guest_name || '').trim();
-
-    if (!primaryGuest && !matchedReservationById) {
-      return NextResponse.json({ success: true, context: null, trace });
-    }
+    const reservationGuestName = String(matchedReservationById?.guest_name || conversationGuestName || '').trim();
 
     if (!guestPhone && primaryGuest?.phone) {
       guestPhone = String(primaryGuest.phone);
