@@ -1089,6 +1089,8 @@ export default function CommunicationHubPage() {
   const handlePermanentDeleteThread = useCallback(async (conversationKey: string) => {
     const { emailIds } = getThreadMessageRefs(conversationKey);
 
+    setTrashedConversationKeys((prev) => prev.filter((key) => key !== conversationKey));
+
     if (selectedEmail && getConversationKey(selectedEmail) === conversationKey) {
       setSelectedEmail(null);
     }
@@ -1097,6 +1099,7 @@ export default function CommunicationHubPage() {
 
     const response = await emailApi.deletePermanently(user.propertyId, emailIds);
     if (!response?.success) {
+      setTrashedConversationKeys((prev) => [conversationKey, ...prev.filter((key) => key !== conversationKey)]);
       toast({ title: 'Permanent delete failed', description: 'Could not permanently delete this thread.', variant: 'destructive' });
       return;
     }
