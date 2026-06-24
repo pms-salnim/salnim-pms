@@ -48,9 +48,10 @@ export const emailApi = {
     email: string,
     emailId?: string,
     phone?: string,
-    reservationId?: string
+    reservationId?: string,
+    sourceConversationId?: string
   ) {
-    return this.fetch('getEmailGuestContext', { propertyId, email, emailId, phone, reservationId });
+    return this.fetch('getEmailGuestContext', { propertyId, email, emailId, phone, reservationId, sourceConversationId });
   },
 
   async markRead(propertyId: string, emailIds: string[], emailUids?: number[]) {

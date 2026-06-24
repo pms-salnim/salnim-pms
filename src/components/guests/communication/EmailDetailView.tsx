@@ -507,7 +507,8 @@ export default function EmailDetailView({
           lookupEmail,
           email.id,
           undefined,
-          sourceReservationIdFromThread || undefined
+          sourceReservationIdFromThread || undefined,
+          sourceConversationIdFromThread || undefined
         );
         const context = result?.context || null;
         setGuestContext(context);
@@ -520,7 +521,7 @@ export default function EmailDetailView({
     };
 
     loadGuestContext();
-  }, [email.id, email.from?.email, latestIncoming, sourceReservationIdFromThread, user?.propertyId]);
+  }, [email.id, email.from?.email, latestIncoming, sourceConversationIdFromThread, sourceReservationIdFromThread, user?.propertyId]);
 
   useEffect(() => {
     const loadChannelHistory = async () => {

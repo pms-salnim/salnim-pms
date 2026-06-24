@@ -1077,11 +1077,12 @@ async function handleGetEmailGuestContext(
     const rawPhone = typeof data?.phone === 'string' ? data.phone.trim() : '';
     const emailId = typeof data?.emailId === 'string' ? data.emailId : '';
     const rawReservationId = typeof data?.reservationId === 'string' ? data.reservationId.trim() : '';
+    const rawSourceConversationId = typeof data?.sourceConversationId === 'string' ? data.sourceConversationId.trim() : '';
 
     let guestEmail = rawEmail;
     let guestPhone = rawPhone;
     let reservationId = rawReservationId;
-    let sourceConversationId = '';
+    let sourceConversationId = rawSourceConversationId;
 
     if (emailId) {
       const { data: emailRow } = await supabase
@@ -1097,7 +1098,9 @@ async function handleGetEmailGuestContext(
       if (!reservationId) {
         reservationId = String((emailRow as any)?.source_reservation_id || '').trim();
       }
-      sourceConversationId = String((emailRow as any)?.source_conversation_id || '').trim();
+      if (!sourceConversationId) {
+        sourceConversationId = String((emailRow as any)?.source_conversation_id || '').trim();
+      }
     }
 
     if (!reservationId && sourceConversationId) {
@@ -1234,6 +1237,14 @@ async function handleGetEmailGuestContext(
       if (normalizedGuestPhone && reservationPhones.includes(normalizedGuestPhone)) return true;
       return false;
     });
+
+    if (matchedReservationById) {
+      const matchedReservationId = String(matchedReservationById.id || '').trim();
+      const alreadyIncluded = matchedReservations.some((reservation: any) => String(reservation?.id || '').trim() === matchedReservationId);
+      if (!alreadyIncluded) {
+        matchedReservations.unshift(matchedReservationById);
+      }
+    }
 
     const reservationIds = matchedReservations
       .map((reservation: any) => String(reservation?.id || ''))
