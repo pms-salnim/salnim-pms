@@ -188,6 +188,42 @@ async function verifyUserProperty(
   }
 }
 
+async function resolveSenderDisplayName(userId: string): Promise<string> {
+  try {
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const userName = String(
+      userRow?.full_name
+      || userRow?.name
+      || [userRow?.first_name, userRow?.last_name].filter(Boolean).join(' ')
+      || ''
+    ).trim();
+    if (userName) return userName;
+
+    const { data: teamMember } = await supabase
+      .from('team_members')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const teamMemberName = String(
+      teamMember?.full_name
+      || teamMember?.name
+      || [teamMember?.first_name, teamMember?.last_name].filter(Boolean).join(' ')
+      || ''
+    ).trim();
+    if (teamMemberName) return teamMemberName;
+  } catch (error) {
+    console.warn('Failed to resolve sender display name:', error);
+  }
+
+  return 'Property Staff';
+}
+
 export async function POST(req: NextRequest) {
   try {
     const userId = await verifyUser(req);
@@ -389,6 +425,8 @@ async function handleSendMessage(
       );
     }
 
+    const senderDisplayName = await resolveSenderDisplayName(userId);
+
     // Create message
     const { data: messageData, error: msgError } = await supabase
       .from('guest_portal_messages')
@@ -397,7 +435,7 @@ async function handleSendMessage(
         property_id: propertyId,
         sender_type: 'property',
         sender_id: userId,
-        sender_name: 'Property Staff', // Should come from user profile
+        sender_name: senderDisplayName,
         message,
         message_status: 'sent',
       })
@@ -436,7 +474,7 @@ async function handleSendMessage(
       .update({
         last_message_text: message,
         last_message_sender_type: 'property',
-        last_message_sender_name: 'Property Staff',
+        last_message_sender_name: senderDisplayName,
         last_message_timestamp: new Date().toISOString(),
         guest_unread_count: (conversation.guest_unread_count || 0) + 1,
         updated_at: new Date().toISOString(),
@@ -528,6 +566,8 @@ async function handleStartConversation(
 
     if (convError) throw convError;
 
+    const senderDisplayName = await resolveSenderDisplayName(userId);
+
     // Create initial message
     const { data: messageData, error: msgError } = await supabase
       .from('guest_portal_messages')
@@ -536,7 +576,7 @@ async function handleStartConversation(
         property_id: propertyId,
         sender_type: 'property',
         sender_id: userId,
-        sender_name: 'Property Staff',
+        sender_name: senderDisplayName,
         message: initialMessage,
         message_status: 'sent',
       })
@@ -558,7 +598,7 @@ async function handleStartConversation(
       .update({
         last_message_text: initialMessage,
         last_message_sender_type: 'property',
-        last_message_sender_name: 'Property Staff',
+        last_message_sender_name: senderDisplayName,
         last_message_timestamp: new Date().toISOString(),
         guest_unread_count: (conversation.guest_unread_count || 0) + 1,
         updated_at: new Date().toISOString(),
