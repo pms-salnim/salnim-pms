@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { jwtVerify } from 'jose';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!;
-const jwtSecret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET!);
 
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
@@ -136,23 +133,19 @@ async function mirrorGuestPortalMessageToInbox(params: {
   }
 }
 
-interface AuthToken {
-  sub: string;
-  aud: string;
-  role?: string;
-}
-
 async function verifyUser(req: NextRequest): Promise<string | null> {
-  const authHeader = req.headers.get('Authorization');
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return null;
   }
 
   const token = authHeader.substring(7);
   try {
-    const verified = await jwtVerify(token, jwtSecret);
-    const payload = verified.payload as AuthToken;
-    return payload.sub;
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user?.id) {
+      return null;
+    }
+    return data.user.id;
   } catch (error) {
     console.error('Token verification failed:', error);
     return null;
