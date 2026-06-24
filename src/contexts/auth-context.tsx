@@ -180,6 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           uid: Number(row.uid || 0),
           source: inferredSource,
           sourceSenderType: row.source_sender_type || undefined,
+          sourceReservationId: row.source_reservation_id || undefined,
           sourceConversationId: row.source_conversation_id || undefined,
           sourceMessageId: row.source_message_id || undefined,
           from: {

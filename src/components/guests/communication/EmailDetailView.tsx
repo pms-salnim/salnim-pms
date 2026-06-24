@@ -26,6 +26,15 @@ type GuestContextPayload = {
     country: string | null;
     city: string | null;
   };
+  reservations?: Array<{
+    id: string;
+    reservationNumber?: string | null;
+    status?: string;
+    arrival?: string | null;
+    departure?: string | null;
+    room?: string | null;
+    outstandingBalance?: number | null;
+  }>;
 };
 
 type UnifiedMessage = {
@@ -61,7 +70,6 @@ interface EmailDetailViewProps {
   isNewConversation?: boolean;
   requireManualEmailSubject?: boolean;
   initialContactPhone?: string;
-  reservationNumber?: string;
   onNewEmailSent?: (sentEmail: Email, options?: { isFirstMessage?: boolean }) => void;
 }
 
@@ -124,7 +132,6 @@ export default function EmailDetailView({
   isNewConversation,
   requireManualEmailSubject,
   initialContactPhone,
-  reservationNumber,
   onNewEmailSent,
 }: EmailDetailViewProps) {
   const { user, property } = useAuth();
@@ -186,14 +193,13 @@ export default function EmailDetailView({
 
   const contactLine = useMemo(() => {
     if (threadPrimarySource === 'guest_portal') {
-      const reservationNumberLabel = String(reservationNumber || '').trim();
-      if (reservationNumberLabel) {
-        return `Res. N° ${reservationNumberLabel}`;
-      }
-      return 'Guest portal conversation';
+      const reservationNumber = String(guestContext?.reservations?.[0]?.reservationNumber || '').trim();
+      if (reservationNumber) return `Res. N° ${reservationNumber}`;
+      if (sourceReservationIdFromThread) return `Res. N° ${sourceReservationIdFromThread}`;
+      return 'Res. N° -';
     }
     return recipientEmail || 'Unknown contact';
-  }, [threadPrimarySource, recipientEmail, reservationNumber]);
+  }, [guestContext?.reservations, recipientEmail, sourceReservationIdFromThread, threadPrimarySource]);
 
   const recipientPhone = useMemo(() => {
     return normalizePhone(guestContext?.guest?.phone || initialContactPhone || '');
@@ -497,7 +503,13 @@ export default function EmailDetailView({
 
       setIsLoadingContext(true);
       try {
-        const result = await emailApi.getEmailGuestContext(user.propertyId, lookupEmail, email.id);
+        const result = await emailApi.getEmailGuestContext(
+          user.propertyId,
+          lookupEmail,
+          email.id,
+          undefined,
+          sourceReservationIdFromThread || undefined
+        );
         const context = result?.context || null;
         setGuestContext(context);
       } catch (error) {
@@ -509,7 +521,7 @@ export default function EmailDetailView({
     };
 
     loadGuestContext();
-  }, [email.id, email.from?.email, latestIncoming, user?.propertyId]);
+  }, [email.id, email.from?.email, latestIncoming, sourceReservationIdFromThread, user?.propertyId]);
 
   useEffect(() => {
     const loadChannelHistory = async () => {

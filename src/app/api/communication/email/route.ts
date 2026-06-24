@@ -1074,23 +1074,50 @@ async function handleGetEmailGuestContext(
     const rawEmail = typeof data?.email === 'string' ? data.email.trim().toLowerCase() : '';
     const rawPhone = typeof data?.phone === 'string' ? data.phone.trim() : '';
     const emailId = typeof data?.emailId === 'string' ? data.emailId : '';
+    const rawReservationId = typeof data?.reservationId === 'string' ? data.reservationId.trim() : '';
 
     let guestEmail = rawEmail;
     let guestPhone = rawPhone;
+    let reservationId = rawReservationId;
 
     if (!guestEmail && emailId) {
       const { data: emailRow } = await supabase
         .from('property_emails')
-        .select('from_email')
+        .select('from_email, source_reservation_id')
         .eq('property_id', propertyId)
         .eq('id', emailId)
         .maybeSingle();
 
       guestEmail = String(emailRow?.from_email || '').trim().toLowerCase();
+      if (!reservationId) {
+        reservationId = String((emailRow as any)?.source_reservation_id || '').trim();
+      }
     }
 
-    if (!guestEmail && !guestPhone) {
+    if (!guestEmail && !guestPhone && !reservationId) {
       return NextResponse.json({ success: true, context: null });
+    }
+
+    let matchedReservationById: any = null;
+    if (reservationId) {
+      const { data: reservationById, error: reservationByIdError } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('id', reservationId)
+        .maybeSingle();
+
+      if (reservationByIdError) throw reservationByIdError;
+      matchedReservationById = reservationById || null;
+
+      if (matchedReservationById) {
+        if (!guestEmail) {
+          guestEmail = String(matchedReservationById.guest_email || matchedReservationById.contact_email || '').trim().toLowerCase();
+        }
+        if (!guestPhone) {
+          guestPhone = String(matchedReservationById.guest_phone || matchedReservationById.contact_phone || '').trim();
+        }
+      }
     }
 
     const { data: guestRows, error: guestRowsError } = await supabase
@@ -1114,7 +1141,9 @@ async function handleGetEmailGuestContext(
 
     const primaryGuest = matchingGuests[0] || null;
 
-    if (!primaryGuest) {
+    const reservationGuestName = String(matchedReservationById?.guest_name || '').trim();
+
+    if (!primaryGuest && !matchedReservationById) {
       return NextResponse.json({ success: true, context: null });
     }
 
@@ -1136,6 +1165,8 @@ async function handleGetEmailGuestContext(
     const normalizedGuestPhone = guestPhone.replace(/\s+/g, '');
 
     const matchedReservations = (reservationRows || []).filter((reservation: any) => {
+      if (reservationId && String(reservation?.id || '') === reservationId) return true;
+
       const reservationGuestId = String(reservation?.guest_id || '');
       const reservationEmails = [reservation?.guest_email, reservation?.contact_email]
         .map((value: any) => String(value || '').trim().toLowerCase())
@@ -1198,6 +1229,7 @@ async function handleGetEmailGuestContext(
 
         return {
           id: reservationId,
+          reservationNumber: reservation?.reservation_number || reservation?.reservationNumber || null,
           status: reservation?.status || 'Unknown',
           arrival: reservation?.start_date || null,
           departure: reservation?.end_date || null,
@@ -1211,14 +1243,20 @@ async function handleGetEmailGuestContext(
         return bStart - aStart;
       });
 
+    const fallbackGuestId = reservationId ? `reservation:${reservationId}` : `unknown:${guestEmail || guestPhone || 'guest'}`;
     const context = {
       guest: {
-        id: primaryGuest.id,
-        fullName: primaryGuest.name || `${primaryGuest.first_name || ''} ${primaryGuest.last_name || ''}`.trim() || guestEmail,
-        email: primaryGuest.email || guestEmail,
-        phone: primaryGuest.phone || null,
-        country: primaryGuest.country || null,
-        city: primaryGuest.city || null,
+        id: primaryGuest?.id || fallbackGuestId,
+        fullName:
+          primaryGuest?.name
+          || `${primaryGuest?.first_name || ''} ${primaryGuest?.last_name || ''}`.trim()
+          || reservationGuestName
+          || guestEmail
+          || 'Guest',
+        email: primaryGuest?.email || guestEmail,
+        phone: primaryGuest?.phone || guestPhone || null,
+        country: primaryGuest?.country || null,
+        city: primaryGuest?.city || null,
       },
       reservations,
     };
@@ -1580,6 +1618,72 @@ async function handleDeletePermanently(
 
     if (threadEmailIds.length === 0) {
       return NextResponse.json({ success: true });
+    }
+
+    const { data: threadRows, error: threadRowsError } = await supabase
+      .from('property_emails')
+      .select('source, source_conversation_id')
+      .eq('property_id', propertyId)
+      .in('id', threadEmailIds);
+
+    if (threadRowsError) {
+      throw threadRowsError;
+    }
+
+    const guestPortalConversationIds = Array.from(
+      new Set(
+        (threadRows || [])
+          .filter((row: any) => normalizeText(row?.source).toLowerCase() === 'guest_portal')
+          .map((row: any) => normalizeText(row?.source_conversation_id))
+          .filter(Boolean)
+      )
+    );
+
+    if (guestPortalConversationIds.length > 0) {
+      const { data: guestPortalRows, error: guestPortalRowsError } = await supabase
+        .from('guest_portal_messages')
+        .select('id')
+        .eq('property_id', propertyId)
+        .in('conversation_id', guestPortalConversationIds);
+
+      if (guestPortalRowsError) {
+        throw guestPortalRowsError;
+      }
+
+      const guestPortalMessageIds = (guestPortalRows || [])
+        .map((row: any) => normalizeText(row?.id))
+        .filter(Boolean);
+
+      if (guestPortalMessageIds.length > 0) {
+        const { error: guestPortalAttachmentDeleteError } = await supabase
+          .from('guest_portal_message_attachments')
+          .delete()
+          .in('message_id', guestPortalMessageIds);
+
+        if (guestPortalAttachmentDeleteError) {
+          throw guestPortalAttachmentDeleteError;
+        }
+      }
+
+      const { error: guestPortalMessageDeleteError } = await supabase
+        .from('guest_portal_messages')
+        .delete()
+        .eq('property_id', propertyId)
+        .in('conversation_id', guestPortalConversationIds);
+
+      if (guestPortalMessageDeleteError) {
+        throw guestPortalMessageDeleteError;
+      }
+
+      await supabase
+        .from('guest_portal_conversations')
+        .update({
+          unread_count: 0,
+          guest_unread_count: 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('property_id', propertyId)
+        .in('id', guestPortalConversationIds);
     }
 
     const { error: labelDeleteError } = await supabase

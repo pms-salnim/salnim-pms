@@ -365,21 +365,6 @@ async function handleGetMessages(
       );
     }
 
-    let threadStartIso: string | null = null;
-    const { data: threadStartRow } = await supabase
-      .from('property_emails')
-      .select('date, date_ms')
-      .eq('property_id', propertyId)
-      .eq('source', 'guest_portal')
-      .eq('source_conversation_id', String(conversationId))
-      .order('date_ms', { ascending: true, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (threadStartRow?.date) {
-      threadStartIso = String(threadStartRow.date);
-    }
-
     let query = supabase
       .from('guest_portal_messages')
       .select(`
@@ -389,10 +374,6 @@ async function handleGetMessages(
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: false })
       .limit(pageSize);
-
-    if (threadStartIso) {
-      query = query.gte('created_at', threadStartIso);
-    }
 
     if (lastMessageId) {
       const { data: lastMessage } = await supabase

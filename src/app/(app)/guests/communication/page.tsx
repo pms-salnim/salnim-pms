@@ -62,6 +62,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import GuestPortalChatView from '@/components/guests/communication/GuestPortalChatView';
 import WhatsAppChatView from '@/components/guests/communication/WhatsAppChatView';
+import ReservationDetailModal from '@/components/reservations/reservation-detail-modal';
 
 type ActiveView = 
     | 'inbox_all' 
@@ -101,11 +102,6 @@ type PendingThreadAction = {
 } | null;
 
 const GuestProfile = dynamic(() => import('@/components/guests/guest-profile'), {
-  loading: () => <div className="flex h-full items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
-  ssr: false,
-});
-
-const ReservationDetailModal = dynamic(() => import('@/components/reservations/reservation-detail-modal'), {
   loading: () => <div className="flex h-full items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
   ssr: false,
 });
@@ -233,13 +229,6 @@ export default function CommunicationHubPage() {
 
   const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
   const [replyingToEmail, setReplyingToEmail] = useState<Email | null>(null);
-  const [selectedReservationForDetails, setSelectedReservationForDetails] = useState<Reservation | null>(null);
-  const [isReservationDetailsOpen, setIsReservationDetailsOpen] = useState(false);
-
-  const logGuestInfo = useCallback((step: string, payload?: Record<string, unknown>) => {
-    const stamp = new Date().toISOString();
-    console.log('[GuestInfo][Communication]', { stamp, step, ...(payload || {}) });
-  }, []);
   
   // Mailbox-specific states
   const [searchQuery, setSearchQuery] = useState('');
@@ -254,6 +243,8 @@ export default function CommunicationHubPage() {
   const [guestReservations, setGuestReservations] = useState<Reservation[]>([]);
   const [isLoadingGuestPanel, setIsLoadingGuestPanel] = useState(false);
   const [isGuestInfoPanelOpen, setIsGuestInfoPanelOpen] = useState(false);
+  const [isReservationDetailsOpen, setIsReservationDetailsOpen] = useState(false);
+  const [selectedReservationForPanel, setSelectedReservationForPanel] = useState<Reservation | null>(null);
   const [threadMailbox, setThreadMailbox] = useState<ThreadMailbox>('all');
   const [pinnedConversationKeys, setPinnedConversationKeys] = useState<string[]>([]);
   const [archivedConversationKeys, setArchivedConversationKeys] = useState<string[]>([]);
@@ -1677,274 +1668,99 @@ export default function CommunicationHubPage() {
     }
   };
 
-  const getThreadMessagesForEmail = useCallback((email: Email): Email[] => {
-    const key = getConversationKey(email);
-    const history = conversationHistoryByKey.get(key);
-    return history && history.length > 0 ? history : [email];
-  }, [conversationHistoryByKey]);
-
-  const extractThreadReservationKeys = useCallback((email: Email) => {
-    const threadMessages = getThreadMessagesForEmail(email);
-    const reservationIdCandidates = new Set<string>();
-    const reservationNumberCandidates = new Set<string>();
-
-    threadMessages.forEach((message: any) => {
-      const sourceReservationId = String(message?.sourceReservationId || message?.source_reservation_id || '').trim();
-      const sourceReservationNumber = String(message?.sourceReservationNumber || message?.source_reservation_number || '').trim();
-
-      if (sourceReservationId) reservationIdCandidates.add(sourceReservationId);
-      if (sourceReservationNumber) reservationNumberCandidates.add(sourceReservationNumber);
-    });
-
-    const emailValue = String(email.from?.email || '').trim().toLowerCase();
-    const senderMatch = emailValue.match(/^guest-portal\+([^@]+)@guest-portal\.local$/i);
-    if (senderMatch?.[1]) {
-      const token = String(senderMatch[1]).trim();
-      if (token) {
-        reservationIdCandidates.add(token);
-        reservationNumberCandidates.add(token);
-      }
-    }
-
-    return {
-      reservationIds: Array.from(reservationIdCandidates),
-      reservationNumbers: Array.from(reservationNumberCandidates),
-      threadMessages,
-    };
-  }, [getThreadMessagesForEmail]);
-
-  const resolveThreadReservation = useCallback((email: Email): Reservation | null => {
-    const { reservationIds, reservationNumbers } = extractThreadReservationKeys(email);
-
-    for (const candidate of reservationNumbers) {
-      const normalizedCandidate = String(candidate).trim().toLowerCase();
-      if (!normalizedCandidate) continue;
-
-      const byNumber = guestReservations.find((reservation) => String(reservation.reservationNumber || '').trim().toLowerCase() === normalizedCandidate);
-      if (byNumber) return byNumber;
-    }
-
-    for (const candidate of reservationIds) {
-      const byId = guestReservations.find((reservation) => String(reservation.id || '').trim() === candidate);
-      if (byId) return byId;
-    }
-
-    return null;
-  }, [extractThreadReservationKeys, guestReservations]);
-
-  const isGuestPortalThread = useCallback((email: Email): boolean => {
-    const { threadMessages } = extractThreadReservationKeys(email);
-    if (threadMessages.length === 0) return false;
-
-    if (getConversationKey(email).startsWith('guest_portal')) return true;
-
-    return threadMessages.some((message: any) => {
-      const source = String(message?.source || '').trim().toLowerCase();
-      if (source === 'guest_portal') return true;
-
-      const sender = String(message?.from?.email || '').trim().toLowerCase();
-      return /^guest-portal\+[^@]+@guest-portal\.local$/i.test(sender);
-    });
-  }, [extractThreadReservationKeys]);
-
-  const selectedThreadReservation = useMemo(() => {
-    if (!selectedEmail) return null;
-    return resolveThreadReservation(selectedEmail);
-  }, [resolveThreadReservation, selectedEmail]);
-
-  const resolveThreadReservationAsync = useCallback(async (email: Email): Promise<Reservation | null> => {
-    const directMatch = resolveThreadReservation(email);
-    if (directMatch) {
-      logGuestInfo('resolve.async.direct_match', {
-        threadKey: getConversationKey(email),
-        reservationId: String(directMatch.id || ''),
-        reservationNumber: String(directMatch.reservationNumber || ''),
-      });
-      return directMatch;
-    }
-
-    if (!user?.propertyId) return null;
-
-    const { reservationNumbers, threadMessages } = extractThreadReservationKeys(email);
-    const conversationIds = new Set<string>();
-
-    threadMessages.forEach((message: any) => {
-      const sourceConversationId = String(message?.sourceConversationId || message?.source_conversation_id || '').trim();
-      if (sourceConversationId) {
-        conversationIds.add(sourceConversationId);
-      }
-    });
-
+  const resolveReservationFromThread = useCallback((email: Email): Reservation | null => {
     const conversationKey = getConversationKey(email);
-    if (conversationKey.startsWith('guest_portal:')) {
-      const keyConversationId = String(conversationKey.split(':')[1] || '').trim();
-      if (keyConversationId) {
-        conversationIds.add(keyConversationId);
-      }
-    }
+    const thread = conversationHistoryByKey.get(conversationKey) || [email];
 
-    logGuestInfo('resolve.async.start', {
-      threadKey: conversationKey,
-      reservationNumbers,
-      conversationIds: Array.from(conversationIds),
-      threadMessageCount: threadMessages.length,
-      selectedFromEmail: String(email.from?.email || ''),
+    const hasOnlyGuestPortalMessages = thread.length > 0 && thread.every((item) => String((item as any).source || '').trim().toLowerCase() === 'guest_portal');
+    if (!hasOnlyGuestPortalMessages) return null;
+
+    const containsRealEmailIdentifier = thread.some((item) => {
+      const fromEmail = String(item.from?.email || '').trim().toLowerCase();
+      if (!fromEmail) return false;
+      return !fromEmail.endsWith('@guest-portal.local');
     });
 
-    try {
-      const supabase = createClient();
-
-      if (conversationIds.size > 0) {
-        const { data: conversations, error: convError } = await supabase
-          .from('guest_portal_conversations')
-          .select('id, reservation_id')
-          .eq('property_id', user.propertyId)
-          .in('id', Array.from(conversationIds));
-
-        if (!convError && Array.isArray(conversations)) {
-          const reservationIdCandidates = conversations
-            .map((row: any) => String(row?.reservation_id || '').trim())
-            .filter(Boolean);
-
-          for (const reservationId of reservationIdCandidates) {
-            const localReservation = guestReservations.find((reservation) => String(reservation.id || '').trim() === reservationId);
-            if (localReservation) {
-              logGuestInfo('resolve.async.by_conversation.local_reservation_id_match', {
-                reservationId,
-                reservationNumber: String(localReservation.reservationNumber || ''),
-              });
-              return localReservation;
-            }
-
-            const { data: reservationRow, error: reservationError } = await supabase
-              .from('reservations')
-              .select('*')
-              .eq('property_id', user.propertyId)
-              .eq('id', reservationId)
-              .maybeSingle();
-
-            if (!reservationError && reservationRow) {
-              logGuestInfo('resolve.async.by_conversation.remote_reservation_id_match', {
-                reservationId,
-                reservationNumber: String(reservationRow?.reservation_number || reservationRow?.reservationNumber || ''),
-              });
-              return normalizeReservationFromRow(reservationRow);
-            }
-          }
-        }
-      }
-
-      for (const reservationNumber of reservationNumbers) {
-        const normalizedNumber = String(reservationNumber || '').trim().toLowerCase();
-        if (!normalizedNumber) continue;
-
-        const localReservation = guestReservations.find((reservation) => String(reservation.reservationNumber || '').trim().toLowerCase() === normalizedNumber);
-        if (localReservation) return localReservation;
-
-        const { data: reservationRows, error: reservationError } = await supabase
-          .from('reservations')
-          .select('*')
-          .eq('property_id', user.propertyId)
-          .eq('reservation_number', reservationNumber)
-          .limit(1);
-
-        if (!reservationError && Array.isArray(reservationRows) && reservationRows.length > 0) {
-          logGuestInfo('resolve.async.by_reservation_number.remote_match', {
-            reservationNumber,
-            reservationId: String(reservationRows[0]?.id || ''),
-          });
-          return normalizeReservationFromRow(reservationRows[0]);
-        }
-      }
-    } catch (error) {
-      logGuestInfo('resolve.async.error', {
-        threadKey: getConversationKey(email),
-        message: error instanceof Error ? error.message : String(error),
-      });
-      console.warn('Failed to resolve reservation for guest info action:', error);
+    const containsPhoneIdentifier = Boolean(normalizePhone(selectedThreadContactPhone || ''));
+    if (containsRealEmailIdentifier || containsPhoneIdentifier) {
+      return null;
     }
 
-    logGuestInfo('resolve.async.no_match', {
-      threadKey: getConversationKey(email),
-      reservationNumbers,
-      conversationIds: Array.from(conversationIds),
-    });
+    const explicitReservationId = thread
+      .map((item) => String((item as any)?.sourceReservationId || (item as any)?.source_reservation_id || '').trim())
+      .find(Boolean);
 
-    return null;
-  }, [extractThreadReservationKeys, getConversationKey, guestReservations, logGuestInfo, resolveThreadReservation, user?.propertyId]);
+    const senderEmail = String(thread[thread.length - 1]?.from?.email || '').trim().toLowerCase();
+    const reservationIdFromSender = (() => {
+      const match = senderEmail.match(/^guest-portal\+([^@]+)@guest-portal\.local$/i);
+      return match?.[1] ? String(match[1]).trim() : '';
+    })();
 
-  const resolveGuestForEmail = useCallback((email: Email, reservation: Reservation | null): Guest | null => {
-    const reservationGuestId = String(reservation?.guestId || '').trim();
-    if (reservationGuestId) {
-      const byReservationGuestId = guestDirectory.find((guest) => String(guest.id || '').trim() === reservationGuestId);
-      if (byReservationGuestId) return byReservationGuestId;
+    const targetReservationId = explicitReservationId || reservationIdFromSender;
+    if (!targetReservationId) return null;
+
+    const matched = guestReservations.find((reservation) => String(reservation.id || '').trim() === targetReservationId);
+    return matched || null;
+  }, [conversationHistoryByKey, getConversationKey, guestReservations, selectedThreadContactPhone]);
+
+  const openGuestInfoFromEmail = useCallback(async (email: Email) => {
+    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
+
+    const reservationOnlyThread = resolveReservationFromThread(email);
+    if (reservationOnlyThread) {
+      setSelectedReservationForPanel(reservationOnlyThread);
+      setIsGuestInfoPanelOpen(false);
+      setIsReservationDetailsOpen(true);
+      return;
     }
 
-    const selectedEmailValue = String(email.from?.email || '').trim().toLowerCase();
+    setSelectedReservationForPanel(null);
+    setIsReservationDetailsOpen(false);
+    setIsGuestInfoPanelOpen(true);
+  }, [handleSelectEmail, resolveReservationFromThread]);
+
+  const selectedGuestForPanel = useMemo(() => {
+    if (!selectedEmail) return null;
+
+    const selectedEmailValue = String(selectedEmail.from?.email || '').trim().toLowerCase();
+    const selectedPhoneValue = normalizePhone(selectedThreadContactPhone || '');
+    const selectedNameValue = String(selectedEmail.from?.name || '').trim().toLowerCase();
 
     const matchedGuest = guestDirectory.find((guest) => {
       const guestEmail = String(guest.email || '').trim().toLowerCase();
+      const guestPhone = normalizePhone(guest.phone || '');
+      const guestName = String(guest.fullName || '').trim().toLowerCase();
 
       if (selectedEmailValue && guestEmail && selectedEmailValue === guestEmail) return true;
+      if (selectedPhoneValue && guestPhone && selectedPhoneValue === guestPhone) return true;
+      if (selectedNameValue && guestName && selectedNameValue === guestName) return true;
       return false;
     });
 
     if (matchedGuest) return matchedGuest;
 
+    const linkedGuestId = guestReservations.find((reservation) => {
+      const sourceReservationId = String((selectedEmail as any)?.sourceReservationId || (selectedEmail as any)?.source_reservation_id || '').trim();
+      if (sourceReservationId && String(reservation.id || '').trim() === sourceReservationId) {
+        return true;
+      }
+
+      const reservationEmail = String(reservation.guestEmail || '').trim().toLowerCase();
+      const reservationPhone = normalizePhone(reservation.guestPhone || '');
+      const reservationName = String(reservation.guestName || '').trim().toLowerCase();
+      if (selectedEmailValue && reservationEmail && selectedEmailValue === reservationEmail) return true;
+      if (selectedPhoneValue && reservationPhone && selectedPhoneValue === reservationPhone) return true;
+      if (selectedNameValue && reservationName && selectedNameValue === reservationName) return true;
+      return false;
+    })?.guestId;
+
+    if (linkedGuestId) {
+      const matchedById = guestDirectory.find((guest) => guest.id === linkedGuestId);
+      if (matchedById) return matchedById;
+    }
+
     return null;
-  }, [guestDirectory]);
-
-  const openGuestInfoFromEmail = useCallback(async (email: Email) => {
-    logGuestInfo('cta.click', {
-      threadKey: getConversationKey(email),
-      fromEmail: String(email.from?.email || ''),
-      source: String((email as any)?.source || ''),
-    });
-
-    const reservation = await resolveThreadReservationAsync(email);
-    const matchedGuest = resolveGuestForEmail(email, reservation);
-
-    if (isGuestPortalThread(email) && reservation) {
-      logGuestInfo('cta.route.reservation_modal.guest_portal_thread', {
-        threadKey: getConversationKey(email),
-        reservationId: String(reservation.id || ''),
-        reservationNumber: String(reservation.reservationNumber || ''),
-      });
-      setSelectedReservationForDetails(reservation);
-      setIsReservationDetailsOpen(true);
-      setIsGuestInfoPanelOpen(false);
-      // Keep selected thread in sync, but do not block modal opening on this async action.
-      void handleSelectEmail(email, 'all', { markReadOnOpen: true });
-      return;
-    }
-
-    if (!matchedGuest && reservation) {
-      logGuestInfo('cta.route.reservation_modal.no_guest_record', {
-        threadKey: getConversationKey(email),
-        reservationId: String(reservation.id || ''),
-        reservationNumber: String(reservation.reservationNumber || ''),
-      });
-      setSelectedReservationForDetails(reservation);
-      setIsReservationDetailsOpen(true);
-      setIsGuestInfoPanelOpen(false);
-      // Keep selected thread in sync, but do not block modal opening on this async action.
-      void handleSelectEmail(email, 'all', { markReadOnOpen: true });
-      return;
-    }
-
-    logGuestInfo('cta.route.guest_panel', {
-      threadKey: getConversationKey(email),
-      hasMatchedGuest: !!matchedGuest,
-      hasReservation: !!reservation,
-    });
-    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
-    setIsGuestInfoPanelOpen(true);
-  }, [getConversationKey, handleSelectEmail, isGuestPortalThread, logGuestInfo, resolveGuestForEmail, resolveThreadReservationAsync]);
-
-  const selectedGuestForPanel = useMemo(() => {
-    if (!selectedEmail) return null;
-    return resolveGuestForEmail(selectedEmail, selectedThreadReservation);
-  }, [resolveGuestForEmail, selectedEmail, selectedThreadReservation]);
+  }, [guestDirectory, guestReservations, selectedEmail, selectedThreadContactPhone]);
 
   if (isLoadingAuth) {
     return <div className="flex h-screen items-center justify-center"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
@@ -2397,19 +2213,9 @@ export default function CommunicationHubPage() {
                     size="icon"
                     className="h-8 w-8 bg-white"
                     onClick={async () => {
-                      if (!selectedEmail) return;
-                      if (selectedThreadReservation) {
-                        logGuestInfo('cta.top_button.route.reservation_modal.prefetched', {
-                          threadKey: getConversationKey(selectedEmail),
-                          reservationId: String(selectedThreadReservation.id || ''),
-                          reservationNumber: String(selectedThreadReservation.reservationNumber || ''),
-                        });
-                        setSelectedReservationForDetails(selectedThreadReservation);
-                        setIsReservationDetailsOpen(true);
-                        setIsGuestInfoPanelOpen(false);
-                        return;
+                      if (selectedEmail) {
+                        await openGuestInfoFromEmail(selectedEmail);
                       }
-                      await openGuestInfoFromEmail(selectedEmail);
                     }}
                     title="Guest info"
                   >
@@ -2434,7 +2240,6 @@ export default function CommunicationHubPage() {
                   requireManualEmailSubject={shouldPromptSubjectForSelectedThread}
                   initialContactPhone={selectedThreadContactPhone}
                   onNewEmailSent={handleThreadEmailSent}
-                  reservationNumber={selectedThreadReservation?.reservationNumber ? String(selectedThreadReservation.reservationNumber) : undefined}
                 />
               </>
             ) : (
@@ -2492,11 +2297,11 @@ export default function CommunicationHubPage() {
         isOpen={isReservationDetailsOpen}
         onClose={() => {
           setIsReservationDetailsOpen(false);
-          setSelectedReservationForDetails(null);
+          setSelectedReservationForPanel(null);
         }}
-        initialData={selectedReservationForDetails}
-        propertySettings={property as Property | null}
-        canManage
+        initialData={selectedReservationForPanel}
+        propertySettings={property}
+        canManage={false}
         displayMode="sidepanel"
       />
 
