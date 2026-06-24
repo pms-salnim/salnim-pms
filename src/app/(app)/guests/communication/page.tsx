@@ -712,14 +712,11 @@ export default function CommunicationHubPage() {
       if (threadMailbox === 'pinned') return isPinned && !isArchived && !isTrashed;
       if (threadMailbox === 'needs_reply') {
         if (isArchived || isTrashed) return false;
-        // Last message must be inbound (not sent by us)
-        const msgs = conversationHistoryByKey.get(key);
-        const latest = msgs?.[0] || conversation.latestEmail;
-        const uid = Number(latest.uid || 0);
-        const fromEmail = String(latest.from?.email || '').trim().toLowerCase();
-        const userEmailLower = String(user?.email || '').trim().toLowerCase();
-        const isSent = !uid || uid <= 0 || (!!fromEmail && fromEmail === userEmailLower);
-        return !isSent;
+        const msgs = conversationHistoryByKey.get(key) || conversation.messages;
+        const latest = msgs[0] || conversation.latestEmail;
+        const hasUnread = msgs.some((message) => !!message.unread);
+        const needsReply = latest ? !isSentEmail(latest) : false;
+        return hasUnread || needsReply;
       }
       return !isArchived && !isTrashed;
     });
@@ -739,7 +736,7 @@ export default function CommunicationHubPage() {
       totalPages: Math.ceil(conversations.length / itemsPerPage) || 1,
       totalConversationCount: conversations.length,
     };
-  }, [archivedConversationKeys, conversationDisplayNames, conversationHistoryByKey, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, itemsPerPage, pinnedConversationKeys, searchQuery, threadMailbox, trashedConversationKeys, user?.email]);
+  }, [archivedConversationKeys, conversationDisplayNames, conversationHistoryByKey, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, isSentEmail, itemsPerPage, pinnedConversationKeys, searchQuery, threadMailbox, trashedConversationKeys]);
 
   const groupedConversations = useMemo(() => {
     const groups: { label: string; items: EmailConversation[] }[] = [];
