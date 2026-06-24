@@ -220,6 +220,7 @@ export default function CommunicationHubPage() {
   const [isTestingImap, setIsTestingImap] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [selectedThreadChannel, setSelectedThreadChannel] = useState<ThreadChannel>('all');
+  const [threadChannelFilter, setThreadChannelFilter] = useState<ThreadChannel>('all');
   const [isSelectedThreadNewConversation, setIsSelectedThreadNewConversation] = useState(false);
   const [shouldPromptSubjectForSelectedThread, setShouldPromptSubjectForSelectedThread] = useState(false);
   const [selectedThreadContactPhone, setSelectedThreadContactPhone] = useState('');
@@ -701,6 +702,19 @@ export default function CommunicationHubPage() {
     conversations = conversations.filter((conversation) => {
       const key = conversation.key;
       const messages = conversationHistoryByKey.get(key) || conversation.messages;
+
+      if (threadChannelFilter !== 'all') {
+        const hasSelectedChannel = messages.some((message) => {
+          const source = String((message as any)?.source || 'email').trim().toLowerCase();
+          if (threadChannelFilter === 'email') {
+            return !source || source === 'email';
+          }
+          return source === threadChannelFilter;
+        });
+
+        if (!hasSelectedChannel) return false;
+      }
+
       const isDbTrashed = messages.length > 0 && messages.every((message) => !!(message as any).trash);
       const isTrashed = isDbTrashed || trashedConversationKeys.includes(key);
       const isDbArchived = !isDbTrashed && messages.length > 0 && messages.every((message) => !!message.archived);
@@ -736,7 +750,7 @@ export default function CommunicationHubPage() {
       totalPages: Math.ceil(conversations.length / itemsPerPage) || 1,
       totalConversationCount: conversations.length,
     };
-  }, [archivedConversationKeys, conversationDisplayNames, conversationHistoryByKey, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, isSentEmail, itemsPerPage, pinnedConversationKeys, searchQuery, threadMailbox, trashedConversationKeys]);
+  }, [archivedConversationKeys, conversationDisplayNames, conversationHistoryByKey, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, isSentEmail, itemsPerPage, pinnedConversationKeys, searchQuery, threadChannelFilter, threadMailbox, trashedConversationKeys]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -1946,7 +1960,27 @@ export default function CommunicationHubPage() {
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   All conversations
                 </h3>
-                <span className="text-[10px] text-slate-400">{totalConversationCount} threads</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400">{totalConversationCount} threads</span>
+                  <Select
+                    value={threadChannelFilter}
+                    onValueChange={(value) => {
+                      setThreadChannelFilter(value as ThreadChannel);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-7 w-[128px] rounded-full border-slate-200 bg-white px-2 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="sms">SMS</SelectItem>
+                      <SelectItem value="guest_portal">Guest Portal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="group/filters relative">
