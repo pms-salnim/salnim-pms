@@ -138,12 +138,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         (imapConfig?.pass || imapConfig?.imapPass)
       );
 
-      // If IMAP is not configured, skip silently to avoid error-toast spam.
-      if (!hasImapConfig) {
-        if (!isPolling) {
-          console.debug('Email fetch skipped: IMAP not configured');
-        }
-        return;
+      // Keep syncing even without IMAP: the API falls back to stored rows
+      // (guest portal/whatsapp mirrored messages in property_emails).
+      if (!hasImapConfig && !isPolling) {
+        console.debug('Email fetch running without IMAP (stored rows fallback)');
       }
 
       // ✅ Prevent concurrent requests - exit if already syncing
@@ -182,7 +180,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           sourceSenderType: row.source_sender_type || undefined,
           sourceConversationId: row.source_conversation_id || undefined,
           sourceMessageId: row.source_message_id || undefined,
-          sourceReservationId: row.source_reservation_id || undefined,
           from: {
             name: row.from_name || row.from_email || 'Unknown',
             email: row.from_email || 'unknown@example.com',

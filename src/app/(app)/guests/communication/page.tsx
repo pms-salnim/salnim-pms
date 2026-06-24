@@ -817,17 +817,17 @@ export default function CommunicationHubPage() {
 
 
   const safeRefetchEmails = useCallback(() => {
-    if (user?.propertyId && hasImapChannelConfigured()) {
+    if (user?.propertyId) {
       refetchEmails();
     }
-  }, [user?.propertyId, hasImapChannelConfigured, refetchEmails]);
+  }, [user?.propertyId, refetchEmails]);
 
   const forceRefetchEmails = useCallback(() => {
-    if (user?.propertyId && hasImapChannelConfigured()) {
+    if (user?.propertyId) {
       // Automatic page refreshes should not show destructive toasts.
       refetchEmails(true, true);
     }
-  }, [user?.propertyId, hasImapChannelConfigured, refetchEmails]);
+  }, [user?.propertyId, refetchEmails]);
 
   useEffect(() => {
     if (!initialFetchDone && user?.propertyId) {
