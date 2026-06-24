@@ -738,6 +738,12 @@ export default function CommunicationHubPage() {
     };
   }, [archivedConversationKeys, conversationDisplayNames, conversationHistoryByKey, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, isSentEmail, itemsPerPage, pinnedConversationKeys, searchQuery, threadMailbox, trashedConversationKeys]);
 
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const groupedConversations = useMemo(() => {
     const groups: { label: string; items: EmailConversation[] }[] = [];
 
@@ -2153,6 +2159,61 @@ export default function CommunicationHubPage() {
                 <div className="p-8 text-center text-sm text-muted-foreground">No conversations</div>
               )}            </div>
           </ScrollArea>
+          <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-white px-4 py-2">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span>Rows per page</span>
+              <Select
+                value={String(itemsPerPage)}
+                onValueChange={(value) => {
+                  const parsed = Number(value);
+                  if (!Number.isFinite(parsed) || parsed <= 0) return;
+                  setItemsPerPage(parsed);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="h-7 w-[74px] rounded-md border-slate-200 bg-white px-2 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 15, 25, 50].map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span>
+                {totalConversationCount === 0
+                  ? '0-0 of 0'
+                  : `${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, totalConversationCount)} of ${totalConversationCount}`}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1}
+                title="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-1 text-xs text-slate-500">{currentPage}/{Math.max(totalPages, 1)}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setCurrentPage((prev) => Math.min(Math.max(totalPages, 1), prev + 1))}
+                disabled={currentPage >= totalPages}
+                title="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
           {/* Bulk select-all bar at bottom */}
           {isBulkMode && (
             <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-white px-4 py-2 text-xs text-slate-500">
