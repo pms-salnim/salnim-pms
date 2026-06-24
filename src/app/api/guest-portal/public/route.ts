@@ -214,6 +214,7 @@ async function mirrorGuestPortalMessageToInbox(params: {
           source: "guest_portal",
           source_sender_type: senderType,
           source_conversation_id: String(conversation.id || messageRow.conversation_id || ""),
+          source_reservation_id: String(conversation.reservation_id || ""),
           source_message_id: String(messageRow.id || ""),
           updated_at: new Date().toISOString(),
         },

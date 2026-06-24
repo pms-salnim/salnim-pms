@@ -46,7 +46,6 @@ import EmailDetailView from '../../../../components/guests/communication/EmailDe
 import LabelManager from '@/components/guests/communication/LabelManager';
 import { emailApi } from '@/lib/communication-api';
 import NewConversationDialog, { type ConversationChannel, type ConversationSearchResult } from '@/components/guests/communication/NewConversationDialog';
-import ReservationDetailModal from '@/components/reservations/reservation-detail-modal';
 import type { Guest } from '@/types/guest';
 import type { Reservation } from '@/types/reservation';
 import { createClient } from '@/utils/supabase/client';
@@ -102,6 +101,11 @@ type PendingThreadAction = {
 } | null;
 
 const GuestProfile = dynamic(() => import('@/components/guests/guest-profile'), {
+  loading: () => <div className="flex h-full items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
+  ssr: false,
+});
+
+const ReservationDetailModal = dynamic(() => import('@/components/reservations/reservation-detail-modal'), {
   loading: () => <div className="flex h-full items-center justify-center"><Icons.Spinner className="h-6 w-6 animate-spin" /></div>,
   ssr: false,
 });
@@ -229,6 +233,8 @@ export default function CommunicationHubPage() {
 
   const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
   const [replyingToEmail, setReplyingToEmail] = useState<Email | null>(null);
+  const [isReservationDetailsModalOpen, setIsReservationDetailsModalOpen] = useState(false);
+  const [selectedReservationForModal, setSelectedReservationForModal] = useState<Reservation | null>(null);
   
   // Mailbox-specific states
   const [searchQuery, setSearchQuery] = useState('');
@@ -243,8 +249,6 @@ export default function CommunicationHubPage() {
   const [guestReservations, setGuestReservations] = useState<Reservation[]>([]);
   const [isLoadingGuestPanel, setIsLoadingGuestPanel] = useState(false);
   const [isGuestInfoPanelOpen, setIsGuestInfoPanelOpen] = useState(false);
-  const [isReservationDetailsOpen, setIsReservationDetailsOpen] = useState(false);
-  const [selectedReservationForDetails, setSelectedReservationForDetails] = useState<Reservation | null>(null);
   const [threadMailbox, setThreadMailbox] = useState<ThreadMailbox>('all');
   const [pinnedConversationKeys, setPinnedConversationKeys] = useState<string[]>([]);
   const [archivedConversationKeys, setArchivedConversationKeys] = useState<string[]>([]);
@@ -1668,78 +1672,54 @@ export default function CommunicationHubPage() {
     }
   };
 
-  const resolveGuestPortalReservation = useCallback((email: Email): Reservation | null => {
-    if (!email) return null;
+  const getGuestPortalReservationIdentifier = useCallback((email: Email): string => {
+    const explicitReservationId = String((email as any)?.sourceReservationId || (email as any)?.source_reservation_id || '').trim();
+    if (explicitReservationId) return explicitReservationId;
+
+    const senderEmail = String(email.from?.email || '').trim().toLowerCase();
+    const guestPortalMatch = senderEmail.match(/^guest-portal\+(.+)@guest-portal\.local$/i);
+    if (guestPortalMatch?.[1]) {
+      return guestPortalMatch[1].trim();
+    }
+
+    return '';
+  }, []);
+
+  const findReservationForEmail = useCallback((email: Email): Reservation | null => {
+    const reservationIdentifier = getGuestPortalReservationIdentifier(email);
+    if (!reservationIdentifier) return null;
+
+    const normalizedIdentifier = reservationIdentifier.toLowerCase();
+    return guestReservations.find((reservation) => {
+      const reservationId = String(reservation.id || '').trim().toLowerCase();
+      const reservationNumber = String(reservation.reservationNumber || '').trim().toLowerCase();
+      return reservationId === normalizedIdentifier || reservationNumber === normalizedIdentifier;
+    }) || null;
+  }, [getGuestPortalReservationIdentifier, guestReservations]);
+
+  const openGuestInfoFromEmail = useCallback(async (email: Email) => {
+    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
 
     const source = String((email as any)?.source || '').trim().toLowerCase();
-    if (source !== 'guest_portal') return null;
-
-    const threadMessages = conversationHistoryByKey.get(getConversationKey(email)) || [email];
-    const reservationCandidates = new Set<string>();
-
-    const collectCandidate = (value: any) => {
-      const normalized = String(value || '').trim();
-      if (normalized) reservationCandidates.add(normalized);
-    };
-
-    const collectFromGuestPortalEmail = (value: any) => {
-      const normalized = String(value || '').trim().toLowerCase();
-      const match = normalized.match(/^guest-portal\+([^@]+)@guest-portal\.local$/i);
-      if (match?.[1]) {
-        reservationCandidates.add(match[1]);
+    if (source === 'guest_portal') {
+      const reservation = findReservationForEmail(email);
+      if (reservation) {
+        setIsGuestInfoPanelOpen(false);
+        setSelectedReservationForModal(reservation);
+        setIsReservationDetailsModalOpen(true);
+        return;
       }
-    };
-
-    threadMessages.forEach((item) => {
-      collectCandidate((item as any)?.sourceReservationId);
-      collectCandidate((item as any)?.source_reservation_id);
-      collectCandidate((item as any)?.sourceConversationId);
-      collectCandidate((item as any)?.source_conversation_id);
-      collectFromGuestPortalEmail(item?.from?.email);
-    });
-
-    const reservationList = guestReservations || [];
-    for (const candidate of reservationCandidates) {
-      const candidateLower = candidate.toLowerCase();
-      const matched = reservationList.find((reservation) => {
-        const reservationId = String(reservation.id || '').trim().toLowerCase();
-        const reservationNumber = String(reservation.reservationNumber || '').trim().toLowerCase();
-        return candidateLower === reservationId || (!!reservationNumber && candidateLower === reservationNumber);
-      });
-
-      if (matched) return matched;
     }
 
-    return null;
-  }, [conversationHistoryByKey, getConversationKey, guestReservations]);
-
-  const openGuestInfoFromEmail = useCallback((email: Email) => {
-    // Never block modal opening on read-mark network calls.
-    void handleSelectEmail(email, 'all', { markReadOnOpen: true });
-
-    try {
-      const source = String((email as any)?.source || '').trim().toLowerCase();
-      const sourceEmail = String(email?.from?.email || '').trim().toLowerCase();
-      const hasRealEmail = !!sourceEmail && !sourceEmail.endsWith('@guest-portal.local');
-      const hasPhone = !!String(selectedThreadContactPhone || '').trim();
-
-      if (source === 'guest_portal' && !hasRealEmail && !hasPhone) {
-        const reservation = resolveGuestPortalReservation(email);
-        if (reservation) {
-          setSelectedReservationForDetails(reservation);
-          setIsReservationDetailsOpen(true);
-          setIsGuestInfoPanelOpen(false);
-          return;
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to resolve guest info target modal:', error);
-    }
-
-    setSelectedReservationForDetails(null);
-    setIsReservationDetailsOpen(false);
+    setIsReservationDetailsModalOpen(false);
+    setSelectedReservationForModal(null);
     setIsGuestInfoPanelOpen(true);
-  }, [handleSelectEmail, resolveGuestPortalReservation, selectedThreadContactPhone]);
+  }, [findReservationForEmail, handleSelectEmail]);
+
+  const selectedReservationForPanel = useMemo(() => {
+    if (!selectedEmail) return null;
+    return findReservationForEmail(selectedEmail);
+  }, [findReservationForEmail, selectedEmail]);
 
   const selectedGuestForPanel = useMemo(() => {
     if (!selectedEmail) return null;
@@ -1776,8 +1756,13 @@ export default function CommunicationHubPage() {
       if (matchedById) return matchedById;
     }
 
+    if (selectedReservationForPanel?.guestId) {
+      const matchedByReservationGuestId = guestDirectory.find((guest) => guest.id === selectedReservationForPanel.guestId);
+      if (matchedByReservationGuestId) return matchedByReservationGuestId;
+    }
+
     return null;
-  }, [guestDirectory, guestReservations, selectedEmail, selectedThreadContactPhone]);
+  }, [guestDirectory, guestReservations, selectedEmail, selectedReservationForPanel, selectedThreadContactPhone]);
 
   if (isLoadingAuth) {
     return <div className="flex h-screen items-center justify-center"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
@@ -2105,7 +2090,7 @@ export default function CommunicationHubPage() {
                                 <span className="text-[11px] font-medium text-slate-400">{formattedDate}</span>
                                 {!isBulkMode && (
                                   <div className="flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openGuestInfoFromEmail(email); }} title="Guest info">
+                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (event) => { event.preventDefault(); event.stopPropagation(); await openGuestInfoFromEmail(email); }} title="Guest info">
                                       <Info className="h-3.5 w-3.5" />
                                     </Button>
                                     <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={(event) => { event.preventDefault(); event.stopPropagation(); handleTogglePin(conversation.key); }} title={pinned ? 'Unpin' : 'Pin'}>
@@ -2230,8 +2215,9 @@ export default function CommunicationHubPage() {
                     size="icon"
                     className="h-8 w-8 bg-white"
                     onClick={() => {
-                      if (!selectedEmail) return;
-                      openGuestInfoFromEmail(selectedEmail);
+                      if (selectedEmail) {
+                        void openGuestInfoFromEmail(selectedEmail);
+                      }
                     }}
                     title="Guest info"
                   >
@@ -2310,14 +2296,15 @@ export default function CommunicationHubPage() {
       </Sheet>
 
       <ReservationDetailModal
-        isOpen={isReservationDetailsOpen}
+        isOpen={isReservationDetailsModalOpen}
         onClose={() => {
-          setIsReservationDetailsOpen(false);
-          setSelectedReservationForDetails(null);
+          setIsReservationDetailsModalOpen(false);
+          setSelectedReservationForModal(null);
         }}
-        initialData={selectedReservationForDetails}
-        propertySettings={property || null}
-        canManage={true}
+        initialData={selectedReservationForModal}
+        propertySettings={(property as Property | null) || null}
+        canManage={false}
+        displayMode="sidepanel"
       />
 
       <NewConversationDialog
