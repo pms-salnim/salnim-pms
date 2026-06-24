@@ -1851,7 +1851,6 @@ export default function CommunicationHubPage() {
   }, [guestDirectory]);
 
   const openGuestInfoFromEmail = useCallback(async (email: Email) => {
-    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
     const reservation = await resolveThreadReservationAsync(email);
     const matchedGuest = resolveGuestForEmail(email, reservation);
 
@@ -1859,6 +1858,8 @@ export default function CommunicationHubPage() {
       setSelectedReservationForDetails(reservation);
       setIsReservationDetailsOpen(true);
       setIsGuestInfoPanelOpen(false);
+      // Keep selected thread in sync, but do not block modal opening on this async action.
+      void handleSelectEmail(email, 'all', { markReadOnOpen: true });
       return;
     }
 
@@ -1866,9 +1867,12 @@ export default function CommunicationHubPage() {
       setSelectedReservationForDetails(reservation);
       setIsReservationDetailsOpen(true);
       setIsGuestInfoPanelOpen(false);
+      // Keep selected thread in sync, but do not block modal opening on this async action.
+      void handleSelectEmail(email, 'all', { markReadOnOpen: true });
       return;
     }
 
+    await handleSelectEmail(email, 'all', { markReadOnOpen: true });
     setIsGuestInfoPanelOpen(true);
   }, [handleSelectEmail, isGuestPortalThread, resolveGuestForEmail, resolveThreadReservationAsync]);
 
@@ -2329,6 +2333,12 @@ export default function CommunicationHubPage() {
                     className="h-8 w-8 bg-white"
                     onClick={async () => {
                       if (!selectedEmail) return;
+                      if (selectedThreadReservation) {
+                        setSelectedReservationForDetails(selectedThreadReservation);
+                        setIsReservationDetailsOpen(true);
+                        setIsGuestInfoPanelOpen(false);
+                        return;
+                      }
                       await openGuestInfoFromEmail(selectedEmail);
                     }}
                     title="Guest info"
