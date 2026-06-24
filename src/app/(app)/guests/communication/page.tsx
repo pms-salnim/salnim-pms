@@ -1241,8 +1241,8 @@ export default function CommunicationHubPage() {
 
   // Check for guest portal notifications when not on guest portal tabs
   const checkGuestPortalNotifications = useCallback(async () => {
-    if (!user?.propertyId || activeView.startsWith('channel_guest_portal') || activeView.startsWith('portal_')) {
-      return; // Don't check if already on guest portal tabs
+    if (!user?.propertyId) {
+      return;
     }
 
     try {
@@ -1292,7 +1292,11 @@ export default function CommunicationHubPage() {
             }
           }
 
-          setGuestPortalUnreadCount(totalUnread);
+          if (activeView.startsWith('channel_guest_portal') || activeView.startsWith('portal_')) {
+            setGuestPortalUnreadCount(0);
+          } else {
+            setGuestPortalUnreadCount(totalUnread);
+          }
         }
       }
     } catch (error) {
