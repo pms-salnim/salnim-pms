@@ -1116,9 +1116,10 @@ async function handleGetEmailGuestContext(
       if (aliasToken) {
         const { data: reservationAliasRow } = await supabase
           .from('reservations')
-          .select('id')
+          .select('id, reservation_number')
           .eq('property_id', propertyId)
-          .eq('id', aliasToken)
+          .or(`id.eq.${aliasToken},reservation_number.eq.${aliasToken}`)
+          .limit(1)
           .maybeSingle();
 
         if (reservationAliasRow?.id) {
@@ -1140,13 +1141,22 @@ async function handleGetEmailGuestContext(
       return NextResponse.json({ success: true, context: null });
     }
 
+    const reservationTokenMatches = (reservation: any, token: string): boolean => {
+      const normalizedToken = String(token || '').trim();
+      if (!normalizedToken) return false;
+      const reservationRowId = String(reservation?.id || '').trim();
+      const reservationNumber = String(reservation?.reservation_number || reservation?.reservationNumber || '').trim();
+      return reservationRowId === normalizedToken || reservationNumber === normalizedToken;
+    };
+
     let matchedReservationById: any = null;
     if (reservationId) {
       const { data: reservationById, error: reservationByIdError } = await supabase
         .from('reservations')
         .select('*')
         .eq('property_id', propertyId)
-        .eq('id', reservationId)
+        .or(`id.eq.${reservationId},reservation_number.eq.${reservationId}`)
+        .limit(1)
         .maybeSingle();
 
       if (reservationByIdError) throw reservationByIdError;
@@ -1207,7 +1217,7 @@ async function handleGetEmailGuestContext(
     const normalizedGuestPhone = guestPhone.replace(/\s+/g, '');
 
     const matchedReservations = (reservationRows || []).filter((reservation: any) => {
-      if (reservationId && String(reservation?.id || '') === reservationId) return true;
+      if (reservationId && reservationTokenMatches(reservation, reservationId)) return true;
 
       const reservationGuestId = String(reservation?.guest_id || '');
       const reservationEmails = [reservation?.guest_email, reservation?.contact_email]
