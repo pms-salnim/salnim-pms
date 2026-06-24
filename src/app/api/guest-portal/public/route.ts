@@ -177,17 +177,6 @@ async function mirrorGuestPortalMessageToInbox(params: {
     const dateMs = new Date(createdAt).getTime();
     const emailId = `gp-${String(messageRow.id || `${threadIdentity}-${createdAt}`)}`;
     const hasAttachments = Array.isArray(params.attachments) && params.attachments.length > 0;
-    const traceId = `gp-public-mirror:${String(conversation.id || messageRow.conversation_id || "unknown")}:${String(messageRow.id || "unknown")}`;
-
-    console.info("[GuestPortalPublicMirror][start]", {
-      traceId,
-      propertyId: conversation.property_id,
-      conversationId: String(conversation.id || messageRow.conversation_id || ""),
-      reservationId: String(conversation.reservation_id || ""),
-      senderType,
-      emailId,
-      hasAttachments,
-    });
 
     await supabase
       .from("property_emails")
@@ -233,10 +222,7 @@ async function mirrorGuestPortalMessageToInbox(params: {
 
     const isMissingReservationColumn = String((emailError as any)?.message || "").toLowerCase().includes("source_reservation_id");
     if (emailError && isMissingReservationColumn) {
-      console.warn("[GuestPortalPublicMirror][fallback-without-source-reservation-id]", {
-        traceId,
-        reason: (emailError as any)?.message,
-      });
+      console.warn("[GuestPortalPublicMirror] Retrying mirror insert without source_reservation_id column");
 
       const { source_reservation_id: _dropped, ...fallbackPayload } = emailPayload;
       const retry = await supabase
@@ -246,11 +232,9 @@ async function mirrorGuestPortalMessageToInbox(params: {
     }
 
     if (emailError) {
-      console.warn("[GuestPortalPublicMirror][failed]", { traceId, error: emailError });
+      console.warn("[GuestPortalPublicMirror] Failed to mirror message to inbox:", String((emailError as any)?.message || "unknown error"));
       return;
     }
-
-    console.info("[GuestPortalPublicMirror][upserted]", { traceId, emailId });
 
     if (hasAttachments) {
       await supabase.from("email_attachments").delete().eq("email_id", emailId);
@@ -265,12 +249,12 @@ async function mirrorGuestPortalMessageToInbox(params: {
           .from("email_attachments")
           .insert(rows);
         if (attachmentError) {
-          console.warn("[GuestPortalPublicMirror][attachment-failed]", { traceId, error: attachmentError });
+          console.warn("[GuestPortalPublicMirror] Failed to mirror attachments:", String((attachmentError as any)?.message || "unknown error"));
         }
       }
     }
   } catch (error) {
-    console.warn("Unexpected inbox mirror error for guest portal message", error);
+    console.warn("Unexpected inbox mirror error for guest portal message:", error instanceof Error ? error.message : "unknown error");
   }
 }
 
