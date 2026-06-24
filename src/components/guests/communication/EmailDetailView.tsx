@@ -351,30 +351,45 @@ export default function EmailDetailView({
     const reservationId = sourceReservationIdFromThread || guestContext?.reservations?.[0]?.id;
     const knownConversationId = sourceConversationIdFromThread || guestPortalConversationId;
 
-    if (knownConversationId) {
-      const messagesResult = await guestPortalApi.getMessages(propertyId, knownConversationId, 100);
-      setGuestPortalConversationId(knownConversationId);
-      setGuestPortalMessages(messagesResult?.messages || []);
-      return;
-    }
-
-    if (!reservationId) {
-      setGuestPortalMessages([]);
-      return;
-    }
-
     const listResult = await guestPortalApi.listConversations(propertyId);
-    const list = listResult?.conversations || [];
-    const existing = list.find((item: any) => String(item?.reservation_id || '') === String(reservationId));
+    const list = Array.isArray(listResult?.conversations) ? listResult.conversations : [];
 
-    if (!existing?.id) {
+    const filtered = reservationId
+      ? list.filter((item: any) => String(item?.reservationId || item?.reservation_id || '') === String(reservationId))
+      : list;
+
+    const sorted = [...filtered].sort((a: any, b: any) => {
+      const aMs = toTimestampMs(a?.updatedAt || a?.updated_at || a?.lastMessage?.timestamp || a?.last_message_timestamp);
+      const bMs = toTimestampMs(b?.updatedAt || b?.updated_at || b?.lastMessage?.timestamp || b?.last_message_timestamp);
+      return bMs - aMs;
+    });
+
+    const freshestConversationId = String(sorted[0]?.id || '').trim();
+    const targetConversationId = freshestConversationId || String(knownConversationId || '').trim();
+
+    if (!targetConversationId) {
       setGuestPortalMessages([]);
       return;
     }
 
-    const conversationId = String(existing.id);
-    setGuestPortalConversationId(conversationId);
-    const messagesResult = await guestPortalApi.getMessages(propertyId, conversationId, 100);
+    let messagesResult = await guestPortalApi.getMessages(propertyId, targetConversationId, 100);
+
+    // Fallback: if freshest lookup fails or yields empty while we have a known id, try known id once.
+    if (
+      String(knownConversationId || '').trim() &&
+      targetConversationId !== String(knownConversationId).trim() &&
+      (!Array.isArray(messagesResult?.messages) || messagesResult.messages.length === 0)
+    ) {
+      const fallbackResult = await guestPortalApi.getMessages(propertyId, String(knownConversationId).trim(), 100);
+      if (Array.isArray(fallbackResult?.messages) && fallbackResult.messages.length > 0) {
+        messagesResult = fallbackResult;
+        setGuestPortalConversationId(String(knownConversationId).trim());
+        setGuestPortalMessages(fallbackResult.messages);
+        return;
+      }
+    }
+
+    setGuestPortalConversationId(targetConversationId);
     setGuestPortalMessages(messagesResult?.messages || []);
   };
 
