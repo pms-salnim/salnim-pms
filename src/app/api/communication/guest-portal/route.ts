@@ -344,13 +344,6 @@ async function handleGetMessages(
   try {
     const { conversationId, lastMessageId, pageSize = 50 } = data;
 
-    console.info('[GP_TRACE_ROUTE_GET_MESSAGES_REQ]', {
-      propertyId,
-      conversationId: String(conversationId || ''),
-      lastMessageId: String(lastMessageId || ''),
-      pageSize,
-    });
-
     if (!conversationId) {
       return NextResponse.json(
         { error: 'conversationId is required' },
@@ -372,6 +365,21 @@ async function handleGetMessages(
       );
     }
 
+    let threadStartIso: string | null = null;
+    const { data: threadStartRow } = await supabase
+      .from('property_emails')
+      .select('date, date_ms')
+      .eq('property_id', propertyId)
+      .eq('source', 'guest_portal')
+      .eq('source_conversation_id', String(conversationId))
+      .order('date_ms', { ascending: true, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (threadStartRow?.date) {
+      threadStartIso = String(threadStartRow.date);
+    }
+
     let query = supabase
       .from('guest_portal_messages')
       .select(`
@@ -381,6 +389,10 @@ async function handleGetMessages(
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: false })
       .limit(pageSize);
+
+    if (threadStartIso) {
+      query = query.gte('created_at', threadStartIso);
+    }
 
     if (lastMessageId) {
       const { data: lastMessage } = await supabase
@@ -398,18 +410,9 @@ async function handleGetMessages(
 
     if (error) throw error;
 
-    const mapped = (messages?.reverse() || []).map(mapMessage);
-    console.info('[GP_TRACE_ROUTE_GET_MESSAGES_RES]', {
-      propertyId,
-      conversationId: String(conversationId || ''),
-      messageCount: mapped.length,
-      firstMessageId: String(mapped[0]?.id || ''),
-      lastMessageId: String(mapped[mapped.length - 1]?.id || ''),
-    });
-
     return NextResponse.json({
       success: true,
-      messages: mapped,
+      messages: (messages?.reverse() || []).map(mapMessage),
     });
   } catch (error) {
     console.error('Error getting messages:', error);

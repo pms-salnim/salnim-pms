@@ -138,10 +138,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         (imapConfig?.pass || imapConfig?.imapPass)
       );
 
-      // Keep syncing even without IMAP: the API falls back to stored rows
-      // (guest portal/whatsapp mirrored messages in property_emails).
-      if (!hasImapConfig && !isPolling) {
-        console.debug('Email fetch running without IMAP (stored rows fallback)');
+      // If IMAP is not configured, skip silently to avoid error-toast spam.
+      if (!hasImapConfig) {
+        if (!isPolling) {
+          console.debug('Email fetch skipped: IMAP not configured');
+        }
+        return;
       }
 
       // ✅ Prevent concurrent requests - exit if already syncing

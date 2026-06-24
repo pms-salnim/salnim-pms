@@ -103,14 +103,6 @@ const isSentMessage = (message: Email) => {
   if (source === 'guest_portal') {
     const senderType = String((message as any).sourceSenderType || (message as any).source_sender_type || '').trim().toLowerCase();
     if (senderType) return senderType === 'property';
-
-    // Legacy mirrored guest-portal rows may miss sender_type metadata.
-    // Use unread as a pragmatic signal: inbound guest messages are unread,
-    // while property-origin rows are persisted as read.
-    if (Boolean((message as any).unread)) return false;
-
-    const fromEmail = String(message.from?.email || '').trim().toLowerCase();
-    if (fromEmail.includes('@guest-portal.local')) return false;
   }
   return !message.uid || Number(message.uid) <= 0;
 };
@@ -189,12 +181,7 @@ export default function EmailDetailView({
 
   const threadPrimarySource = useMemo<'email' | 'whatsapp' | 'guest_portal' | 'sms'>(() => {
     const latest = latestIncoming || email;
-    const normalized = normalizeMessageSource(latest as any);
-    if (normalized === 'email') {
-      const fromEmail = String((latest as any)?.from?.email || '').trim().toLowerCase();
-      if (fromEmail.includes('@guest-portal.local')) return 'guest_portal';
-    }
-    return normalized;
+    return normalizeMessageSource(latest as any);
   }, [latestIncoming, email]);
 
   const contactLine = useMemo(() => {
@@ -363,85 +350,32 @@ export default function EmailDetailView({
   const loadGuestPortalHistory = async (propertyId: string) => {
     const reservationId = sourceReservationIdFromThread || guestContext?.reservations?.[0]?.id;
     const knownConversationId = sourceConversationIdFromThread || guestPortalConversationId;
-    const selectedThreadKey = sourceReservationIdFromThread
-      ? `guest_portal_reservation:${String(sourceReservationIdFromThread).trim()}`
-      : sourceConversationIdFromThread
-      ? `guest_portal:${String(sourceConversationIdFromThread).trim()}`
-      : (() => {
-          const senderEmail = String(email.from?.email || '').trim().toLowerCase();
-          if (senderEmail) return `email:${senderEmail}`;
-          const senderName = String(email.from?.name || '').trim().toLowerCase();
-          if (senderName) return `name:${senderName}`;
-          return `fallback:${String(email.id || '') || String(email.uid || '') || 'unknown'}`;
-        })();
 
-    const listResult = await guestPortalApi.listConversations(propertyId);
-    const list = Array.isArray(listResult?.conversations) ? listResult.conversations : [];
+    if (knownConversationId) {
+      const messagesResult = await guestPortalApi.getMessages(propertyId, knownConversationId, 100);
+      setGuestPortalConversationId(knownConversationId);
+      setGuestPortalMessages(messagesResult?.messages || []);
+      return;
+    }
 
-    const filtered = reservationId
-      ? list.filter((item: any) => String(item?.reservationId || item?.reservation_id || '') === String(reservationId))
-      : list;
-
-    const sorted = [...filtered].sort((a: any, b: any) => {
-      const aMs = toTimestampMs(a?.updatedAt || a?.updated_at || a?.lastMessage?.timestamp || a?.last_message_timestamp);
-      const bMs = toTimestampMs(b?.updatedAt || b?.updated_at || b?.lastMessage?.timestamp || b?.last_message_timestamp);
-      return bMs - aMs;
-    });
-
-    const freshestConversationId = String(sorted[0]?.id || '').trim();
-    const targetConversationId = freshestConversationId || String(knownConversationId || '').trim();
-
-    console.info('[GP_TRACE_DETAIL_LOAD]', {
-      selectedThreadKey,
-      propertyId,
-      reservationId: reservationId ? String(reservationId) : '',
-      knownConversationId: String(knownConversationId || ''),
-      freshestConversationId,
-      targetConversationId,
-      conversationsInList: list.length,
-      filteredByReservation: filtered.length,
-    });
-
-    if (!targetConversationId) {
+    if (!reservationId) {
       setGuestPortalMessages([]);
       return;
     }
 
-    let messagesResult = await guestPortalApi.getMessages(propertyId, targetConversationId, 100);
+    const listResult = await guestPortalApi.listConversations(propertyId);
+    const list = listResult?.conversations || [];
+    const existing = list.find((item: any) => String(item?.reservation_id || '') === String(reservationId));
 
-    // Fallback: if freshest lookup fails or yields empty while we have a known id, try known id once.
-    if (
-      String(knownConversationId || '').trim() &&
-      targetConversationId !== String(knownConversationId).trim() &&
-      (!Array.isArray(messagesResult?.messages) || messagesResult.messages.length === 0)
-    ) {
-      const fallbackResult = await guestPortalApi.getMessages(propertyId, String(knownConversationId).trim(), 100);
-      if (Array.isArray(fallbackResult?.messages) && fallbackResult.messages.length > 0) {
-        console.info('[GP_TRACE_DETAIL_MESSAGES]', {
-          selectedThreadKey,
-          propertyId,
-          resolvedConversationId: String(knownConversationId).trim(),
-          messageCount: fallbackResult.messages.length,
-          mode: 'fallback_known_conversation',
-        });
-        messagesResult = fallbackResult;
-        setGuestPortalConversationId(String(knownConversationId).trim());
-        setGuestPortalMessages(fallbackResult.messages);
-        return;
-      }
+    if (!existing?.id) {
+      setGuestPortalMessages([]);
+      return;
     }
 
-    const resolvedMessages = Array.isArray(messagesResult?.messages) ? messagesResult.messages : [];
-    console.info('[GP_TRACE_DETAIL_MESSAGES]', {
-      selectedThreadKey,
-      propertyId,
-      resolvedConversationId: targetConversationId,
-      messageCount: resolvedMessages.length,
-      mode: 'target_conversation',
-    });
-
-    setGuestPortalConversationId(targetConversationId);
-    setGuestPortalMessages(resolvedMessages);
+    const conversationId = String(existing.id);
+    setGuestPortalConversationId(conversationId);
+    const messagesResult = await guestPortalApi.getMessages(propertyId, conversationId, 100);
+    setGuestPortalMessages(messagesResult?.messages || []);
   };
 
   const handleSendEmail = async () => {
@@ -589,48 +523,6 @@ export default function EmailDetailView({
     };
     loadChannelHistory();
   }, [guestContext, recipientPhone, user?.propertyId]);
-
-  useEffect(() => {
-    if (!user?.propertyId) return;
-
-    const hasGuestPortalContext =
-      threadPrimarySource === 'guest_portal' ||
-      Boolean(
-        sourceConversationIdFromThread ||
-        guestPortalConversationId ||
-        sourceReservationIdFromThread ||
-        guestContext?.reservations?.[0]?.id
-      );
-
-    if (!hasGuestPortalContext) return;
-
-    let disposed = false;
-
-    const pollGuestPortalHistory = async () => {
-      try {
-        await loadGuestPortalHistory(user.propertyId!);
-      } catch (error) {
-        if (!disposed) {
-          console.warn('Failed to poll guest portal history', error);
-        }
-      }
-    };
-
-    pollGuestPortalHistory();
-    const interval = window.setInterval(pollGuestPortalHistory, 3500);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(interval);
-    };
-  }, [
-    user?.propertyId,
-    guestContext?.reservations,
-    guestPortalConversationId,
-    sourceConversationIdFromThread,
-    sourceReservationIdFromThread,
-    threadPrimarySource,
-  ]);
 
   const mappedEmailMessages = useMemo<UnifiedMessage[]>(() => {
     return threadMessages

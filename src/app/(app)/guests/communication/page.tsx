@@ -235,6 +235,11 @@ export default function CommunicationHubPage() {
   const [replyingToEmail, setReplyingToEmail] = useState<Email | null>(null);
   const [selectedReservationForDetails, setSelectedReservationForDetails] = useState<Reservation | null>(null);
   const [isReservationDetailsOpen, setIsReservationDetailsOpen] = useState(false);
+
+  const logGuestInfo = useCallback((step: string, payload?: Record<string, unknown>) => {
+    const stamp = new Date().toISOString();
+    console.log('[GuestInfo][Communication]', { stamp, step, ...(payload || {}) });
+  }, []);
   
   // Mailbox-specific states
   const [searchQuery, setSearchQuery] = useState('');
@@ -260,8 +265,6 @@ export default function CommunicationHubPage() {
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [pendingThreadAction, setPendingThreadAction] = useState<PendingThreadAction>(null);
   const unreadAnchorRef = useRef<HTMLDivElement | null>(null);
-  const lastGuestPortalSnapshotRef = useRef('');
-  const lastGuestPortalInboxRefreshAtRef = useRef(0);
   const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
   const threadListRef = useRef<HTMLDivElement | null>(null);
   const filterChipsScrollRef = useRef<HTMLDivElement | null>(null);
@@ -819,17 +822,17 @@ export default function CommunicationHubPage() {
 
 
   const safeRefetchEmails = useCallback(() => {
-    if (user?.propertyId) {
+    if (user?.propertyId && hasImapChannelConfigured()) {
       refetchEmails();
     }
-  }, [user?.propertyId, refetchEmails]);
+  }, [user?.propertyId, hasImapChannelConfigured, refetchEmails]);
 
   const forceRefetchEmails = useCallback(() => {
-    if (user?.propertyId) {
+    if (user?.propertyId && hasImapChannelConfigured()) {
       // Automatic page refreshes should not show destructive toasts.
       refetchEmails(true, true);
     }
-  }, [user?.propertyId, refetchEmails]);
+  }, [user?.propertyId, hasImapChannelConfigured, refetchEmails]);
 
   useEffect(() => {
     if (!initialFetchDone && user?.propertyId) {
@@ -955,28 +958,6 @@ export default function CommunicationHubPage() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(`${threadStoragePrefix}:starred`, JSON.stringify(starredConversationKeys));
   }, [starredConversationKeys, threadStoragePrefix]);
-
-  useEffect(() => {
-    setTrashedConversationKeys((prev) => {
-      const next = prev.filter((conversationKey) => {
-        const messages = conversationHistoryByKey.get(conversationKey) || [];
-        if (messages.length === 0) return true;
-        return messages.every((message) => !!(message as any).trash);
-      });
-      return next.length === prev.length ? prev : next;
-    });
-
-    setArchivedConversationKeys((prev) => {
-      const next = prev.filter((conversationKey) => {
-        const messages = conversationHistoryByKey.get(conversationKey) || [];
-        if (messages.length === 0) return true;
-        const isTrashed = messages.every((message) => !!(message as any).trash);
-        if (isTrashed) return false;
-        return messages.every((message) => !!message.archived);
-      });
-      return next.length === prev.length ? prev : next;
-    });
-  }, [conversationHistoryByKey]);
 
   const getThreadMessageRefs = useCallback((conversationKey: string) => {
     const threadMessages = conversationHistoryByKey.get(conversationKey) || [];
@@ -1263,8 +1244,8 @@ export default function CommunicationHubPage() {
 
   // Check for guest portal notifications when not on guest portal tabs
   const checkGuestPortalNotifications = useCallback(async () => {
-    if (!user?.propertyId) {
-      return;
+    if (!user?.propertyId || activeView.startsWith('channel_guest_portal') || activeView.startsWith('portal_')) {
+      return; // Don't check if already on guest portal tabs
     }
 
     try {
@@ -1287,45 +1268,18 @@ export default function CommunicationHubPage() {
       if (response.ok) {
         const result = await response.json();
         if (result.conversations) {
-          const snapshot = result.conversations
-            .map((conv: any) => {
-              const unread = conv.unreadCount || conv.unread_count || 0;
-              const lastTimestamp = conv.lastMessage?.timestamp || conv.last_message_timestamp || '';
-              return `${conv.id}:${unread}:${lastTimestamp}`;
-            })
-            .sort()
-            .join('|');
-
           // Calculate total unread count from all conversations
           const totalUnread = result.conversations.reduce((total: number, conv: any) => {
             return total + (conv.unreadCount || conv.unread_count || 0);
           }, 0);
-
-          const hasConversationChanges =
-            snapshot.length > 0 && snapshot !== lastGuestPortalSnapshotRef.current;
-          if (hasConversationChanges) {
-            lastGuestPortalSnapshotRef.current = snapshot;
-
-            const now = Date.now();
-            // Keep refresh responsive for incoming portal messages, but avoid burst refetches.
-            if (now - lastGuestPortalInboxRefreshAtRef.current >= 4000) {
-              lastGuestPortalInboxRefreshAtRef.current = now;
-              forceRefetchEmails();
-            }
-          }
-
-          if (activeView.startsWith('channel_guest_portal') || activeView.startsWith('portal_')) {
-            setGuestPortalUnreadCount(0);
-          } else {
-            setGuestPortalUnreadCount(totalUnread);
-          }
+          setGuestPortalUnreadCount(totalUnread);
         }
       }
     } catch (error) {
       // Silently handle errors to avoid console spam
       console.warn('Failed to check guest portal notifications:', error);
     }
-  }, [user?.propertyId, activeView, forceRefetchEmails]);
+  }, [user?.propertyId, activeView]);
 
   useEffect(() => {
     // Check notifications every 5 seconds when not on guest portal tabs
@@ -1337,7 +1291,6 @@ export default function CommunicationHubPage() {
   useEffect(() => {
     if (activeView.startsWith('channel_guest_portal') || activeView.startsWith('portal_')) {
       setGuestPortalUnreadCount(0);
-      lastGuestPortalSnapshotRef.current = '';
     }
   }, [activeView]);
 
@@ -1801,7 +1754,14 @@ export default function CommunicationHubPage() {
 
   const resolveThreadReservationAsync = useCallback(async (email: Email): Promise<Reservation | null> => {
     const directMatch = resolveThreadReservation(email);
-    if (directMatch) return directMatch;
+    if (directMatch) {
+      logGuestInfo('resolve.async.direct_match', {
+        threadKey: getConversationKey(email),
+        reservationId: String(directMatch.id || ''),
+        reservationNumber: String(directMatch.reservationNumber || ''),
+      });
+      return directMatch;
+    }
 
     if (!user?.propertyId) return null;
 
@@ -1823,6 +1783,14 @@ export default function CommunicationHubPage() {
       }
     }
 
+    logGuestInfo('resolve.async.start', {
+      threadKey: conversationKey,
+      reservationNumbers,
+      conversationIds: Array.from(conversationIds),
+      threadMessageCount: threadMessages.length,
+      selectedFromEmail: String(email.from?.email || ''),
+    });
+
     try {
       const supabase = createClient();
 
@@ -1840,7 +1808,13 @@ export default function CommunicationHubPage() {
 
           for (const reservationId of reservationIdCandidates) {
             const localReservation = guestReservations.find((reservation) => String(reservation.id || '').trim() === reservationId);
-            if (localReservation) return localReservation;
+            if (localReservation) {
+              logGuestInfo('resolve.async.by_conversation.local_reservation_id_match', {
+                reservationId,
+                reservationNumber: String(localReservation.reservationNumber || ''),
+              });
+              return localReservation;
+            }
 
             const { data: reservationRow, error: reservationError } = await supabase
               .from('reservations')
@@ -1850,6 +1824,10 @@ export default function CommunicationHubPage() {
               .maybeSingle();
 
             if (!reservationError && reservationRow) {
+              logGuestInfo('resolve.async.by_conversation.remote_reservation_id_match', {
+                reservationId,
+                reservationNumber: String(reservationRow?.reservation_number || reservationRow?.reservationNumber || ''),
+              });
               return normalizeReservationFromRow(reservationRow);
             }
           }
@@ -1871,15 +1849,29 @@ export default function CommunicationHubPage() {
           .limit(1);
 
         if (!reservationError && Array.isArray(reservationRows) && reservationRows.length > 0) {
+          logGuestInfo('resolve.async.by_reservation_number.remote_match', {
+            reservationNumber,
+            reservationId: String(reservationRows[0]?.id || ''),
+          });
           return normalizeReservationFromRow(reservationRows[0]);
         }
       }
     } catch (error) {
+      logGuestInfo('resolve.async.error', {
+        threadKey: getConversationKey(email),
+        message: error instanceof Error ? error.message : String(error),
+      });
       console.warn('Failed to resolve reservation for guest info action:', error);
     }
 
+    logGuestInfo('resolve.async.no_match', {
+      threadKey: getConversationKey(email),
+      reservationNumbers,
+      conversationIds: Array.from(conversationIds),
+    });
+
     return null;
-  }, [extractThreadReservationKeys, getConversationKey, guestReservations, resolveThreadReservation, user?.propertyId]);
+  }, [extractThreadReservationKeys, getConversationKey, guestReservations, logGuestInfo, resolveThreadReservation, user?.propertyId]);
 
   const resolveGuestForEmail = useCallback((email: Email, reservation: Reservation | null): Guest | null => {
     const reservationGuestId = String(reservation?.guestId || '').trim();
@@ -1903,10 +1895,21 @@ export default function CommunicationHubPage() {
   }, [guestDirectory]);
 
   const openGuestInfoFromEmail = useCallback(async (email: Email) => {
+    logGuestInfo('cta.click', {
+      threadKey: getConversationKey(email),
+      fromEmail: String(email.from?.email || ''),
+      source: String((email as any)?.source || ''),
+    });
+
     const reservation = await resolveThreadReservationAsync(email);
     const matchedGuest = resolveGuestForEmail(email, reservation);
 
     if (isGuestPortalThread(email) && reservation) {
+      logGuestInfo('cta.route.reservation_modal.guest_portal_thread', {
+        threadKey: getConversationKey(email),
+        reservationId: String(reservation.id || ''),
+        reservationNumber: String(reservation.reservationNumber || ''),
+      });
       setSelectedReservationForDetails(reservation);
       setIsReservationDetailsOpen(true);
       setIsGuestInfoPanelOpen(false);
@@ -1916,6 +1919,11 @@ export default function CommunicationHubPage() {
     }
 
     if (!matchedGuest && reservation) {
+      logGuestInfo('cta.route.reservation_modal.no_guest_record', {
+        threadKey: getConversationKey(email),
+        reservationId: String(reservation.id || ''),
+        reservationNumber: String(reservation.reservationNumber || ''),
+      });
       setSelectedReservationForDetails(reservation);
       setIsReservationDetailsOpen(true);
       setIsGuestInfoPanelOpen(false);
@@ -1924,9 +1932,14 @@ export default function CommunicationHubPage() {
       return;
     }
 
+    logGuestInfo('cta.route.guest_panel', {
+      threadKey: getConversationKey(email),
+      hasMatchedGuest: !!matchedGuest,
+      hasReservation: !!reservation,
+    });
     await handleSelectEmail(email, 'all', { markReadOnOpen: true });
     setIsGuestInfoPanelOpen(true);
-  }, [handleSelectEmail, isGuestPortalThread, resolveGuestForEmail, resolveThreadReservationAsync]);
+  }, [getConversationKey, handleSelectEmail, isGuestPortalThread, logGuestInfo, resolveGuestForEmail, resolveThreadReservationAsync]);
 
   const selectedGuestForPanel = useMemo(() => {
     if (!selectedEmail) return null;
@@ -2386,6 +2399,11 @@ export default function CommunicationHubPage() {
                     onClick={async () => {
                       if (!selectedEmail) return;
                       if (selectedThreadReservation) {
+                        logGuestInfo('cta.top_button.route.reservation_modal.prefetched', {
+                          threadKey: getConversationKey(selectedEmail),
+                          reservationId: String(selectedThreadReservation.id || ''),
+                          reservationNumber: String(selectedThreadReservation.reservationNumber || ''),
+                        });
                         setSelectedReservationForDetails(selectedThreadReservation);
                         setIsReservationDetailsOpen(true);
                         setIsGuestInfoPanelOpen(false);
