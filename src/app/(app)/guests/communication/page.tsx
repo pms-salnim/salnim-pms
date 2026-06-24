@@ -1561,26 +1561,50 @@ export default function CommunicationHubPage() {
 
   const handleStartConversation = async (result: ConversationSearchResult, channel: ConversationChannel) => {
     const resultEmail = String(result.email || '').trim().toLowerCase();
+    const resultPhone = normalizePhone(result.phone || '');
     const resultReservationId = String(result.reservationId || '').trim();
-    const existing = displayEmails.find((email) => {
-      if (resultEmail && String(email.from?.email || '').trim().toLowerCase() === resultEmail) {
-        return true;
-      }
+    const resultReservationNumber = String(result.reservationNumber || '').trim();
+    const reservationTokenCandidates = [resultReservationId, resultReservationNumber]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean);
 
-      if (channel === 'guest_portal' && resultReservationId) {
-        const sourceReservationId = String((email as any)?.sourceReservationId || (email as any)?.source_reservation_id || '').trim();
-        if (sourceReservationId && sourceReservationId === resultReservationId) {
-          return true;
-        }
-
+    const existing = [...displayEmails]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .find((email) => {
+        const source = String((email as any)?.source || '').trim().toLowerCase();
         const senderEmail = String(email.from?.email || '').trim().toLowerCase();
-        if (senderEmail === `guest-portal+${resultReservationId.toLowerCase()}@guest-portal.local`) {
+        const sourceReservationId = String((email as any)?.sourceReservationId || (email as any)?.source_reservation_id || '').trim().toLowerCase();
+
+        if (resultEmail && senderEmail && senderEmail === resultEmail) {
           return true;
         }
-      }
 
-      return false;
-    });
+        if (resultPhone) {
+          const senderPhone = normalizePhone(email.from?.email || '');
+          if (senderPhone && senderPhone === resultPhone) {
+            return true;
+          }
+        }
+
+        if (reservationTokenCandidates.length > 0) {
+          if (sourceReservationId && reservationTokenCandidates.includes(sourceReservationId)) {
+            return true;
+          }
+
+          if (senderEmail.startsWith('guest-portal+') && senderEmail.endsWith('@guest-portal.local')) {
+            const aliasToken = senderEmail.slice('guest-portal+'.length, senderEmail.indexOf('@guest-portal.local')).trim().toLowerCase();
+            if (aliasToken && reservationTokenCandidates.includes(aliasToken)) {
+              return true;
+            }
+          }
+        }
+
+        if (channel === 'guest_portal' && source === 'guest_portal' && reservationTokenCandidates.length > 0) {
+          return reservationTokenCandidates.some((token) => sourceReservationId === token);
+        }
+
+        return false;
+      });
 
     if (channel === 'guest_portal' && !resultReservationId) {
       toast({
@@ -1600,6 +1624,7 @@ export default function CommunicationHubPage() {
       if (resolvedDisplayName) {
         setConversationDisplayNames((prev) => ({ ...prev, [existingKey]: resolvedDisplayName }));
       }
+      setSelectedThreadContactPhone(String(result.phone || '').trim());
       await handleSelectEmail(existing, channel, {
         promptSubjectForEmail: channel === 'email',
         markReadOnOpen: true,
