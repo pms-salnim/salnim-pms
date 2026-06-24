@@ -195,21 +195,10 @@ export default function EmailDetailView({
     if (threadPrimarySource === 'guest_portal') {
       const reservationNumber = String(guestContext?.reservations?.[0]?.reservationNumber || '').trim();
       if (reservationNumber) return `Res. N° ${reservationNumber}`;
-
-      const fallbackReservationId = String(
-        (email as any).sourceReservationId
-        || (email as any).source_reservation_id
-        || threadMessages
-            .map((item: any) => item?.sourceReservationId || item?.source_reservation_id)
-            .find(Boolean)
-        || ''
-      ).trim();
-
-      if (fallbackReservationId) return `Res. N° ${fallbackReservationId}`;
       return 'Res. N° -';
     }
     return recipientEmail || 'Unknown contact';
-  }, [email, guestContext?.reservations, recipientEmail, threadMessages, threadPrimarySource]);
+  }, [guestContext?.reservations, recipientEmail, threadPrimarySource]);
 
   const recipientPhone = useMemo(() => {
     return normalizePhone(guestContext?.guest?.phone || initialContactPhone || '');
