@@ -34,6 +34,14 @@ function isMissingTableError(error: any, tableName: string): boolean {
   );
 }
 
+function isAnyMissingTableError(error: any): boolean {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("could not find the table") ||
+    (message.includes("relation") && message.includes("does not exist"))
+  );
+}
+
 function normalizeSlug(value: string): string {
   return String(value || "")
     .trim()
@@ -239,6 +247,19 @@ async function getOptionalPortalSettings(propertyId: string): Promise<JsonRecord
   return data || null;
 }
 
+async function getOptionalTableRows(
+  queryFactory: () => Promise<{ data: any[] | null; error: any }>
+): Promise<any[]> {
+  const { data, error } = await queryFactory();
+  if (error) {
+    if (isAnyMissingTableError(error)) {
+      return [];
+    }
+    throw error;
+  }
+  return Array.isArray(data) ? data : [];
+}
+
 async function getPropertyBySlug(propertySlug: string) {
   const inputSlug = normalizeSlug(decodeURIComponent(String(propertySlug || "")));
   if (!inputSlug) return null;
@@ -308,38 +329,40 @@ async function buildGuestPortalPayload(
     .map((r: JsonRecord) => r.roomTypeId || r.room_type_id)
     .filter(Boolean);
 
-  const [portalSettingsRow, roomTypesResp, servicesResp, mealPlansResp, packagesResp] = await Promise.all([
+  const [portalSettingsRow, roomTypesRows, servicesRows, mealPlansRows, packagesRows] = await Promise.all([
     getOptionalPortalSettings(propertyId),
-    roomTypeIds.length > 0
-      ? supabase
-          .from("room_types")
-          .select("*")
-          .in("id", roomTypeIds)
-      : Promise.resolve({ data: [], error: null } as any),
-    supabase
-      .from("services")
-      .select("*")
-      .eq("property_id", propertyId)
-      .eq("guest_portal", true)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("meal_plans")
-      .select("*")
-      .eq("property_id", propertyId)
-      .eq("visible_in_guest_portal", true)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("packages")
-      .select("*")
-      .eq("property_id", propertyId)
-      .eq("visible_in_guest_portal", true)
-      .order("created_at", { ascending: false }),
+    getOptionalTableRows(async () => {
+      if (roomTypeIds.length === 0) return { data: [], error: null } as any;
+      return supabase
+        .from("room_types")
+        .select("*")
+        .in("id", roomTypeIds);
+    }),
+    getOptionalTableRows(async () => {
+      return supabase
+        .from("services")
+        .select("*")
+        .eq("property_id", propertyId)
+        .eq("guest_portal", true)
+        .order("created_at", { ascending: false });
+    }),
+    getOptionalTableRows(async () => {
+      return supabase
+        .from("meal_plans")
+        .select("*")
+        .eq("property_id", propertyId)
+        .eq("visible_in_guest_portal", true)
+        .order("created_at", { ascending: false });
+    }),
+    getOptionalTableRows(async () => {
+      return supabase
+        .from("packages")
+        .select("*")
+        .eq("property_id", propertyId)
+        .eq("visible_in_guest_portal", true)
+        .order("created_at", { ascending: false });
+    }),
   ]);
-
-  if (roomTypesResp.error) throw roomTypesResp.error;
-  if (servicesResp.error) throw servicesResp.error;
-  if (mealPlansResp.error) throw mealPlansResp.error;
-  if (packagesResp.error) throw packagesResp.error;
 
   const totalAmount = Number(reservationRow.total_price || 0);
   const totalPaid = 0;
@@ -348,7 +371,7 @@ async function buildGuestPortalPayload(
     property,
     reservation,
     rooms: reservation.rooms || [],
-    roomTypes: (roomTypesResp.data || []).map((row: JsonRecord) => ({
+    roomTypes: roomTypesRows.map((row: JsonRecord) => ({
       id: row.id,
       name: row.name,
       maxGuests: row.max_guests,
@@ -356,9 +379,9 @@ async function buildGuestPortalPayload(
       galleryImageUrls: row.gallery_image_urls || [],
     })),
     ratePlans: [],
-    services: (servicesResp.data || []).map(normalizeService),
-    mealPlans: (mealPlansResp.data || []).map(normalizeMealPlan),
-    packages: (packagesResp.data || []).map(normalizePackage),
+    services: servicesRows.map(normalizeService),
+    mealPlans: mealPlansRows.map(normalizeMealPlan),
+    packages: packagesRows.map(normalizePackage),
     menus: [],
     payments: [],
     propertyInfo: {
@@ -424,37 +447,39 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "getExtras") {
-      const [servicesResp, mealPlansResp, packagesResp] = await Promise.all([
-        supabase
-          .from("services")
-          .select("*")
-          .eq("property_id", propertyRow.id)
-          .eq("guest_portal", true)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("meal_plans")
-          .select("*")
-          .eq("property_id", propertyRow.id)
-          .eq("visible_in_guest_portal", true)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("packages")
-          .select("*")
-          .eq("property_id", propertyRow.id)
-          .eq("visible_in_guest_portal", true)
-          .order("created_at", { ascending: false }),
+      const [servicesRows, mealPlansRows, packagesRows] = await Promise.all([
+        getOptionalTableRows(async () => {
+          return supabase
+            .from("services")
+            .select("*")
+            .eq("property_id", propertyRow.id)
+            .eq("guest_portal", true)
+            .order("created_at", { ascending: false });
+        }),
+        getOptionalTableRows(async () => {
+          return supabase
+            .from("meal_plans")
+            .select("*")
+            .eq("property_id", propertyRow.id)
+            .eq("visible_in_guest_portal", true)
+            .order("created_at", { ascending: false });
+        }),
+        getOptionalTableRows(async () => {
+          return supabase
+            .from("packages")
+            .select("*")
+            .eq("property_id", propertyRow.id)
+            .eq("visible_in_guest_portal", true)
+            .order("created_at", { ascending: false });
+        }),
       ]);
-
-      if (servicesResp.error) throw servicesResp.error;
-      if (mealPlansResp.error) throw mealPlansResp.error;
-      if (packagesResp.error) throw packagesResp.error;
 
       return NextResponse.json({
         success: true,
         data: {
-          services: (servicesResp.data || []).map(normalizeService),
-          mealPlans: (mealPlansResp.data || []).map(normalizeMealPlan),
-          packages: (packagesResp.data || []).map(normalizePackage),
+          services: servicesRows.map(normalizeService),
+          mealPlans: mealPlansRows.map(normalizeMealPlan),
+          packages: packagesRows.map(normalizePackage),
           menus: [],
           property: normalizeProperty(propertyRow, propertySlug),
         },
