@@ -400,6 +400,13 @@ export default function ReservationDetailModal({ isOpen, onClose, initialData, p
   const [reservation, setReservation] = useState<Reservation | null>(initialData);
   const currencySymbol = propertySettings?.currency || '$';
 
+  useEffect(() => {
+    // Keep local modal state aligned with parent-provided reservation payload.
+    // This is required for contexts where reservation data is not sourced from
+    // the Firestore `reservations` collection used by the snapshot listener.
+    setReservation(initialData || null);
+  }, [initialData]);
+
   // Calculate sidebar width based on state (16rem = 256px expanded, 3rem = 48px collapsed)
   const SIDEBAR_WIDTH_EXPANDED = 256;
   const SIDEBAR_WIDTH_COLLAPSED = 48;
