@@ -1073,6 +1073,17 @@ async function handleGetEmailGuestContext(
   data: any
 ): Promise<NextResponse> {
   try {
+    const isSyntheticGuestPortalAddress = (value: any): boolean => {
+      const normalized = String(value || '').trim().toLowerCase();
+      return /^guest-portal\+[^@]+@guest-portal\.local$/.test(normalized);
+    };
+
+    const sanitizeEmailAddress = (value: any): string => {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (!normalized) return '';
+      return isSyntheticGuestPortalAddress(normalized) ? '' : normalized;
+    };
+
     const isInvalidUuidCastError = (error: any): boolean => {
       const code = String(error?.code || '').toUpperCase();
       const message = String(error?.message || '').toLowerCase();
@@ -1107,7 +1118,7 @@ async function handleGetEmailGuestContext(
       return null;
     };
 
-    const rawEmail = typeof data?.email === 'string' ? data.email.trim().toLowerCase() : '';
+    const rawEmail = sanitizeEmailAddress(typeof data?.email === 'string' ? data.email : '');
     const rawPhone = typeof data?.phone === 'string' ? data.phone.trim() : '';
     const emailId = typeof data?.emailId === 'string' ? data.emailId : '';
     const rawReservationId = typeof data?.reservationId === 'string' ? data.reservationId.trim() : '';
@@ -1126,7 +1137,7 @@ async function handleGetEmailGuestContext(
         .maybeSingle();
 
       if (!guestEmail) {
-        guestEmail = String(emailRow?.from_email || '').trim().toLowerCase();
+        guestEmail = sanitizeEmailAddress(emailRow?.from_email);
       }
       if (!reservationId) {
         reservationId = String((emailRow as any)?.source_reservation_id || '').trim();
@@ -1324,9 +1335,8 @@ async function handleGetEmailGuestContext(
           primaryGuest?.name
           || `${primaryGuest?.first_name || ''} ${primaryGuest?.last_name || ''}`.trim()
           || reservationGuestName
-          || guestEmail
           || 'Guest',
-        email: primaryGuest?.email || guestEmail,
+        email: sanitizeEmailAddress(primaryGuest?.email || guestEmail) || null,
         phone: primaryGuest?.phone || guestPhone || null,
         country: primaryGuest?.country || null,
         city: primaryGuest?.city || null,

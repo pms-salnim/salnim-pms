@@ -83,6 +83,10 @@ const CHANNELS: Array<{ key: ChannelKey; label: string }> = [
 
 const stripHtml = (value: string) => value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const normalizePhone = (value?: string | null) => String(value || '').replace(/[^\d+]/g, '');
+const isSyntheticGuestPortalAddress = (value?: string | null): boolean => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return /^guest-portal\+[^@]+@guest-portal\.local$/.test(normalized);
+};
 
 const normalizeMessageSource = (message: any): 'email' | 'whatsapp' | 'guest_portal' | 'sms' => {
   const source = String(message?.source || '').trim().toLowerCase();
@@ -183,7 +187,8 @@ export default function EmailDetailView({
   }, [threadMessages]);
 
   const recipientEmail = useMemo(() => {
-    return String(latestIncoming?.from?.email || email.from?.email || email.from_email || '').trim();
+    const raw = String(latestIncoming?.from?.email || email.from?.email || email.from_email || '').trim();
+    return isSyntheticGuestPortalAddress(raw) ? '' : raw;
   }, [latestIncoming, email]);
 
   const threadPrimarySource = useMemo<'email' | 'whatsapp' | 'guest_portal' | 'sms'>(() => {
@@ -204,7 +209,7 @@ export default function EmailDetailView({
 
   const guestDisplayName = useMemo(() => {
     const fromName = String(latestIncoming?.from?.name || email.from?.name || email.from_name || '').trim();
-    return String(guestContext?.guest?.fullName || fromName || recipientEmail || 'Guest').trim();
+    return String(guestContext?.guest?.fullName || fromName || 'Guest').trim();
   }, [email.from, email.from_name, guestContext?.guest?.fullName, latestIncoming, recipientEmail]);
 
   const replyReferenceId = useMemo(() => {
@@ -492,7 +497,8 @@ export default function EmailDetailView({
         return;
       }
 
-      const lookupEmail = String(latestIncoming?.from?.email || email.from?.email || '').trim();
+      const rawLookupEmail = String(latestIncoming?.from?.email || email.from?.email || '').trim();
+      const lookupEmail = isSyntheticGuestPortalAddress(rawLookupEmail) ? '' : rawLookupEmail;
       if (!lookupEmail && !email.id) {
         setGuestContext(null);
         return;

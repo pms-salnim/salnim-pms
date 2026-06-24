@@ -161,8 +161,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         const newEmails: Email[] = result.emails.map((row: any) => {
           const normalizedFromEmail = String(row.from_email || '').trim().toLowerCase();
+          const isGuestPortalAlias = /^guest-portal\+[^@]+@guest-portal\.local$/.test(normalizedFromEmail);
           const inferredSource = String(row.source || '').trim().toLowerCase()
             || (normalizedFromEmail.includes('@guest-portal.local') ? 'guest_portal' : 'email');
+          const fromEmail = isGuestPortalAlias ? '' : String(row.from_email || '');
+          const fromName = String(row.from_name || '').trim() || (fromEmail || 'Guest');
 
           return {
           id: row.id ? String(row.id) : undefined,
@@ -173,8 +176,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           sourceConversationId: row.source_conversation_id || undefined,
           sourceMessageId: row.source_message_id || undefined,
           from: {
-            name: row.from_name || row.from_email || 'Unknown',
-            email: row.from_email || 'unknown@example.com',
+            name: fromName,
+            email: fromEmail,
           },
           subject: row.subject || '(No Subject)',
           date: row.date || new Date().toISOString(),
