@@ -61,6 +61,7 @@ interface EmailDetailViewProps {
   isNewConversation?: boolean;
   requireManualEmailSubject?: boolean;
   initialContactPhone?: string;
+  reservationNumber?: string;
   onNewEmailSent?: (sentEmail: Email, options?: { isFirstMessage?: boolean }) => void;
 }
 
@@ -123,6 +124,7 @@ export default function EmailDetailView({
   isNewConversation,
   requireManualEmailSubject,
   initialContactPhone,
+  reservationNumber,
   onNewEmailSent,
 }: EmailDetailViewProps) {
   const { user, property } = useAuth();
@@ -183,9 +185,15 @@ export default function EmailDetailView({
   }, [latestIncoming, email]);
 
   const contactLine = useMemo(() => {
-    if (threadPrimarySource === 'guest_portal') return 'Guest portal conversation';
+    if (threadPrimarySource === 'guest_portal') {
+      const reservationNumberLabel = String(reservationNumber || '').trim();
+      if (reservationNumberLabel) {
+        return `Res. N° ${reservationNumberLabel}`;
+      }
+      return 'Guest portal conversation';
+    }
     return recipientEmail || 'Unknown contact';
-  }, [threadPrimarySource, recipientEmail]);
+  }, [threadPrimarySource, recipientEmail, reservationNumber]);
 
   const recipientPhone = useMemo(() => {
     return normalizePhone(guestContext?.guest?.phone || initialContactPhone || '');

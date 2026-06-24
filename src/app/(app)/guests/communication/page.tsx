@@ -233,8 +233,8 @@ export default function CommunicationHubPage() {
 
   const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
   const [replyingToEmail, setReplyingToEmail] = useState<Email | null>(null);
-  const [isReservationDetailsModalOpen, setIsReservationDetailsModalOpen] = useState(false);
-  const [selectedReservationForModal, setSelectedReservationForModal] = useState<Reservation | null>(null);
+  const [selectedReservationForDetails, setSelectedReservationForDetails] = useState<Reservation | null>(null);
+  const [isReservationDetailsOpen, setIsReservationDetailsOpen] = useState(false);
   
   // Mailbox-specific states
   const [searchQuery, setSearchQuery] = useState('');
@@ -1672,54 +1672,64 @@ export default function CommunicationHubPage() {
     }
   };
 
-  const getGuestPortalReservationIdentifier = useCallback((email: Email): string => {
-    const explicitReservationId = String((email as any)?.sourceReservationId || (email as any)?.source_reservation_id || '').trim();
-    if (explicitReservationId) return explicitReservationId;
+  const getThreadMessagesForEmail = useCallback((email: Email): Email[] => {
+    const key = getConversationKey(email);
+    const history = conversationHistoryByKey.get(key);
+    return history && history.length > 0 ? history : [email];
+  }, [conversationHistoryByKey]);
 
-    const senderEmail = String(email.from?.email || '').trim().toLowerCase();
-    const guestPortalMatch = senderEmail.match(/^guest-portal\+(.+)@guest-portal\.local$/i);
-    if (guestPortalMatch?.[1]) {
-      return guestPortalMatch[1].trim();
+  const resolveThreadReservation = useCallback((email: Email): Reservation | null => {
+    const threadMessages = getThreadMessagesForEmail(email);
+    const reservationIdCandidates = new Set<string>();
+
+    threadMessages.forEach((message: any) => {
+      const sourceReservationId = String(message?.sourceReservationId || message?.source_reservation_id || '').trim();
+      if (sourceReservationId) {
+        reservationIdCandidates.add(sourceReservationId);
+      }
+    });
+
+    const emailValue = String(email.from?.email || '').trim().toLowerCase();
+    const senderMatch = emailValue.match(/^guest-portal\+([^@]+)@guest-portal\.local$/i);
+    if (senderMatch?.[1]) {
+      reservationIdCandidates.add(String(senderMatch[1]).trim());
     }
 
-    return '';
-  }, []);
+    for (const candidate of reservationIdCandidates) {
+      const byId = guestReservations.find((reservation) => String(reservation.id || '').trim() === candidate);
+      if (byId) return byId;
 
-  const findReservationForEmail = useCallback((email: Email): Reservation | null => {
-    const reservationIdentifier = getGuestPortalReservationIdentifier(email);
-    if (!reservationIdentifier) return null;
+      const byNumber = guestReservations.find((reservation) => String(reservation.reservationNumber || '').trim().toLowerCase() === candidate.toLowerCase());
+      if (byNumber) return byNumber;
+    }
 
-    const normalizedIdentifier = reservationIdentifier.toLowerCase();
-    return guestReservations.find((reservation) => {
-      const reservationId = String(reservation.id || '').trim().toLowerCase();
-      const reservationNumber = String(reservation.reservationNumber || '').trim().toLowerCase();
-      return reservationId === normalizedIdentifier || reservationNumber === normalizedIdentifier;
-    }) || null;
-  }, [getGuestPortalReservationIdentifier, guestReservations]);
+    return null;
+  }, [getThreadMessagesForEmail, guestReservations]);
+
+  const isGuestPortalOnlyThread = useCallback((email: Email): boolean => {
+    const threadMessages = getThreadMessagesForEmail(email);
+    if (threadMessages.length === 0) return false;
+
+    return threadMessages.every((message: any) => String(message?.source || '').trim().toLowerCase() === 'guest_portal');
+  }, [getThreadMessagesForEmail]);
+
+  const selectedThreadReservation = useMemo(() => {
+    if (!selectedEmail) return null;
+    return resolveThreadReservation(selectedEmail);
+  }, [resolveThreadReservation, selectedEmail]);
 
   const openGuestInfoFromEmail = useCallback(async (email: Email) => {
     await handleSelectEmail(email, 'all', { markReadOnOpen: true });
-
-    const source = String((email as any)?.source || '').trim().toLowerCase();
-    if (source === 'guest_portal') {
-      const reservation = findReservationForEmail(email);
-      if (reservation) {
-        setIsGuestInfoPanelOpen(false);
-        setSelectedReservationForModal(reservation);
-        setIsReservationDetailsModalOpen(true);
-        return;
-      }
+    const reservation = resolveThreadReservation(email);
+    if (isGuestPortalOnlyThread(email) && reservation) {
+      setSelectedReservationForDetails(reservation);
+      setIsReservationDetailsOpen(true);
+      setIsGuestInfoPanelOpen(false);
+      return;
     }
 
-    setIsReservationDetailsModalOpen(false);
-    setSelectedReservationForModal(null);
     setIsGuestInfoPanelOpen(true);
-  }, [findReservationForEmail, handleSelectEmail]);
-
-  const selectedReservationForPanel = useMemo(() => {
-    if (!selectedEmail) return null;
-    return findReservationForEmail(selectedEmail);
-  }, [findReservationForEmail, selectedEmail]);
+  }, [handleSelectEmail, isGuestPortalOnlyThread, resolveThreadReservation]);
 
   const selectedGuestForPanel = useMemo(() => {
     if (!selectedEmail) return null;
@@ -1756,13 +1766,8 @@ export default function CommunicationHubPage() {
       if (matchedById) return matchedById;
     }
 
-    if (selectedReservationForPanel?.guestId) {
-      const matchedByReservationGuestId = guestDirectory.find((guest) => guest.id === selectedReservationForPanel.guestId);
-      if (matchedByReservationGuestId) return matchedByReservationGuestId;
-    }
-
     return null;
-  }, [guestDirectory, guestReservations, selectedEmail, selectedReservationForPanel, selectedThreadContactPhone]);
+  }, [guestDirectory, guestReservations, selectedEmail, selectedThreadContactPhone]);
 
   if (isLoadingAuth) {
     return <div className="flex h-screen items-center justify-center"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
@@ -2214,10 +2219,9 @@ export default function CommunicationHubPage() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8 bg-white"
-                    onClick={() => {
-                      if (selectedEmail) {
-                        void openGuestInfoFromEmail(selectedEmail);
-                      }
+                    onClick={async () => {
+                      if (!selectedEmail) return;
+                      await openGuestInfoFromEmail(selectedEmail);
                     }}
                     title="Guest info"
                   >
@@ -2242,6 +2246,7 @@ export default function CommunicationHubPage() {
                   requireManualEmailSubject={shouldPromptSubjectForSelectedThread}
                   initialContactPhone={selectedThreadContactPhone}
                   onNewEmailSent={handleThreadEmailSent}
+                  reservationNumber={selectedThreadReservation?.reservationNumber ? String(selectedThreadReservation.reservationNumber) : undefined}
                 />
               </>
             ) : (
@@ -2296,14 +2301,14 @@ export default function CommunicationHubPage() {
       </Sheet>
 
       <ReservationDetailModal
-        isOpen={isReservationDetailsModalOpen}
+        isOpen={isReservationDetailsOpen}
         onClose={() => {
-          setIsReservationDetailsModalOpen(false);
-          setSelectedReservationForModal(null);
+          setIsReservationDetailsOpen(false);
+          setSelectedReservationForDetails(null);
         }}
-        initialData={selectedReservationForModal}
-        propertySettings={(property as Property | null) || null}
-        canManage={false}
+        initialData={selectedReservationForDetails}
+        propertySettings={property as Property | null}
+        canManage
         displayMode="sidepanel"
       />
 
