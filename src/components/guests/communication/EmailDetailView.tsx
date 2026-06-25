@@ -181,6 +181,10 @@ export default function EmailDetailView({
     setNewConversationSubject('');
   }, [email.id, isNewConversation, requireManualEmailSubject]);
 
+  useEffect(() => {
+    setGuestPortalConversationId(sourceConversationIdFromThread || '');
+  }, [sourceConversationIdFromThread, email.id]);
+
   const latestIncoming = useMemo(() => {
     const copy = [...threadMessages].reverse();
     return copy.find((item) => !isSentMessage(item));

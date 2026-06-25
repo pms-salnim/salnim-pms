@@ -290,11 +290,13 @@ export default function CommunicationHubPage() {
   const getConversationKey = (email: Email) => {
     const source = String((email as any)?.source || '').trim().toLowerCase();
     if (source === 'guest_portal') {
+      const sourceConversationId = String((email as any)?.sourceConversationId || (email as any)?.source_conversation_id || '').trim();
+      if (sourceConversationId) return `guest_portal_conversation:${sourceConversationId}`;
+
       const sourceReservationId = String((email as any)?.sourceReservationId || (email as any)?.source_reservation_id || '').trim();
       if (sourceReservationId) return `guest_portal_reservation:${sourceReservationId}`;
 
-      const sourceConversationId = String((email as any)?.sourceConversationId || (email as any)?.source_conversation_id || '').trim();
-      if (sourceConversationId) return `guest_portal:${sourceConversationId}`;
+      return `guest_portal:fallback:${getEmailIdentity(email)}`;
     }
 
     const senderEmail = String(email.from?.email || '').trim().toLowerCase();
@@ -1604,6 +1606,7 @@ export default function CommunicationHubPage() {
         const source = String((email as any)?.source || '').trim().toLowerCase();
         const senderEmail = String(email.from?.email || '').trim().toLowerCase();
         const rawSenderEmail = String((email as any)?.rawFromEmail || senderEmail).trim().toLowerCase();
+        const sourceConversationId = String((email as any)?.sourceConversationId || (email as any)?.source_conversation_id || '').trim().toLowerCase();
         const sourceReservationId = String((email as any)?.sourceReservationId || (email as any)?.source_reservation_id || '').trim().toLowerCase();
 
         if (resultEmail && (senderEmail === resultEmail || rawSenderEmail === resultEmail)) {
@@ -1618,6 +1621,10 @@ export default function CommunicationHubPage() {
         }
 
         if (reservationTokenCandidates.length > 0) {
+          if (sourceConversationId && reservationTokenCandidates.includes(sourceConversationId)) {
+            return true;
+          }
+
           if (sourceReservationId && reservationTokenCandidates.includes(sourceReservationId)) {
             return true;
           }
@@ -1631,7 +1638,7 @@ export default function CommunicationHubPage() {
         }
 
         if (channel === 'guest_portal' && source === 'guest_portal' && reservationTokenCandidates.length > 0) {
-          return reservationTokenCandidates.some((token) => sourceReservationId === token);
+          return reservationTokenCandidates.some((token) => sourceConversationId === token || sourceReservationId === token);
         }
 
         return false;
