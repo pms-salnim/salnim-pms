@@ -117,7 +117,6 @@ const defaultPropertyInfos: PropertyInfosData = {
   country: '',
   googleMapsLink: '',
 };
-             value={formData.description ?? ''}
 const propertyTypes = [
   'Hotel',
   'Boutique Hotel',
