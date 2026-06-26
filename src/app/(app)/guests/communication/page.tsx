@@ -496,12 +496,8 @@ export default function CommunicationHubPage() {
       .replace(/\s+/g, ' ')
       .trim();
 
-    return rawPreview || 'No message preview available';
+    return rawPreview.replace(/^draft:\s*/i, '') || 'No message preview available';
   }, []);
-
-  const getThreadPreviewLabel = useCallback((email: Email) => {
-    return isSentEmail(email) ? 'You' : 'Guest';
-  }, [isSentEmail]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2095,6 +2091,34 @@ export default function CommunicationHubPage() {
                 </div>
               </div>
 
+              {threadChannelFilter !== 'all' && (
+                <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+                  <span>
+                    Active filter:{' '}
+                    <strong>
+                      {threadChannelFilter === 'guest_portal'
+                        ? 'Guest Portal'
+                        : threadChannelFilter === 'whatsapp'
+                          ? 'WhatsApp'
+                          : threadChannelFilter === 'sms'
+                            ? 'SMS'
+                            : 'Email'}
+                    </strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setThreadChannelFilter('all');
+                      setCurrentPage(1);
+                    }}
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-100"
+                  >
+                    <X className="h-3 w-3" />
+                    Clear
+                  </button>
+                </div>
+              )}
+
               <div className="group/filters relative">
                 <div
                   id="conversation-filters-scroll"
@@ -2174,7 +2198,6 @@ export default function CommunicationHubPage() {
                         const trashed = isConversationTrashed(conversation.key);
                         const starred = isConversationStarred(conversation.key, conversation.messages);
                         const previewText = getThreadPreviewText(latestThreadEmail);
-                        const previewLabel = getThreadPreviewLabel(latestThreadEmail);
                         const isLatestSent = isSentEmail(latestThreadEmail);
                         const slaInfo = getSlaInfo(conversation);
                         const activeStay = getActiveStay(conversation);
@@ -2225,9 +2248,6 @@ export default function CommunicationHubPage() {
 
                                 {/* Preview line */}
                                 <div className="mt-1 flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-xs">
-                                  <span className={cn('shrink-0 font-medium', isLatestSent ? 'text-emerald-600' : 'text-blue-600')}>
-                                    {previewLabel}:
-                                  </span>
                                   <span className="block min-w-0 flex-1 truncate text-slate-500">
                                     {previewText}
                                   </span>

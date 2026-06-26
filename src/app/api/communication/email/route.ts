@@ -652,6 +652,39 @@ async function handleSyncEmails(
   data: any
 ): Promise<NextResponse> {
   let connection: any = null;
+  const storedWindow = (() => {
+    const requested = Number(data?.storedLimit);
+    if (Number.isFinite(requested) && requested > 0) {
+      return Math.min(Math.max(Math.trunc(requested), 50), 1000);
+    }
+    return 300;
+  })();
+  const emailPriorityWindow = Math.min(Math.max(Math.floor(storedWindow / 2), 100), 500);
+
+  const getSourceCounts = (rows: any[]) => {
+    const counts = {
+      all: Array.isArray(rows) ? rows.length : 0,
+      email: 0,
+      guest_portal: 0,
+      whatsapp: 0,
+      sms: 0,
+    };
+
+    (rows || []).forEach((row: any) => {
+      const source = normalizeText(row?.source).toLowerCase();
+      if (source === 'guest_portal') {
+        counts.guest_portal += 1;
+      } else if (source === 'whatsapp') {
+        counts.whatsapp += 1;
+      } else if (source === 'sms') {
+        counts.sms += 1;
+      } else {
+        counts.email += 1;
+      }
+    });
+
+    return counts;
+  };
 
   const loadStoredEmails = async () => {
     const { data: storedEmails, error: storedError } = await supabase
@@ -659,14 +692,24 @@ async function handleSyncEmails(
       .select('*, attachments:email_attachments(*), labels:email_message_labels(label_id)')
       .eq('property_id', propertyId)
       .order('date_ms', { ascending: false })
-      .range(0, 49);
+      .range(0, storedWindow - 1);
 
-    if (storedError) {
-      throw storedError;
-    }
+    const { data: emailPriorityRows, error: emailPriorityError } = await supabase
+      .from('property_emails')
+      .select('*, attachments:email_attachments(*), labels:email_message_labels(label_id)')
+      .eq('property_id', propertyId)
+      .or('source.eq.email,source.is.null')
+      .order('date_ms', { ascending: false })
+      .range(0, emailPriorityWindow - 1);
 
-    const deduped = dedupeEmailsByUid(storedEmails || [])
-      .sort((a: any, b: any) => Number(b?.date_ms || 0) - Number(a?.date_ms || 0));
+    if (storedError) throw storedError;
+    if (emailPriorityError) throw emailPriorityError;
+
+    const mergedRows = [...(storedEmails || []), ...(emailPriorityRows || [])];
+
+    const deduped = dedupeEmailsByUid(mergedRows)
+      .sort((a: any, b: any) => Number(b?.date_ms || 0) - Number(a?.date_ms || 0))
+      .slice(0, storedWindow);
 
     return deduped;
   };
@@ -680,10 +723,12 @@ async function handleSyncEmails(
 
     if (!imapConfig) {
       const emails = await loadStoredEmails();
+      const sourceCounts = getSourceCounts(emails);
       return NextResponse.json(
         {
           success: true,
           emails,
+          sourceCounts,
           synced: 0,
           degraded: true,
           message: 'IMAP not configured for this property',
@@ -925,10 +970,12 @@ async function handleSyncEmails(
     }
 
     const dedupedEmails = await loadStoredEmails();
+    const sourceCounts = getSourceCounts(dedupedEmails);
 
     return NextResponse.json({
       success: true,
       emails: dedupedEmails,
+      sourceCounts,
       synced: validParsedByUid.length,
     });
   } catch (error) {
@@ -936,10 +983,12 @@ async function handleSyncEmails(
 
     try {
       const fallbackEmails = await loadStoredEmails();
+      const sourceCounts = getSourceCounts(fallbackEmails);
       return NextResponse.json(
         {
           success: true,
           emails: fallbackEmails,
+          sourceCounts,
           synced: 0,
           degraded: true,
           message: 'Email sync failed. Showing last stored emails.',
@@ -1349,11 +1398,10 @@ async function handleGetEmailGuestContext(
 
     return NextResponse.json({ success: true, context });
   } catch (error) {
-    console.error('Error getting email guest context:', error);
-    return NextResponse.json(
-      { error: 'Failed to load email guest context' },
-      { status: 500 }
-    );
+    // Guest context is auxiliary data for the UI side panel. A lookup failure
+    // must never block thread rendering or trigger hard client errors.
+    console.warn('Error getting email guest context, returning null context:', error);
+    return NextResponse.json({ success: true, context: null });
   }
 }
 
