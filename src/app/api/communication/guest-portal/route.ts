@@ -35,7 +35,15 @@ function mapConversation(row: any) {
 
 function mapMessage(row: any) {
   const timestampMs = row.created_at ? new Date(row.created_at).getTime() : Date.now();
-  const firstAttachment = Array.isArray(row.attachments) ? row.attachments[0] : null;
+  const attachments = Array.isArray(row.attachments)
+    ? row.attachments.map((attachment: any) => ({
+        fileName: attachment.file_name,
+        fileType: attachment.file_type,
+        fileSize: attachment.file_size,
+        fileUrl: attachment.file_url,
+      }))
+    : [];
+  const firstAttachment = attachments[0] || null;
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -46,12 +54,13 @@ function mapMessage(row: any) {
     timestamp: row.created_at,
     timestampMs,
     status: row.message_status || 'sent',
+    attachments,
     fileAttachment: firstAttachment
       ? {
-          fileName: firstAttachment.file_name,
-          fileType: firstAttachment.file_type,
-          fileSize: firstAttachment.file_size,
-          fileUrl: firstAttachment.file_url,
+          fileName: firstAttachment.fileName,
+          fileType: firstAttachment.fileType,
+          fileSize: firstAttachment.fileSize,
+          fileUrl: firstAttachment.fileUrl,
         }
       : undefined,
   };
@@ -61,13 +70,28 @@ async function mirrorGuestPortalMessageToInbox(params: {
   conversation: any;
   messageRow: any;
   senderType: 'guest' | 'property';
-  attachments?: Array<{ file_name: string; content_type?: string; file_type?: string; file_size?: number | null }>;
+  attachments?: Array<{
+    file_name?: string;
+    filename?: string;
+    content_type?: string;
+    contentType?: string;
+    file_type?: string;
+    file_size?: number | null;
+    size?: number | null;
+    file_url?: string;
+    fileUrl?: string;
+    dataUri?: string;
+  }>;
 }) {
   try {
     const conversation = params.conversation || {};
     const messageRow = params.messageRow || {};
     const senderType = params.senderType;
     const guestName = String(conversation.guest_name || messageRow.sender_name || 'Guest').trim() || 'Guest';
+    const senderDisplayName = String(
+      messageRow.sender_name
+      || (senderType === 'property' ? 'Property Staff' : guestName)
+    ).trim() || (senderType === 'property' ? 'Property Staff' : guestName);
     const threadIdentity = String(conversation.reservation_id || conversation.id || messageRow.conversation_id || messageRow.id || 'guest').trim();
     const threadEmail = `guest-portal+${threadIdentity}@guest-portal.local`;
     const bodyText = String(messageRow.message || '').trim();
@@ -93,7 +117,7 @@ async function mirrorGuestPortalMessageToInbox(params: {
       id: emailId,
       property_id: conversation.property_id,
       uid: null,
-      from_name: guestName,
+      from_name: senderDisplayName,
       from_email: threadEmail,
       subject: `Guest Portal • ${guestName}`,
       date: createdAt,
@@ -140,15 +164,29 @@ async function mirrorGuestPortalMessageToInbox(params: {
       await supabase.from('email_attachments').delete().eq('email_id', emailId);
       const rows = (params.attachments || []).map((att) => ({
         email_id: emailId,
-        file_name: String(att.file_name || 'attachment'),
-        content_type: String(att.content_type || att.file_type || 'application/octet-stream'),
-        file_size: typeof att.file_size === 'number' ? att.file_size : null,
+        file_name: String(att.file_name || att.filename || 'attachment'),
+        content_type: String(att.content_type || att.contentType || att.file_type || 'application/octet-stream'),
+        file_size: typeof att.file_size === 'number'
+          ? att.file_size
+          : typeof att.size === 'number'
+            ? att.size
+            : null,
+        file_url: String(att.file_url || att.fileUrl || att.dataUri || '') || null,
       }));
 
       if (rows.length > 0) {
-        const { error: attachmentError } = await supabase
+        let { error: attachmentError } = await supabase
           .from('email_attachments')
           .insert(rows);
+
+        const missingFileUrlColumn = String((attachmentError as any)?.message || '').toLowerCase().includes('file_url');
+        if (attachmentError && missingFileUrlColumn) {
+          const fallbackRows = rows.map(({ file_url: _drop, ...rest }) => rest);
+          const retry = await supabase
+            .from('email_attachments')
+            .insert(fallbackRows);
+          attachmentError = retry.error;
+        }
 
         if (attachmentError) {
           console.warn('[GuestPortalMirror] Failed to mirror attachments:', String((attachmentError as any)?.message || 'unknown error'));
@@ -480,10 +518,10 @@ async function handleSendMessage(
     if (attachments && Array.isArray(attachments) && attachments.length > 0) {
       const attachmentData = attachments.map((att: any) => ({
         message_id: messageData.id,
-        file_name: att.file_name,
-        file_type: att.file_type,
-        file_size: att.file_size,
-        file_url: att.file_url,
+        file_name: att.file_name || att.filename,
+        file_type: att.file_type || att.contentType,
+        file_size: att.file_size || att.size,
+        file_url: att.file_url || att.dataUri,
       }));
 
       const { error: attError } = await supabase

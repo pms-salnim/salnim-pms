@@ -117,7 +117,7 @@ const defaultPropertyInfos: PropertyInfosData = {
   country: '',
   googleMapsLink: '',
 };
-
+             value={formData.description ?? ''}
 const propertyTypes = [
   'Hotel',
   'Boutique Hotel',
@@ -538,7 +538,7 @@ export function PropertyInfosForm({
               Description
             </label>
             <textarea
-              value={formData.description ?? ''}
+              value={formData.description}
               onChange={(e) => handleChange('description', e.target.value)}
               placeholder="Describe your property, its features, and what makes it special..."
               rows={4}

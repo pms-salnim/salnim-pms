@@ -40,6 +40,8 @@ export interface Email {
     filename: string;
     contentType: string;
     dataUri?: string;
+    fileUrl?: string;
+    file_url?: string;
     size: number;
   }[];
 }
@@ -197,6 +199,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             ? row.attachments.map((a: any) => ({
                 filename: a.file_name,
                 contentType: a.content_type,
+                dataUri: a.file_url || a.fileUrl || undefined,
                 size: a.file_size || 0,
               }))
             : [],

@@ -9,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { Archive, Mail, MessageSquare, Bot, Settings, Bell, MessageCircle, RefreshCw, MailPlus, Inbox, Paperclip, ChevronLeft, ChevronRight, Send, MailWarning, AlertCircle, Trash2, Users, UserCheck, CalendarClock, LogOut, CheckCircle2, X, Search, Star, Pin, PinOff, ArchiveRestore, Info, Clock, BedDouble, ChevronsUp, CheckSquare, Square, ArrowDownCircle, Reply } from 'lucide-react';
+import { Archive, Mail, MessageSquare, Bot, Settings, Bell, MessageCircle, RefreshCw, MailPlus, Inbox, Paperclip, ChevronLeft, ChevronRight, Send, MailWarning, AlertCircle, Trash2, Users, UserCheck, CalendarClock, LogOut, CheckCircle2, X, Search, Star, Pin, PinOff, ArchiveRestore, Info, Clock, BedDouble, ChevronsUp, CheckSquare, Square, ArrowDownCircle, Reply, MoreHorizontal } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -20,6 +20,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, isValid, isToday, isYesterday } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { Property } from '@/types/property';
 import {
   Dialog,
@@ -688,12 +696,61 @@ export default function CommunicationHubPage() {
       conversationMap.set(key, current);
     });
 
+    const resolveContactName = (key: string, sortedMessages: Email[], latestEmail: Email): string => {
+      const source = String((latestEmail as any)?.source || '').trim().toLowerCase();
+      const isGuestPortalThread = source === 'guest_portal' || key.startsWith('guest_portal_') || key.startsWith('guest_portal:');
+      const manualDisplayName = String(conversationDisplayNames[key] || '').trim();
+
+      if (!isGuestPortalThread) {
+        return manualDisplayName || latestEmail.from?.name || latestEmail.from?.email || 'Unknown sender';
+      }
+
+      const guestMessageName = sortedMessages
+        .find((message) => {
+          const messageSource = String((message as any)?.source || '').trim().toLowerCase();
+          if (messageSource !== 'guest_portal') return false;
+          const senderType = String((message as any)?.sourceSenderType || (message as any)?.source_sender_type || '').trim().toLowerCase();
+          return senderType === 'guest' && String(message.from?.name || '').trim().length > 0;
+        })
+        ?.from?.name;
+
+      if (String(guestMessageName || '').trim()) {
+        return String(guestMessageName).trim();
+      }
+
+      const sourceReservationId = sortedMessages
+        .map((message) => String((message as any)?.sourceReservationId || (message as any)?.source_reservation_id || '').trim())
+        .find(Boolean);
+
+      if (sourceReservationId) {
+        const reservationGuestName = String(
+          guestReservations.find((reservation) => String(reservation.id || '').trim() === sourceReservationId)?.guestName || ''
+        ).trim();
+        if (reservationGuestName) {
+          return reservationGuestName;
+        }
+      }
+
+      const subjectGuestName = String(latestEmail.subject || '')
+        .replace(/^\s*guest\s*portal\s*•\s*/i, '')
+        .trim();
+      if (subjectGuestName) {
+        return subjectGuestName;
+      }
+
+      if (manualDisplayName) {
+        return manualDisplayName;
+      }
+
+      return latestEmail.from?.email || 'Unknown sender';
+    };
+
     let conversations: EmailConversation[] = Array.from(conversationMap.entries()).map(([key, messages]) => {
       const sortedMessages = [...messages].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       const latestEmail = sortedMessages[0];
       return {
         key,
-        contactName: conversationDisplayNames[key] || latestEmail.from?.name || latestEmail.from?.email || 'Unknown sender',
+        contactName: resolveContactName(key, sortedMessages, latestEmail),
         contactEmail: latestEmail.from?.email || '',
         latestEmail,
         messages: sortedMessages,
@@ -759,7 +816,7 @@ export default function CommunicationHubPage() {
       totalPages: Math.ceil(conversations.length / itemsPerPage) || 1,
       totalConversationCount: conversations.length,
     };
-  }, [archivedConversationKeys, conversationDisplayNames, conversationHistoryByKey, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, isSentEmail, itemsPerPage, pinnedConversationKeys, searchQuery, threadChannelFilter, threadMailbox, trashedConversationKeys]);
+  }, [archivedConversationKeys, conversationDisplayNames, conversationHistoryByKey, currentPage, displayEmails, filterAttachments, filterStarred, filterUnread, guestReservations, isSentEmail, itemsPerPage, pinnedConversationKeys, searchQuery, threadChannelFilter, threadMailbox, trashedConversationKeys]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -794,6 +851,12 @@ export default function CommunicationHubPage() {
 
     return groups;
   }, [currentList]);
+
+  const isAllVisibleSelected = useMemo(() => {
+    if (currentList.length === 0) return false;
+    const selectedSet = new Set(bulkSelectedKeys);
+    return currentList.every((conversation) => selectedSet.has(conversation.key));
+  }, [bulkSelectedKeys, currentList]);
 
   const selectedConversationHistory = useMemo(() => {
     if (!selectedEmail) return [] as Email[];
@@ -836,7 +899,6 @@ export default function CommunicationHubPage() {
       return start <= today && end >= today && res.status === 'Checked-in';
     }) || null;
   }, [guestReservations]);
-
 
   const safeRefetchEmails = useCallback(() => {
     if (user?.propertyId) {
@@ -1898,27 +1960,54 @@ export default function CommunicationHubPage() {
                   <span className="text-sm font-medium text-slate-700">{bulkSelectedKeys.length} selected</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={handleBulkMarkRead} title="Mark selected as read">
-                    <Mail className="h-3.5 w-3.5" /> Mark read
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={isAllVisibleSelected ? handleBulkClear : handleBulkSelectAll}
+                    title={isAllVisibleSelected ? 'Clear selection' : 'Select all visible'}
+                  >
+                    {isAllVisibleSelected ? 'Clear' : 'Select all'}
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={handleBulkMarkUnread} title="Mark selected as unread">
-                    <MailWarning className="h-3.5 w-3.5" /> Mark unread
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={handleBulkStar} title="Star selected">
-                    <Star className="h-3.5 w-3.5" /> Star
-                  </Button>
-                  {threadMailbox === 'trash' ? (
-                    <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-emerald-600 hover:text-emerald-700" onClick={handleBulkRestore} title="Recover selected">
-                      <ArchiveRestore className="h-3.5 w-3.5" /> Recover
-                    </Button>
-                  ) : (
-                    <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={handleBulkArchive} title="Archive selected">
-                      <Archive className="h-3.5 w-3.5" /> Archive
-                    </Button>
-                  )}
-                  <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-red-500 hover:text-red-600" onClick={handleBulkDelete} title="Delete selected">
-                    <Trash2 className="h-3.5 w-3.5" /> {threadMailbox === 'trash' ? 'Delete forever' : 'Delete'}
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Bulk actions">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuLabel>Bulk actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={handleBulkMarkRead}>
+                        <Mail className="mr-2 h-3.5 w-3.5" />
+                        Mark as read
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={handleBulkMarkUnread}>
+                        <MailWarning className="mr-2 h-3.5 w-3.5" />
+                        Mark as unread
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={handleBulkStar}>
+                        <Star className="mr-2 h-3.5 w-3.5" />
+                        Star
+                      </DropdownMenuItem>
+                      {threadMailbox === 'trash' ? (
+                        <DropdownMenuItem onSelect={handleBulkRestore}>
+                          <ArchiveRestore className="mr-2 h-3.5 w-3.5 text-emerald-600" />
+                          Recover
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onSelect={handleBulkArchive}>
+                          <Archive className="mr-2 h-3.5 w-3.5" />
+                          Archive
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={handleBulkDelete} className="text-red-600 focus:text-red-600">
+                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                        {threadMailbox === 'trash' ? 'Delete forever' : 'Delete'}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             ) : (
@@ -2177,54 +2266,68 @@ export default function CommunicationHubPage() {
                                     <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (event) => { event.preventDefault(); event.stopPropagation(); await openGuestInfoFromEmail(email); }} title="Guest info">
                                       <Info className="h-3.5 w-3.5" />
                                     </Button>
-                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={(event) => { event.preventDefault(); event.stopPropagation(); handleTogglePin(conversation.key); }} title={pinned ? 'Unpin' : 'Pin'}>
-                                      {pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                                    </Button>
-                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (event) => { event.preventDefault(); event.stopPropagation(); await handleToggleStarThread(conversation.key); }} title={starred ? 'Unstar' : 'Star'}>
-                                      <Star className={cn('h-3.5 w-3.5', starred && 'fill-amber-400 text-amber-500')} />
-                                    </Button>
-                                    {conversation.unreadCount > 0 && (
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6"
-                                        onClick={async (event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          await handleMarkThreadRead(conversation.key);
-                                        }}
-                                        title="Mark as read"
-                                      >
-                                        <Mail className="h-3.5 w-3.5" />
-                                      </Button>
-                                    )}
-                                    {conversation.unreadCount === 0 && (
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6"
-                                        onClick={async (event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          await handleMarkThreadUnread(conversation.key);
-                                        }}
-                                        title="Mark as unread"
-                                      >
-                                        <MailWarning className="h-3.5 w-3.5" />
-                                      </Button>
-                                    )}
-                                    {(threadMailbox === 'trash' || trashed) ? (
-                                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => { e.preventDefault(); e.stopPropagation(); await handleRestoreThread(conversation.key); }} title="Restore"><ArchiveRestore className="h-3.5 w-3.5" /></Button>
-                                    ) : archived ? (
-                                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={async (e) => { e.preventDefault(); e.stopPropagation(); await handleUnarchiveThread(conversation.key); }} title="Unarchive"><ArchiveRestore className="h-3.5 w-3.5" /></Button>
-                                    ) : (
-                                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openThreadActionConfirm('archive', [conversation.key]); }} title="Archive"><Archive className="h-3.5 w-3.5" /></Button>
-                                    )}
-                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-600" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openThreadActionConfirm(threadMailbox === 'trash' || trashed ? 'permanent_delete' : 'move_to_trash', [conversation.key]); }} title={threadMailbox === 'trash' || trashed ? 'Delete permanently' : 'Move to trash'}>
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6"
+                                          onClick={(event) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                          }}
+                                          title="Thread actions"
+                                        >
+                                          <MoreHorizontal className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-44" onClick={(event) => event.stopPropagation()}>
+                                        <DropdownMenuItem onSelect={() => handleTogglePin(conversation.key)}>
+                                          {pinned ? <PinOff className="mr-2 h-3.5 w-3.5" /> : <Pin className="mr-2 h-3.5 w-3.5" />}
+                                          {pinned ? 'Unpin' : 'Pin'}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={async () => { await handleToggleStarThread(conversation.key); }}>
+                                          <Star className={cn('mr-2 h-3.5 w-3.5', starred && 'fill-amber-400 text-amber-500')} />
+                                          {starred ? 'Unstar' : 'Star'}
+                                        </DropdownMenuItem>
+                                        {conversation.unreadCount > 0 ? (
+                                          <DropdownMenuItem onSelect={async () => { await handleMarkThreadRead(conversation.key); }}>
+                                            <Mail className="mr-2 h-3.5 w-3.5" />
+                                            Mark as read
+                                          </DropdownMenuItem>
+                                        ) : (
+                                          <DropdownMenuItem onSelect={async () => { await handleMarkThreadUnread(conversation.key); }}>
+                                            <MailWarning className="mr-2 h-3.5 w-3.5" />
+                                            Mark as unread
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuSeparator />
+                                        {(threadMailbox === 'trash' || trashed) ? (
+                                          <DropdownMenuItem onSelect={async () => { await handleRestoreThread(conversation.key); }}>
+                                            <ArchiveRestore className="mr-2 h-3.5 w-3.5" />
+                                            Restore
+                                          </DropdownMenuItem>
+                                        ) : archived ? (
+                                          <DropdownMenuItem onSelect={async () => { await handleUnarchiveThread(conversation.key); }}>
+                                            <ArchiveRestore className="mr-2 h-3.5 w-3.5" />
+                                            Unarchive
+                                          </DropdownMenuItem>
+                                        ) : (
+                                          <DropdownMenuItem onSelect={() => openThreadActionConfirm('archive', [conversation.key])}>
+                                            <Archive className="mr-2 h-3.5 w-3.5" />
+                                            Archive
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem
+                                          onSelect={() => openThreadActionConfirm(threadMailbox === 'trash' || trashed ? 'permanent_delete' : 'move_to_trash', [conversation.key])}
+                                          className="text-red-600 focus:text-red-600"
+                                        >
+                                          <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                          {threadMailbox === 'trash' || trashed ? 'Delete permanently' : 'Move to trash'}
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </div>
                                 )}
                                 <Badge variant="outline" className={cn('h-5 rounded-full px-2 text-[10px] font-medium', getStatusBadgeClassName(latestThreadEmail, trashed))}>
